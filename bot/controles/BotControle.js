@@ -23,7 +23,7 @@ export class BotControle{
             bot.numero_bot = await socket.obterNumeroHost(c)
             bot.lid_bot = await socket.obterLidHost(c)
             await this.bot.atualizarDados(bot)
-            console.log("[BOT]", corTexto(comandosInfo(bot).outros.dados_bot))
+            // log consolidado no bootPronto()
         }catch(err){
             err.message = `botStart - ${err.message}`
             throw err
@@ -34,7 +34,7 @@ export class BotControle{
         const bot = {
             iniciado: 0,
             nome_bot: "Ultron",
-            nome_adm: "Thiago",
+            nome_adm: "Admin",
             nome_pack: "Ultron Stickers",
             prefixo: "!",
             cmds_executados:0,

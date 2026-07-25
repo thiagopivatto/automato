@@ -24,8 +24,19 @@ import {
     separarStemsEleven,
     textoLongoParaVozEleven
 } from '../lib/elevenlabs.js'
-import { separarUvr5, concatenarMp3, cortarAudioMp3, subtrairVocaisDoOriginal } from '../lib/uvr5.js'
+import { separarUvr5, concatenarMp3, cortarAudioMp3, subtrairVocaisDoOriginal, misturarStemsMp3 } from '../lib/uvr5.js'
 import { gerarImagemMultiFonte } from '../lib/imagens-ia.js'
+import { gerarImagemPreferencial, gerarVideoPollinations, pollinationsKey, imagemParaImagemPollinations } from '../lib/imagens-preferencial.js'
+import { detectarGpu, separarDemucsLocal, torchTemCuda } from '../lib/gpu.js'
+import { textoParaVozRobusto } from '../lib/tts-robusto.js'
+
+const torchTemCudaHint = () => {
+    try {
+        return torchTemCuda()
+    } catch {
+        return false
+    }
+}
 
 const TIMEOUT_PADRAO = 45000
 const TIMEOUT_LONGO = 60000
@@ -312,77 +323,85 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null) => {
     }
 }
 
-/** Resposta SimSimi via RapidAPI (simsimi7) + contexto. */
+/** Resposta SimSimi — APIs públicas → IA persona (ignora 403 Rapid). */
 export const obterRespostaSimi = async (texto, id_usuario = 'simi') => {
-    const hist = obterHistorico(contextoSimi, id_usuario, MAX_CTX_SIMI)
-    const rapidKey = process.env.RAPIDAPI_KEY?.trim() || process.env.SIMSIMI_RAPIDAPI_KEY?.trim()
+    const pergunta = String(texto || '').trim()
+    if (!pergunta) throw { erro: 'Envie um texto para o Simi.' }
 
+    const rapidKeyEnv = process.env.RAPIDAPI_KEY?.trim() || process.env.SIMSIMI_RAPIDAPI_KEY?.trim()
+
+    const salvar = (resultado) => {
+        adicionarAoHistorico(contextoSimi, id_usuario, 'user', pergunta, MAX_CTX_SIMI)
+        adicionarAoHistorico(contextoSimi, id_usuario, 'assistant', resultado, MAX_CTX_SIMI)
+        return { resultado }
+    }
+
+    // 1) simsimi.vn (sem auth)
     try {
-        if (!rapidKey) throw new Error('RAPIDAPI_KEY ausente')
-
-        const { data } = await axios.get('https://simsimi7.p.rapidapi.com/v1/talk', {
-            params: {
-                message: String(texto),
-                language: 'pt',
-                bad_words_filter: 'false',
-                filter: '0',
-                cf: 'false'
-            },
-            headers: {
-                'x-rapidapi-host': 'simsimi7.p.rapidapi.com',
-                'x-rapidapi-key': rapidKey
-            },
-            timeout: 15000
+        const { data, status } = await axios({
+            url: 'https://api.simsimi.vn/v2/simtalk',
+            method: 'post',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            data: qs.stringify({ text: pergunta, lc: 'pt' }),
+            timeout: 12000,
+            validateStatus: () => true
         })
+        if (status < 400) {
+            const resultado = String(data?.message || data?.success || '').trim()
+            if (resultado && !/error|limit|403/i.test(resultado)) return salvar(resultado)
+        }
+    } catch { /* next */ }
 
-        const resultado = String(
-            data?.message || data?.success || data?.response || data?.simsimi || data?.answer || ''
-        ).trim()
-        if (!resultado) throw new Error('resposta vazia RapidAPI')
+    // 2) RapidAPI (pula se 403 / não inscrito)
+    if (rapidKeyEnv) {
+        try {
+            const { data, status } = await axios.get('https://simsimi7.p.rapidapi.com/v1/talk', {
+                params: {
+                    message: pergunta,
+                    language: 'pt',
+                    bad_words_filter: 'false',
+                    filter: '0',
+                    cf: 'false'
+                },
+                headers: {
+                    'x-rapidapi-host': 'simsimi7.p.rapidapi.com',
+                    'x-rapidapi-key': rapidKeyEnv
+                },
+                timeout: 12000,
+                validateStatus: () => true
+            })
+            if (status !== 403 && status < 400) {
+                const resultado = String(
+                    data?.message || data?.success || data?.response || data?.simsimi || data?.answer || ''
+                ).trim()
+                if (resultado) return salvar(resultado)
+            } else if (status === 403) {
+                console.log('API obterRespostaSimi RapidAPI 403 — usando IA')
+            }
+        } catch (err) {
+            console.log(`API obterRespostaSimi Rapid - ${msgErro(err)}`)
+        }
+    }
 
-        adicionarAoHistorico(contextoSimi, id_usuario, 'user', texto, MAX_CTX_SIMI)
+    // 3) Persona Simi via IA (sempre disponível se houver chave)
+    try {
+        adicionarAoHistorico(contextoSimi, id_usuario, 'user', pergunta, MAX_CTX_SIMI)
+        const messages = montarMensagens(
+            obterHistorico(contextoSimi, id_usuario, MAX_CTX_SIMI),
+            SYSTEM_SIMI
+        )
+        const resultado = await completarMensagens(messages)
+        if (!resultado) throw new Error('IA vazia')
         adicionarAoHistorico(contextoSimi, id_usuario, 'assistant', resultado, MAX_CTX_SIMI)
         return { resultado }
     } catch (err) {
-        // Fallback: API antiga + IA
-        try {
-            const { data } = await axios({
-                url: 'https://api.simsimi.vn/v2/simtalk',
-                method: 'post',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                data: qs.stringify({ text: String(texto), lc: 'pt' }),
-                timeout: 15000
-            }).catch((e) => {
-                if (e.response?.data?.message) return e.response
-                throw e
-            })
-            const resultado = String(data?.message || '').trim()
-            if (resultado) {
-                adicionarAoHistorico(contextoSimi, id_usuario, 'user', texto, MAX_CTX_SIMI)
-                adicionarAoHistorico(contextoSimi, id_usuario, 'assistant', resultado, MAX_CTX_SIMI)
-                return { resultado }
-            }
-        } catch { /* IA fallback */ }
-
-        try {
-            adicionarAoHistorico(contextoSimi, id_usuario, 'user', texto, MAX_CTX_SIMI)
-            const messages = montarMensagens(
-                obterHistorico(contextoSimi, id_usuario, MAX_CTX_SIMI),
-                SYSTEM_SIMI
-            )
-            const resultado = await completarMensagens(messages)
-            if (!resultado) throw new Error('fallback vazio')
-            adicionarAoHistorico(contextoSimi, id_usuario, 'assistant', resultado, MAX_CTX_SIMI)
-            return { resultado }
-        } catch (err2) {
-            const histAtual = obterHistorico(contextoSimi, id_usuario, MAX_CTX_SIMI)
-            if (histAtual.length && histAtual[histAtual.length - 1]?.role === 'user') histAtual.pop()
-            console.log(`API obterRespostaSimi - ${msgErro(err2) || msgErro(err)}`)
-            throw {
-                erro: !rapidKey
-                    ? 'Configure RAPIDAPI_KEY no .env (https://rapidapi.com/Glavier/api/simsimi7).'
-                    : 'Houve um erro no SimSimi. Verifique a chave RapidAPI.'
-            }
+        const histAtual = obterHistorico(contextoSimi, id_usuario, MAX_CTX_SIMI)
+        if (histAtual.length && histAtual[histAtual.length - 1]?.role === 'user') histAtual.pop()
+        console.log(`API obterRespostaSimi - ${msgErro(err)}`)
+        throw {
+            erro: !temChaveIa()
+                ? 'SimSimi indisponível (403). Configure GEMINI_API_KEY ou OPENROUTER_API_KEY no .env para o chat.'
+                : 'Houve um erro no Simi. Tente de novo.'
         }
     }
 }
@@ -391,6 +410,13 @@ export const obterRespostaSimi = async (texto, id_usuario = 'simi') => {
 export const obterImagemIA = async (texto) => {
     const prompt = String(texto || '').trim()
     if (!prompt) throw { erro: 'Informe o prompt da imagem.' }
+
+    try {
+        const buf = await gerarImagemPreferencial(prompt, { model: 'flux', width: 1024, height: 1024 })
+        if (buf?.length > 500) return { resultado: buf }
+    } catch (err) {
+        console.log(`API obterImagemIA preferencial - ${msgErro(err)}`)
+    }
 
     try {
         const buf = await gerarImagemMultiFonte(prompt)
@@ -417,37 +443,10 @@ export const obterImagemIA = async (texto) => {
         }
     }
 
-    const geminiKey = process.env.GEMINI_API_KEY?.trim()
-    if (geminiKey) {
-        try {
-            const modelos = ['gemini-2.5-flash-image', 'gemini-2.0-flash-preview-image-generation']
-            for (const model of modelos) {
-                try {
-                    const { data, status } = await axios.post(
-                        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-                        {
-                            contents: [{ parts: [{ text: prompt }] }],
-                            generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
-                        },
-                        { timeout: TIMEOUT_LONGO, validateStatus: () => true }
-                    )
-                    if (status >= 400) continue
-                    const parts = data?.candidates?.[0]?.content?.parts || []
-                    for (const p of parts) {
-                        const b64 = p?.inlineData?.data || p?.inline_data?.data
-                        if (b64) return { resultado: Buffer.from(b64, 'base64') }
-                    }
-                } catch (e) {
-                    console.log(`API obterImagemIA Gemini ${model} - ${msgErro(e)}`)
-                }
-            }
-        } catch (err) {
-            console.log(`API obterImagemIA Gemini - ${msgErro(err)}`)
-        }
-    }
-
     throw {
-        erro: 'Não foi possível gerar a imagem agora (limite/indisponibilidade). Aguarde 30s e tente de novo.'
+        erro: pollinationsKey()
+            ? 'Não foi possível gerar a imagem. Verifique saldo Pollinations ou tente outro prompt.'
+            : 'Configure POLLINATIONS_API_KEY no .env (ou tente novamente).'
     }
 }
 
@@ -922,10 +921,58 @@ async function imagemParaVideoPan(bufferImagem) {
     return imagensParaVideoSlideshow([bufferImagem], 8)
 }
 
-/** Vídeo por IA — tenta APIs reais; fallback: slideshow cinematográfico + SFX. */
+/** Vídeo por IA — slideshow curto (2 frames) com delay p/ evitar 429. */
 export const obterVideoIA = async (prompt) => {
     const p = String(prompt || '').trim()
     if (!p) throw { erro: 'Informe o prompt do vídeo.' }
+
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+    const gerarFrame = async (textoFrame, tentativa = 0) => {
+        try {
+            const { resultado } = await obterImagemIA(textoFrame)
+            if (Buffer.isBuffer(resultado) && resultado.length > 500) return resultado
+        } catch (err) {
+            const msg = String(err?.erro || err?.message || err)
+            if (/429|too many|rate|muitas solicita/i.test(msg) && tentativa < 2) {
+                await sleep(2500 * (tentativa + 1))
+                return gerarFrame(textoFrame, tentativa + 1)
+            }
+            // tenta multi-fonte direto (pula Pollinations se estiver em rate limit)
+            try {
+                const { gerarImagemMultiFonte } = await import('../lib/imagens-ia.js')
+                const buf = await gerarImagemMultiFonte(textoFrame, { width: 720, height: 720 })
+                if (buf?.length > 500) return buf
+            } catch { /* ignore */ }
+            throw err
+        }
+        return null
+    }
+
+    try {
+        const angulos = [
+            `${p}, cinematic still, dramatic lighting, 4k`,
+            `${p}, wide shot, atmospheric, film still`
+        ]
+        const frames = []
+        for (let i = 0; i < angulos.length; i++) {
+            if (i > 0) await sleep(2000)
+            try {
+                const f = await gerarFrame(angulos[i])
+                if (f) frames.push(f)
+            } catch (e) {
+                console.log(`API obterVideoIA frame ${i} - ${msgErro(e)}`)
+            }
+        }
+        if (frames.length >= 2) {
+            return { resultado: await imagensParaVideoSlideshow(frames.slice(0, 2), 3.5) }
+        }
+        if (frames.length === 1) {
+            return { resultado: await imagemParaVideoPan(frames[0]) }
+        }
+    } catch (err) {
+        console.log(`API obterVideoIA slideshow - ${msgErro(err)}`)
+    }
 
     if (rapidKey()) {
         try {
@@ -933,112 +980,33 @@ export const obterVideoIA = async (prompt) => {
             if (url) return { resultado: url }
         } catch (err) {
             console.log(`API obterVideoIA Rapid - ${msgErro(err)}`)
-        }
-    }
-
-    // HuggingFace Gradio — zeroscope / similar (texto → vídeo curto)
-    try {
-        const { gradioCall, baixarArquivoGradio, achatarArquivosGradio } = await import('../lib/gradio.js')
-        const spaces = [
-            { base: 'https://fffiloni-zeroscope-v2.hf.space', api: 'infer', args: [p, 3, 24, 5] },
-            { base: 'https://ali-vilab-text-to-video-ms-1.7b.hf.space', api: '/text2video', args: [p] }
-        ]
-        for (const sp of spaces) {
-            try {
-                const resultado = await gradioCall(sp.base, sp.api, sp.args, { timeoutMs: 180000 })
-                const arquivos = achatarArquivosGradio(resultado)
-                if (!arquivos.length) continue
-                const buf = await baixarArquivoGradio(sp.base, arquivos[0])
-                if (buf?.length > 5000) return { resultado: buf }
-            } catch (e) {
-                console.log(`API obterVideoIA HF ${sp.base} - ${e.message}`)
+            if (/429|too many|rate/i.test(String(err?.message || ''))) {
+                throw { erro: 'Muitas solicitações agora. Aguarde ~1 minuto e tente de novo.' }
             }
         }
-    } catch (err) {
-        console.log(`API obterVideoIA HF - ${msgErro(err)}`)
     }
 
-    // Pollinations video (experimental)
-    try {
-        const seed = Math.floor(Math.random() * 1e9)
-        const url =
-            `https://video.pollinations.ai/prompt/${encodeURIComponent(p.slice(0, 300))}?width=768&height=512&seed=${seed}`
-        const { data, status } = await axios.get(url, {
-            responseType: 'arraybuffer',
-            timeout: 120000,
-            validateStatus: () => true,
-            headers: { Accept: 'video/*,*/*' }
-        })
-        const buf = Buffer.from(data)
-        if (status < 400 && buf.length > 20000 && !/^\{|<!DOCTYPE/i.test(buf.slice(0, 40).toString())) {
-            return { resultado: buf }
-        }
-    } catch (err) {
-        console.log(`API obterVideoIA pollinations - ${msgErro(err)}`)
+    throw {
+        erro: 'Não foi possível gerar o vídeo (limite de requisições ou falha nas imagens). Aguarde um pouco e tente novamente.'
     }
+}
 
+/** Image-to-image (I22) via Pollinations kontext. */
+export const imagemParaImagemIA = async (bufferImagem, prompt) => {
+    const p = String(prompt || 'melhorar esta imagem, alta qualidade, detalhes').trim()
+    if (!bufferImagem?.length) throw { erro: 'Envie/responda uma imagem.' }
+    if (!pollinationsKey()) throw { erro: 'Configure POLLINATIONS_API_KEY no .env.' }
     try {
-        const angulos = [
-            `${p}, cinematic establishing shot, dramatic lighting, 4k still`,
-            `${p}, medium shot, dynamic composition, film still`,
-            `${p}, close-up detail, shallow depth of field, cinematic`,
-            `${p}, wide angle, atmospheric, golden hour`,
-            `${p}, alternate angle, vivid colors, movie frame`,
-            `${p}, final shot, epic composition, high detail`
-        ]
-        const frames = []
-        await Promise.all(
-            angulos.map(async (v) => {
-                try {
-                    const { resultado } = await obterImagemIA(v)
-                    if (Buffer.isBuffer(resultado)) frames.push(resultado)
-                } catch { /* next */ }
-            })
-        )
-        if (!frames.length) throw new Error('sem frames')
-
-        let video = await imagensParaVideoSlideshow(frames.slice(0, 6), 2.2)
-
-        if (elevenKey()) {
-            try {
-                const { gerarSomEleven } = await import('../lib/elevenlabs.js')
-                const sfx = await gerarSomEleven(
-                    `Cinematic ambient soundtrack for: ${p}. Soft pads, subtle rhythm, no vocals.`,
-                    14
-                )
-                const vidIn = obterCaminhoTemporario('mp4')
-                const audIn = obterCaminhoTemporario('mp3')
-                const out = obterCaminhoTemporario('mp4')
-                await fs.writeFile(vidIn, video)
-                await fs.writeFile(audIn, sfx)
-                await new Promise((resolve, reject) => {
-                    ffmpeg()
-                        .input(vidIn)
-                        .input(audIn)
-                        .outputOptions([
-                            '-c:v', 'copy',
-                            '-c:a', 'aac',
-                            '-shortest',
-                            '-movflags', '+faststart',
-                            '-y'
-                        ])
-                        .save(out)
-                        .on('end', resolve)
-                        .on('error', reject)
-                })
-                video = await fs.readFile(out)
-                try { await fs.unlink(vidIn) } catch {}
-                try { await fs.unlink(audIn) } catch {}
-                try { await fs.unlink(out) } catch {}
-            } catch (e) {
-                console.log(`API obterVideoIA audio - ${msgErro(e)}`)
-            }
-        }
-
-        return { resultado: video }
+        const buf = await imagemParaImagemPollinations(bufferImagem, p)
+        if (buf?.length > 500) return { resultado: buf }
+        throw new Error('imagem vazia')
     } catch (err) {
-        console.log(`API obterVideoIA fallback - ${msgErro(err)}`)
-        throw { erro: 'Não foi possível gerar o vídeo. Tente outro prompt ou mais tarde.' }
+        console.log(`API imagemParaImagemIA - ${msgErro(err)}`)
+        throw {
+            erro: /Saldo insuficiente/i.test(String(err?.message || ''))
+                ? 'Saldo insuficiente na Pollinations (Pollen).'
+                : `Falha no image-to-image: ${msgErro(err)}`
+        }
     }
 }
 
@@ -1164,34 +1132,35 @@ async function processarAudioFfmpeg(buffer, { audioFilters = [], filterComplex }
     }
 }
 
-/** Isolamento de vocais — UVR5 rápido → fallbacks. */
+/** Isolamento de vocais — UVR5 primeiro. */
 export const isolarVocais = async (buffer) => {
     if (!buffer?.length) throw { erro: 'Envie/responda um áudio ou vídeo.' }
 
+    const maxSeg = 90
+    const curto = await cortarAudioMp3(buffer, maxSeg).catch(() => buffer)
+
     try {
-        const { vocals } = await separarUvr5(buffer, { maxSegundos: 70 })
-        if (vocals?.length > 500) return { resultado: vocals }
+        const { vocals } = await separarUvr5(curto, { maxSegundos: maxSeg })
+        if (vocals?.length > 500) {
+            console.log('isolarVocais UVR5 ok')
+            return { resultado: vocals }
+        }
     } catch (err) {
         console.log(`API isolarVocais UVR5 - ${msgErro(err)}`)
     }
 
-    if (elevenKey()) {
-        try {
-            const { interpretarStemsEleven } = await import('../lib/elevenlabs.js')
-            const raw = await separarStemsEleven(buffer, 'two_stems_v1')
-            const vocals = await interpretarStemsEleven(raw, 'vocals')
-            if (vocals?.length > 500) return { resultado: vocals }
-            if (raw?.length > 500 && raw.slice(0, 3).toString() === 'ID3') {
-                return { resultado: raw }
-            }
-        } catch (err) {
-            console.log(`API isolarVocais ElevenLabs stems - ${msgErro(err)}`)
+    try {
+        const local = await separarDemucsLocal(curto, { maxSegundos: maxSeg })
+        if (local?.vocals?.length > 500) {
+            console.log(`isolarVocais demucs fallback device=${local.device}`)
+            return { resultado: local.vocals }
         }
+    } catch (err) {
+        console.log(`API isolarVocais demucs - ${msgErro(err)}`)
     }
 
     if (rapidKey()) {
         try {
-            const curto = await cortarAudioMp3(buffer, 90).catch(() => buffer)
             const resultado = await stemSplitSeparar(curto, 'VOCALS')
             if (resultado?.length > 500) return { resultado }
         } catch (err) {
@@ -1199,55 +1168,44 @@ export const isolarVocais = async (buffer) => {
         }
     }
 
-    try {
-        const resultado = await processarAudioFfmpeg(buffer, {
-            filterComplex:
-                '[0:a]pan=mono|c0=0.5*c0+0.5*c1,highpass=f=180,lowpass=f=3800,volume=1.4[out]'
-        })
-        return { resultado }
-    } catch {
-        throw { erro: 'Não foi possível isolar os vocais. Envie um trecho de até ~1 minuto.' }
-    }
+    throw { erro: 'Não foi possível isolar os vocais via UVR. Envie um trecho de até ~1–1,5 min.' }
 }
 
-/** Isolamento de instrumental — ElevenLabs stems → UVR5 (original−vocais) → fallbacks. */
+/** Isolamento de instrumental — UVR5 primeiro. */
 export const isolarInstrumental = async (buffer) => {
     if (!buffer?.length) throw { erro: 'Envie/responda um áudio ou vídeo.' }
 
-    const curto = await cortarAudioMp3(buffer, 90).catch(() => buffer)
-
-    if (elevenKey()) {
-        try {
-            const { interpretarStemsEleven } = await import('../lib/elevenlabs.js')
-            const raw = await separarStemsEleven(curto, 'two_stems_v1')
-            const inst = await interpretarStemsEleven(raw, 'instrumental')
-            if (inst?.length > 500) return { resultado: inst }
-            // se veio só vocals, subtrai do original
-            const voc = await interpretarStemsEleven(raw, 'vocals')
-            if (voc?.length > 500) {
-                const sub = await subtrairVocaisDoOriginal(curto, voc)
-                if (sub?.length > 500) return { resultado: sub }
-            }
-        } catch (err) {
-            console.log(`API isolarInstrumental ElevenLabs - ${msgErro(err)}`)
-        }
-    }
+    const maxSeg = 90
+    const curto = await cortarAudioMp3(buffer, maxSeg).catch(() => buffer)
 
     try {
-        const { vocals, instrumental, stems } = await separarUvr5(curto, { maxSegundos: 90 })
-
+        const { vocals, instrumental, stems } = await separarUvr5(curto, { maxSegundos: maxSeg })
+        if (instrumental?.length > 500) {
+            console.log('isolarInstrumental UVR5 ok')
+            return { resultado: instrumental }
+        }
         if (vocals?.length > 500) {
             const sub = await subtrairVocaisDoOriginal(curto, vocals)
             if (sub?.length > 500) return { resultado: sub }
         }
-
-        if (instrumental?.length > 500) return { resultado: instrumental }
-
-        const { misturarStemsMp3 } = await import('../lib/uvr5.js')
         const mix = await misturarStemsMp3([stems?.bass, stems?.drums, stems?.other, stems?.guitar, stems?.piano])
         if (mix?.length > 500) return { resultado: mix }
     } catch (err) {
         console.log(`API isolarInstrumental UVR5 - ${msgErro(err)}`)
+    }
+
+    try {
+        const local = await separarDemucsLocal(curto, { maxSegundos: maxSeg })
+        if (local?.instrumental?.length > 500) {
+            console.log(`isolarInstrumental demucs fallback device=${local.device}`)
+            return { resultado: local.instrumental }
+        }
+        if (local?.vocals?.length > 500) {
+            const sub = await subtrairVocaisDoOriginal(curto, local.vocals)
+            if (sub?.length > 500) return { resultado: sub }
+        }
+    } catch (err) {
+        console.log(`API isolarInstrumental demucs - ${msgErro(err)}`)
     }
 
     if (rapidKey()) {
@@ -1259,55 +1217,75 @@ export const isolarInstrumental = async (buffer) => {
         }
     }
 
-    try {
-        const resultado = await processarAudioFfmpeg(curto, {
-            filterComplex: '[0:a]pan=stereo|c0=c0-c1|c1=c1-c0,volume=1.6[out]'
-        })
-        return { resultado }
-    } catch {
-        throw { erro: 'Não foi possível isolar o instrumental. Envie um trecho de até ~1,5 minuto.' }
-    }
+    throw { erro: 'Não foi possível isolar o instrumental via UVR. Envie um trecho de até ~1–1,5 min.' }
 }
 
 /**
- * Resumo do grupo em áudio (máx. ~3 min) — sarcástico, direto, com nomes reais.
+ * Resumo do grupo em áudio (máx. ~3 min) — sarcástico, baseado só no histórico real.
+ * TTS: ElevenLabs → Rapid/Google se cota/erro.
  */
 export const gerarResumoGrupoAudio = async ({ mensagens, nomeGrupo }) => {
-    if (!elevenKey()) throw { erro: 'Configure ELEVENLABS_API_KEY no .env.' }
-
     const lista = (mensagens || []).slice(-300)
+    if (!lista.length) {
+        throw {
+            erro:
+                'Ainda não há mensagens salvas deste grupo. O bot precisa estar online enquanto o pessoal conversa (ele guarda as mensagens automaticamente, inclusive comandos).'
+        }
+    }
+
     const linhas = lista
-        .map((m) => {
-            const nome = m.nome_usuario || 'Alguém'
-            return `${nome}: ${m.texto}`
+        .map((m, i) => {
+            const nome = String(m.nome_usuario || 'Alguém').trim() || 'Alguém'
+            const texto = String(m.texto || '').replace(/\s+/g, ' ').trim()
+            if (!texto) return null
+            return `${i + 1}. ${nome}: ${texto}`
         })
+        .filter(Boolean)
         .join('\n')
-        .slice(0, 22000)
+        .slice(0, 24000)
+
+    if (!linhas) {
+        throw { erro: 'As mensagens salvas não têm texto para resumir.' }
+    }
 
     const system =
-        'Você é um narrador sarcástico e engraçado de resumo de grupo de WhatsApp. ' +
-        'Fale em português do Brasil. Use SEMPRE os nomes reais ou apelidos das pessoas. ' +
-        'Sem enrolação: vá direto ao que foi dito e feito, por quem, para quem. ' +
-        'Roteiro FALADO contínuo (sem marcadores de palco), entre 350 e 450 palavras ' +
-        '(cerca de 2,5 a 3 minutos de áudio). Não invente fatos; pode ironizar o que realmente aconteceu. ' +
-        'Máximo 3 minutos — seja denso e objetivo.'
+        'Você é narrador de podcast sarcástico e engraçado de grupo de WhatsApp. ' +
+        'Fale em português do Brasil. Use SEMPRE os nomes reais/apelidos exatamente como aparecem nas mensagens. ' +
+        'REGRAS OBRIGATÓRIAS: ' +
+        '1) NÃO invente nada — só o que está nas mensagens. ' +
+        '2) Sem enrolação: diga o que foi feito/dito, por quem, para quem. ' +
+        '3) Tom sarcástico e afiado, mas fiel aos fatos. ' +
+        '4) Roteiro FALADO contínuo (sem marcadores de palco), 300 a 450 palavras (~2–3 min). ' +
+        '5) Se a conversa for rasa, ironize isso com base no que realmente foi dito — ainda sem inventar eventos.'
 
-    const userPrompt = linhas
-        ? `Grupo: ${nomeGrupo || 'WhatsApp'}\n\nÚltimas mensagens (até 300):\n${linhas}\n\nEscreva o resumo falado agora (350–450 palavras).`
-        : `Grupo: ${nomeGrupo || 'WhatsApp'}\n\nAinda há poucas mensagens registradas. ` +
-          `Faça um resumo curto e sarcástico (cerca de 350 palavras) zoando a falta de fofoca e pedindo que o pessoal converse mais.`
+    const userPrompt =
+        `Grupo: ${nomeGrupo || 'WhatsApp'}\n` +
+        `Total de mensagens analisadas: ${lista.length}\n\n` +
+        `TRANSCRIÇÃO REAL (não invente fora disso):\n${linhas}\n\n` +
+        `Escreva agora o resumo falado sarcástico, fiel à transcrição (300–450 palavras).`
 
     const { resultado: roteiro } = await gerarTextoIA(userPrompt, system)
-    if (!roteiro || roteiro.length < 200) {
+    if (!roteiro || roteiro.length < 120) {
         throw { erro: 'Não foi possível gerar o roteiro do resumo.' }
     }
 
-    // Limita roteiro para caber em ~3 min (~450 palavras ≈ ~2700–3200 chars)
     let texto = roteiro.trim()
     const palavras = texto.split(/\s+/)
     if (palavras.length > 480) texto = palavras.slice(0, 480).join(' ')
 
-    const pedacos = await textoLongoParaVozEleven(texto, { idioma: 'pt', chunkSize: 1800 })
-    const audio = await concatenarMp3(pedacos)
-    return { resultado: audio, roteiro: texto }
+    const { resultado: audio, fonte: ttsFonte, mimetype, ptt } = await textoParaVozRobusto(texto, {
+        idioma: 'pt',
+        maxPalavras: 480
+    })
+    return { resultado: audio, roteiro: texto, totalMsgs: lista.length, ttsFonte, mimetype, ptt }
+}
+
+/** Gera texto engraçado sobre membros do grupo. */
+export const gerarTextoGrupoIA = async (prompt, system) => {
+    return gerarTextoIA(prompt, system)
+}
+
+/** Texto longo → áudio (jornal / cancelado / etc). */
+export const gerarAudioNarrado = async (texto, { maxPalavras = 750 } = {}) => {
+    return textoParaVozRobusto(texto, { idioma: 'pt', maxPalavras })
 }

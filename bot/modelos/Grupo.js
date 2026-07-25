@@ -96,6 +96,28 @@ export class Grupo{
         await db.grupos.updateAsync({id_grupo}, {$set:{autosimi: status}})
     }
 
+    async alterarAutoMsg(id_grupo, status){
+        await db.grupos.updateAsync({id_grupo}, {$set:{automsg: !!status}})
+    }
+
+    async atualizarUltimaMsgHumana(id_grupo, ts = Date.now()){
+        await db.grupos.updateAsync({id_grupo}, {$set:{ultima_msg_humana: Number(ts) || Date.now()}})
+    }
+
+    async atualizarUltimaAutoMsg(id_grupo, ts = Date.now()){
+        await db.grupos.updateAsync({id_grupo}, {$set:{ultima_automsg: Number(ts) || Date.now()}})
+    }
+
+    async definirPrefeito(id_grupo, dados){
+        await db.grupos.updateAsync({id_grupo}, {$set:{prefeito: dados || null}})
+    }
+
+    async obterGruposAutoMsg(){
+        // Ativo por padrão: inclui true e campos ausentes; só exclui false explícito
+        const todos = await db.grupos.findAsync({})
+        return (todos || []).filter((g) => g.automsg !== false)
+    }
+
     async alterarContador(id_grupo, status, data_atual){
         await db.grupos.updateAsync({id_grupo}, {$set:{"contador.status":status, "contador.inicio":data_atual}})
     }

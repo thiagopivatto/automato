@@ -344,40 +344,137 @@ export const obterAnimeInfo = async (bufferImagem)=>{
     return new Promise(async (resolve, reject)=>{
         try{
             let resposta = {}
-            await fetch(`https://api.trace.moe/search?anilistInfo`,{
-                    method: "POST",
-                    body: bufferImagem,
-                    headers: { "Content-type": "image/jpeg" },
-            }).then(async (res)=>{
-                res = await res.json()
-                let msInicio = Math.round(res.result[0].from * 1000) , msFinal = Math.round(res.result[0].to * 1000)
-                let tempoInicial = duration.default(msInicio).format("h:mm:ss")
-                let tempoFinal = duration.default(msFinal).format("h:mm:ss")
-                let episodio = res.result[0].episode
-                let titulo =  res.result[0].anilist.title.english || res.result[0].anilist.title.romaji
-                let similaridade = parseFloat((res.result[0].similarity * 100).toFixed(2))
-                let previaLink = res.result[0].video
-                resposta.resultado = {
-                    tempoInicial,
-                    tempoFinal,
-                    episodio,
-                    titulo,
-                    similaridade,
-                    link_previa: previaLink
+            if (!bufferImagem?.length) {
+                reject({ erro: 'Imagem vazia.' })
+                return
+            }
+
+            // Reduz imagem grande (Trace.moe limita ~10MB / dimensões)
+            let buf = Buffer.from(bufferImagem)
+            try {
+                const ffmpeg = (await import('fluent-ffmpeg')).default
+                const { obterCaminhoTemporario } = await import('../lib/util.js')
+                const fs = (await import('fs-extra')).default
+                const entrada = obterCaminhoTemporario('bin')
+                const saida = obterCaminhoTemporario('jpg')
+                await fs.writeFile(entrada, buf)
+                await new Promise((res, rej) => {
+                    ffmpeg(entrada)
+                        .outputOptions([
+                            '-vf',
+                            'scale=min(1280\\,iw):min(1280\\,ih):force_original_aspect_ratio=decrease',
+                            '-q:v',
+                            '3',
+                            '-frames:v',
+                            '1',
+                            '-y'
+                        ])
+                        .save(saida)
+                        .on('end', res)
+                        .on('error', rej)
+                })
+                buf = await fs.readFile(saida)
+                try { await fs.unlink(entrada) } catch {}
+                try { await fs.unlink(saida) } catch {}
+            } catch {
+                /* usa buffer original */
+            }
+
+            const form = new FormData()
+            form.append('image', buf, { filename: 'anime.jpg', contentType: 'image/jpeg' })
+
+            let data
+            try {
+                const res = await axios.post(
+                    'https://api.trace.moe/search?anilistInfo&cutBorders',
+                    form,
+                    {
+                        headers: form.getHeaders(),
+                        timeout: 60000,
+                        maxBodyLength: Infinity,
+                        validateStatus: () => true
+                    }
+                )
+                if (res.status === 429) {
+                    reject({ erro: 'Muitas solicitações no Trace.moe. Aguarde um minuto e tente de novo.' })
+                    return
                 }
-                resolve(resposta)
-            }).catch(err=>{
-                if(err.status == 429){
-                    resposta.erro = 'Muitas solicitações sendo feitas, tente novamente mais tarde.'
-                    reject(resposta)
-                } else if(err.status == 400){
-                    resposta.erro = 'Não foi possível achar resultados para esta imagem'
-                    reject(resposta)
-                } else {
-                    resposta.erro = 'Houve um erro no servidor de pesquisa de anime.'
-                    reject(resposta)
-                } 
-            })
+                if (res.status === 400) {
+                    reject({ erro: 'Não foi possível achar resultados para esta imagem.' })
+                    return
+                }
+                if (res.status >= 400) {
+                    reject({ erro: `Trace.moe retornou erro HTTP ${res.status}.` })
+                    return
+                }
+                data = res.data
+            } catch (errFetch) {
+                // fallback: POST raw body
+                const mime =
+                    buf[0] === 0x89 && buf[1] === 0x50
+                        ? 'image/png'
+                        : 'image/jpeg'
+                const res = await axios.post(
+                    'https://api.trace.moe/search?anilistInfo&cutBorders',
+                    buf,
+                    {
+                        headers: { 'Content-Type': mime },
+                        timeout: 60000,
+                        maxBodyLength: Infinity,
+                        validateStatus: () => true
+                    }
+                )
+                if (res.status >= 400) {
+                    reject({ erro: `Trace.moe falhou (${res.status}). ${errFetch.message}` })
+                    return
+                }
+                data = res.data
+            }
+
+            if (!data?.result?.length) {
+                reject({ erro: 'Nenhum anime encontrado para esta imagem.' })
+                return
+            }
+            const top = data.result[0]
+            let msInicio = Math.round((top.from || 0) * 1000)
+            let msFinal = Math.round((top.to || 0) * 1000)
+            let tempoInicial = duration.default(msInicio).format('h:mm:ss')
+            let tempoFinal = duration.default(msFinal).format('h:mm:ss')
+            let episodio = top.episode
+            let titulo =
+                top.anilist?.title?.english ||
+                top.anilist?.title?.romaji ||
+                top.anilist?.title?.native ||
+                'Desconhecido'
+            let similaridade = parseFloat(((top.similarity || 0) * 100).toFixed(2))
+            let previaLink = top.video || top.image || null
+
+            // Baixa prévia como buffer (mais estável no WhatsApp que URL externa)
+            let previaBuffer = null
+            if (previaLink) {
+                try {
+                    const { data: vid, status } = await axios.get(previaLink, {
+                        responseType: 'arraybuffer',
+                        timeout: 30000,
+                        maxContentLength: 15 * 1024 * 1024,
+                        validateStatus: () => true
+                    })
+                    if (status < 400 && vid?.byteLength > 1000) {
+                        previaBuffer = Buffer.from(vid)
+                    }
+                } catch { /* só texto */ }
+            }
+
+            resposta.resultado = {
+                tempoInicial,
+                tempoFinal,
+                episodio,
+                titulo,
+                similaridade,
+                link_previa: previaLink,
+                previa_buffer: previaBuffer
+            }
+            resolve(resposta)
         } catch(err){
             console.log(`API obterAnimeInfo - ${err.message}`)
             reject({erro: 'Houve um erro no servidor de pesquisa de anime.'})

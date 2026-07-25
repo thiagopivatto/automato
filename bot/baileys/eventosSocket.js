@@ -1,6 +1,6 @@
 import {DisconnectReason, getContentType} from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
-import {criarTexto, consoleErro, corTexto, verificarEnv, criarArquivosNecessarios, verificarNumeroDono, versaoAtual} from'../lib/util.js'
+import {criarTexto, consoleErro, corTexto, verificarEnv, criarArquivosNecessarios, verificarNumeroDono} from'../lib/util.js'
 import {comandosInfo} from '../comandos/comandos.js'
 import fs from "fs-extra"
 import * as socket from './socket.js'
@@ -38,12 +38,27 @@ export const conexaoEncerrada = async(conexao, botInfo)=>{
 
 export const conexaoAberta = async(c, botInfo)=>{
     try{
-        console.log(criarTexto(comandosInfo(botInfo).outros.inicializando, versaoAtual()))
+        const { bootBanner, registrarBootAutoMsg, registrarBootConteudo } = await import('../lib/boot.js')
+        bootBanner()
         await criarArquivosNecessarios()
         dotenv.config()
         await new BotControle().inicializarBot(c, botInfo)
         await verificarEnv()
-        await verificarNumeroDono()        
+        await verificarNumeroDono()
+        try {
+            const { iniciarAutoMsg } = await import('../lib/autoMsg.js')
+            iniciarAutoMsg(c, botInfo)
+            registrarBootAutoMsg(true)
+        } catch (e) {
+            registrarBootAutoMsg(false)
+            console.log(corTexto(`  AutoMsg: ${e?.message || e}`, '#d63e3e'))
+        }
+        try {
+            const { resumoConteudo } = await import('../lib/conteudo.js')
+            registrarBootConteudo(resumoConteudo())
+        } catch {
+            registrarBootConteudo({})
+        }
     } catch(err){
         consoleErro(err, "Inicialização")
         c.end(new Error("erro_geral"))
@@ -60,15 +75,15 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
             case "notify":
                 const grupos = new GrupoControle()
                 const mensagemBaileys = await converterMensagem(mensagem, botInfo)
-                if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) return
-                if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
-                if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
-                if(!await checagemMensagem(c, mensagemBaileys, botInfo)) return
-                // Histórico de grupo (para !resumodogrupo) — ignora comandos
+                // Histórico ANTES de filtros/tipos — guarda TODAS as msgs de grupo (comandos + midia)
                 try {
                     const { registrarHistoricoGrupo } = await import('../controles/HistoricoGrupoControle.js')
                     await registrarHistoricoGrupo(mensagemBaileys)
                 } catch {}
+                if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) return
+                if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
+                if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
+                if(!await checagemMensagem(c, mensagemBaileys, botInfo)) return
                 await chamadaComando(c, mensagemBaileys, botInfo)
                 break
             case "append":
@@ -134,20 +149,19 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
         //Se não houver grupos retorne
         if(dadosGrupos.length){
             const grupos = new GrupoControle()
-            //Cadastro de grupos
             await grupos.registrarGruposAoIniciar(dadosGrupos)
-            //Atualização dos participantes dos grupos
             await grupos.atualizarDadosGruposInicio(dadosGrupos)
-            //Verificar lista negra dos grupos
             await grupos.verificarListaNegraGeral(c, dadosGrupos, botInfo)
-            //Atualização da contagem de mensagens
             await grupos.atualizarContagemGrupos(dadosGrupos)
-            // Log : Grupos carregados e atualizados
-            console.log('[GRUPOS]', corTexto(comandosInfo(botInfo).outros.grupos_carregados))
         }
 
-        // Log : Servidor iniciado
-        console.log('[SERVIDOR]', corTexto(comandosInfo(botInfo).outros.servidor_iniciado))
+        try {
+            const { registrarBootGrupos, bootPronto } = await import('../lib/boot.js')
+            registrarBootGrupos(dadosGrupos?.length || 0)
+            bootPronto()
+        } catch {
+            console.log(corTexto('Online', false))
+        }
         return true
     } catch(err){
         consoleErro(err, "GROUPS.UPDATE")

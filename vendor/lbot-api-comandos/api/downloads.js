@@ -375,28 +375,87 @@ export const obterMidiaTwitter = async (url) => {
 
 export const obterMidiaTiktok = async (url) => {
     try {
+        const link = String(url || '').trim()
+        if (!/tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com/i.test(link)) {
+            throw { erro: 'Envie um link válido do TikTok.' }
+        }
+
+        // 1) yt-dlp → buffer (mais confiável)
+        if (await ytDlpDisponivel()) {
+            try {
+                const outTpl = obterCaminhoTemporario('mp4').replace(/\.mp4$/i, '.%(ext)s')
+                const tmpBase = outTpl.replace('.%(ext)s', '')
+                await runYtDlp(
+                    [
+                        '-f',
+                        'best[ext=mp4]/best',
+                        '--no-playlist',
+                        '--no-warnings',
+                        '-o',
+                        outTpl,
+                        link
+                    ],
+                    { timeoutMs: 120000 }
+                )
+                const dir = path.dirname(tmpBase)
+                const baseName = path.basename(tmpBase)
+                const arquivos = (await fs.readdir(dir)).filter((f) => f.startsWith(baseName))
+                for (const arq of arquivos) {
+                    const full = path.join(dir, arq)
+                    const buffer = await fs.readFile(full)
+                    try { await fs.unlink(full) } catch {}
+                    if (buffer?.length > 1000) {
+                        return {
+                            resultado: {
+                                autor_perfil: '',
+                                descricao: '',
+                                url: null,
+                                buffer,
+                                tipo: /\.(jpe?g|png|webp)$/i.test(arq) ? 'imagem' : 'video'
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log(`API obterMidiaTiktok yt-dlp - ${msgErro(e)}`)
+            }
+        }
+
+        // 2) Cobalt → baixa buffer
         for (const mode of ['auto', 'video']) {
             try {
-                const itens = await cobaltObterUrls(url, {downloadMode: mode})
+                const itens = await cobaltObterUrls(link, { downloadMode: mode })
                 const video = itens.find((item) => item.tipo === 'video') || itens[0]
                 if (video?.url) {
-                    return {
-                        resultado: {
-                            autor_perfil: '',
-                            descricao: '',
-                            url: video.url
+                    const buffer = await baixarBufferDeUrl(video.url)
+                    if (buffer?.length > 1000) {
+                        return {
+                            resultado: {
+                                autor_perfil: '',
+                                descricao: '',
+                                url: video.url,
+                                buffer,
+                                tipo: video.tipo || 'video'
+                            }
                         }
                     }
                 }
             } catch {}
         }
 
-        const resultado = await baixarMidiaTiktokScraper(url)
-        return {resultado}
+        // 3) scraper
+        const resultado = await baixarMidiaTiktokScraper(link)
+        if (resultado?.url) {
+            try {
+                const buffer = await baixarBufferDeUrl(resultado.url)
+                if (buffer?.length > 1000) resultado.buffer = buffer
+            } catch {}
+        }
+        return { resultado }
     } catch (err) {
         console.log(`API obterMidiaTiktok - ${msgErro(err)}`)
         if (err?.erro) throw err
-        throw {erro: 'Houve um erro no servidor de download do TikTok.'}
+        throw { erro: 'Houve um erro no servidor de download do TikTok. Verifique o link.' }
     }
 }
 

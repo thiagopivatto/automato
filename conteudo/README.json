@@ -1,0 +1,13 @@
+{
+  "descricao": "Bancos de conteúdo do Ultron (≥2000 itens cada).",
+  "arquivos": [
+    "piadas.json",
+    "verdade_ou_desafio.json",
+    "trocadilhos.json",
+    "audios_malignos.json",
+    "isso_ou_aquilo.json",
+    "curiosidades.json",
+    "frases_soltas.json"
+  ],
+  "regenerar": "node scripts/gerar-conteudo-json.js"
+}

@@ -4,8 +4,8 @@ const db = new Datastore({ filename: './dados/historico_grupo.db', autoload: tru
 db.ensureIndex({ fieldName: 'id_grupo' })
 db.ensureIndex({ fieldName: 'timestamp' })
 
-const TTL_MS = 48 * 60 * 60 * 1000
-const MAX_TEXTO = 800
+const TTL_MS = 7 * 24 * 60 * 60 * 1000
+const MAX_TEXTO = 1200
 
 export class HistoricoGrupo {
     constructor() {}
@@ -13,7 +13,6 @@ export class HistoricoGrupo {
     async registrar({ id_grupo, id_usuario, nome_usuario, texto, tipo = 'texto', timestamp = Date.now() }) {
         const body = String(texto || '').trim()
         if (!id_grupo || !body) return
-        if (body.startsWith('!') || body.startsWith('/') || body.startsWith('.')) return
 
         await db.insertAsync({
             id_grupo,
@@ -54,5 +53,17 @@ export class HistoricoGrupo {
         await this.limparAntigas(id_grupo)
         const corte = Date.now() - TTL_MS
         return await db.countAsync({ id_grupo, timestamp: { $gte: corte } })
+    }
+
+    async limparTudo() {
+        await db.removeAsync({}, { multi: true })
+        try {
+            if (typeof db.compactDatafile === 'function') await db.compactDatafile()
+            else await db.persistence.compactDatafile()
+        } catch { /* ignore */ }
+    }
+
+    async contarTodas() {
+        return await db.countAsync({})
     }
 }

@@ -92,6 +92,8 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     resposta += (grupo.autosticker) ? comandos_info.grupo.status.msgs.resposta_variavel.autosticker.on : comandos_info.grupo.status.msgs.resposta_variavel.autosticker.off
                     //Auto-Simi
                     resposta += (grupo.autosimi) ? comandos_info.grupo.status.msgs.resposta_variavel.autosimi.on : comandos_info.grupo.status.msgs.resposta_variavel.autosimi.off
+                    //Auto-Msg (padrão: ligado)
+                    resposta += (grupo.automsg !== false) ? comandos_info.grupo.status.msgs.resposta_variavel.automsg.on : comandos_info.grupo.status.msgs.resposta_variavel.automsg.off
                     //Anti-Link
                     resposta += (grupo.antilink) ? comandos_info.grupo.status.msgs.resposta_variavel.antilink.on : comandos_info.grupo.status.msgs.resposta_variavel.antilink.off
                     //Anti-fake
@@ -229,6 +231,27 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                         await socket.responderTexto(c, id_chat, comandos_info.grupo.autosimi.msgs.desligado, mensagem)
                     }
                 } catch(err){
+                    throw err
+                }
+                break
+
+            case 'automsg':
+                try {
+                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                    const arg = String(texto_recebido || args[0] || '').toLowerCase().trim()
+                    const atual = grupo.automsg !== false
+                    let ligar
+                    if (arg === 'ativar' || arg === 'on' || arg === 'liga' || arg === 'ligar') ligar = true
+                    else if (arg === 'desativar' || arg === 'off' || arg === 'desliga' || arg === 'desligar') ligar = false
+                    else ligar = !atual
+                    await grupos.alterarAutoMsg(id_grupo, ligar)
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        ligar ? comandos_info.grupo.automsg.msgs.ligado : comandos_info.grupo.automsg.msgs.desligado,
+                        mensagem
+                    )
+                } catch (err) {
                     throw err
                 }
                 break
@@ -580,8 +603,8 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                         if (!atual || String(jid).endsWith('@s.whatsapp.net')) porNumero.set(num, jid)
                     }
                     const mencoes = [...porNumero.values()]
-                    const tags = mencoes.map(p => `@${String(p).split('@')[0]}`).join(' ')
-                    await socket.enviarTextoComMencoes(c, id_chat, `${respostaMarcar}\n\n${tags}`, mencoes)
+                    // Anônimo: mentions no payload, sem @números no texto visível
+                    await socket.enviarTextoComMencoes(c, id_chat, respostaMarcar, mencoes)
                 } catch (err) {
                     throw err
                 }
@@ -724,7 +747,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                 } catch (err) {
                     console.error("Erro ao executar o comando restrito:", err);
                 }
-                break           
+                break
                 
         }
     } catch(err){

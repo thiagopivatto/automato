@@ -252,7 +252,7 @@ export const responderArquivoUrl = async(c, tipo, id_chat, url, legenda, mensage
     }
 }
 
-export const responderArquivoBuffer = async(c, tipo, id_chat, buffer, legenda, mensagemCitacao, mimetype = '')=>{ 
+export const responderArquivoBuffer = async(c, tipo, id_chat, buffer, legenda, mensagemCitacao, mimetype = '', extras = {})=>{ 
     if(tipo == tiposMensagem.video){
         let base64Thumb = (await api.Videos.obterThumbnailVideo(buffer, "buffer")).resultado
         return await c.sendMessage(id_chat, {video: buffer, caption: legenda, mimetype, jpegThumbnail: base64Thumb}, {quoted: mensagemCitacao})
@@ -261,7 +261,12 @@ export const responderArquivoBuffer = async(c, tipo, id_chat, buffer, legenda, m
         const mimeImg = mimetype || (buffer?.[0] === 0x89 && buffer?.[1] === 0x50 ? 'image/png' : 'image/jpeg')
         return await c.sendMessage(id_chat, {image: buffer, caption: legenda, mimetype: mimeImg}, {quoted: mensagemCitacao})
     } else if (tipo == tiposMensagem.audio){
-        return await c.sendMessage(id_chat, {audio: buffer, mimetype}, {quoted: mensagemCitacao})
+        const payload = {
+            audio: buffer,
+            mimetype: mimetype || 'audio/mpeg',
+            ptt: !!extras.ptt
+        }
+        return await c.sendMessage(id_chat, payload, {quoted: mensagemCitacao})
     } else if (tipo == 'documento' || tipo == 'document') {
         return await c.sendMessage(id_chat, {
             document: buffer,
@@ -269,6 +274,15 @@ export const responderArquivoBuffer = async(c, tipo, id_chat, buffer, legenda, m
             fileName: legenda || 'arquivo.bin'
         }, {quoted: mensagemCitacao})
     }
+}
+
+/** Envia buffer como nota de voz (PTT / opus). */
+export const responderVozBuffer = async(c, id_chat, buffer, mensagemCitacao = null, mimetype = 'audio/ogg; codecs=opus')=>{
+    return await c.sendMessage(id_chat, {
+        audio: buffer,
+        mimetype,
+        ptt: true
+    }, mensagemCitacao ? { quoted: mensagemCitacao } : undefined)
 }
 
 export const responderComMencoes = async(c, id_chat, texto, mencionados, mensagemCitacao)=>{ 

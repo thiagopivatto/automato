@@ -1,5 +1,5 @@
 // REQUERINDO MODULOS
-import { criarTexto, primeiraLetraMaiuscula, erroComandoMsg, consoleErro, timestampParaData, mencaoNumero, sortearMembros } from '../lib/util.js'
+import { criarTexto, primeiraLetraMaiuscula, erroComandoMsg, consoleErro, mencaoNumero, sortearMembros } from '../lib/util.js'
 import path from 'node:path'
 import fs from 'fs-extra'
 import api from '@victorsouzaleal/lbot-api-comandos'
@@ -54,7 +54,7 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                     if (!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
                     let perguntaSimi = texto_recebido
                     let { resultado: resultadoTexto } = await api.IA.obterRespostaSimi(perguntaSimi, remetente)
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.diversao.simi.msgs.resposta, timestampParaData(Date.now()), resultadoTexto), mensagem)
+                    await socket.responderTexto(c, id_chat, resultadoTexto, mensagem)
                 } catch (err) {
                     if (!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
@@ -179,15 +179,6 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                     }
                 } catch (err) {
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err?.erro || err?.message || 'Erro ao carregar mascote'), mensagem)
-                }
-                break
-
-            case 'malacos':
-                try {
-                    const malacosFotoURL = "https://i.imgur.com/7bcn2TK.jpg"
-                    await socket.responderArquivoUrl(c, tiposMensagem.imagem, id_chat, malacosFotoURL, 'Somos o problema', mensagem)
-                } catch (err) {
-                    throw err
                 }
                 break
 
@@ -328,10 +319,19 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
             case 'sortear':
                 try {
                     if (!mensagem_grupo) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
-                    const idParticipantesAtuais = [...(grupo.participantes || [])]
-                    if (idParticipantesAtuais.length == 0) return await socket.responderTexto(c, id_chat, 'Não há membros para sortear.', mensagem)
+                    const idParticipantesAtuais = [...(grupo.participantes || [])].filter(
+                        (j) => j && j !== numero_bot
+                    )
+                    if (idParticipantesAtuais.length == 0) {
+                        return await socket.responderTexto(c, id_chat, 'Não há membros para sortear.', mensagem)
+                    }
                     const [sorteado] = sortearMembros(idParticipantesAtuais, 1)
-                    await socket.enviarTextoComMencoes(c, id_chat, `🎲 O sorteado foi: @${mencaoNumero(sorteado)}`, [sorteado])
+                    await socket.enviarTextoComMencoes(
+                        c,
+                        id_chat,
+                        `🎲 *Sorteio*\nO membro sorteado foi: @${mencaoNumero(sorteado)}`,
+                        [sorteado]
+                    )
                 } catch (err) {
                     throw err
                 }
@@ -385,23 +385,44 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                 }
                 break
 
-                // COMANDOOSSSSS NOVOS ------------------------------------------------------
-                
             case 'joke':
+            case 'piada':
                 try {
-                    let response = await axios.get('https://official-joke-api.appspot.com/random_joke')
-                    let joke = `${response.data.setup} - ${response.data.punchline}`
-                    await socket.responderTexto(c, id_chat, joke, mensagem)
+                    const { obterPiadaAleatoria } = await import('../lib/piadas.js')
+                    const { texto } = await obterPiadaAleatoria(id_chat)
+                    await socket.responderTexto(c, id_chat, `😂 ${texto}`, mensagem)
                 } catch (err) {
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, 'Não foi possível obter uma piada no momento.'), mensagem)
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.outros.erro_api, comando, 'Não foi possível obter uma piada agora.'),
+                        mensagem
+                    )
+                }
+                break
+
+            case 'issoouaquilo':
+            case 'ioa':
+                try {
+                    const { sortearItem } = await import('../lib/conteudo.js')
+                    const texto = sortearItem('isso_ou_aquilo', id_chat)
+                    if (!texto) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            'Banco de “isso ou aquilo” vazio. Rode: npm run gerar:conteudo',
+                            mensagem
+                        )
+                    }
+                    await socket.responderTexto(c, id_chat, `⚖️ ${texto}`, mensagem)
+                } catch (err) {
+                    throw err
                 }
                 break
 
             case 'verdadeoudesafio':
             case 'vod':
                 try {
-                    // !verdadeoudesafio [verdade|desafio|aleatorio] [1-5]
-                    // !vod vdd 3  |  !vod dsf 5  |  !vod 2
                     let tipo = 'aleatorio'
                     let nivel = 1
                     if (args.length === 1 && /^\d+$/.test(args[0])) {
@@ -433,59 +454,99 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                 }
                 break
 
-            // case 'vod':
-            //     try {
-            //         if (!mensagem_grupo) {
-            //             return await socket.responderTexto(c, id_chat, "Este comando só pode ser usado em grupos.", mensagem)
-            //         }
-            //         if (args.length < 1 || args.length > 2) {
-            //             return await socket.responderTexto(c, id_chat, "Formato inválido. Use !vod [vdd/dsf] [nível]", mensagem)
-            //         }
+            case 'fofoca':
+            case 'crime':
+            case 'tribunal':
+            case 'prefeito':
+            case 'horoscopo':
+            case 'cancelado':
+            case 'boladocotidiano':
+            case 'jornal':
+                try {
+                    if (!mensagem_grupo) {
+                        return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
+                    }
+                    const { membrosDoGrupo, sortearNomes, listaNomesTexto, PROMPTS } = await import('../lib/dramaGrupo.js')
+                    const { aplicarMencoes } = await import('../lib/mencoes.js')
+                    const participantes = grupo?.participantes || []
+                    const membros = await membrosDoGrupo(id_chat, participantes, numero_bot)
+                    if (membros.length < 1) {
+                        return await socket.responderTexto(c, id_chat, 'Preciso de membros no grupo pra isso.', mensagem)
+                    }
+                    const nomeGrupo = grupo?.nome || 'o grupo'
+                    const nomes = listaNomesTexto(membros)
 
-            //         const tipoEscolha = args[0].toLowerCase()
-            //         const nivel = parseInt(args[1])
-            //         const tipoEscolhaMapeado = tipoEscolha === 'vdd' ? 'truth' : tipoEscolha === 'dsf' ? 'dare' : ''
+                    if (comandoSemPrefixo === 'prefeito') {
+                        const [escolhido] = sortearNomes(membros, 1)
+                        const ate = Date.now() + 24 * 60 * 60 * 1000
+                        const { GrupoControle } = await import('../controles/GrupoControle.js')
+                        await new GrupoControle().definirPrefeito(id_chat, {
+                            jid: escolhido.jid,
+                            nome: escolhido.nome,
+                            ate
+                        })
+                        const textoFinal = `🏛️ *Prefeito do dia*\n\n@${mencaoNumero(escolhido.jid)} assume a prefeitura de *${nomeGrupo}* por 24h!\nPromessa de campanha: Wi-Fi estável e zero ghosting.`
+                        await socket.enviarTextoComMencoes(c, id_chat, textoFinal, [escolhido.jid])
+                        break
+                    }
 
-            //         if (!tipoEscolhaMapeado) {
-            //             return await socket.responderTexto(c, id_chat, "Tipo de escolha inválido. Use vdd ou dsf.", mensagem)
-            //         }
-            //         if (isNaN(nivel) || nivel < 1 || nivel > 5) {
-            //             return await socket.responderTexto(c, id_chat, "Nível inválido. Use um número de 1 a 5.", mensagem)
-            //         }
+                    let alvo = sortearNomes(membros, 1)[0]
+                    if (mencionados?.length) {
+                        const m = membros.find((x) => mencionados.includes(x.jid)) || {
+                            jid: mencionados[0],
+                            nome: membros.find((x) => x.jid === mencionados[0])?.nome || 'Alguém'
+                        }
+                        alvo = m
+                    }
 
-            //         const frasesVOD = await axios.get("https://gist.githubusercontent.com/thiagopivatto/3ed7f417a37590b75745cc1c4cba450a/raw/a960f63a10323565a21c32d13a457edca67ebb75/vod.json")
-            //         const frasesFiltradas = frasesVOD.data.filter(frase => frase.level === nivel.toString() && frase.type.toLowerCase() === tipoEscolhaMapeado)
-            //         const traduzirFrases = async (frases) => {
-            //             return new Promise(async (resolve, reject) => {
-            //                 try {
-            //                     const targetLanguage = 'pt'
-            //                     const traducaoPromises = frases.map(async (frase) => {
-            //                         const translation = await translate(frase.summary, { to: targetLanguage })
-            //                         frase.summary = translation.text
-            //                     })
-            //                     await Promise.all(traducaoPromises)
-            //                     resolve({ sucesso: true, frases })
-            //                 } catch (err) {
-            //                     console.log(`API traduzirFrases - ${err.message}`)
-            //                     reject({ sucesso: false, erro: "Houve um erro no servidor de tradução." })
-            //                 }
-            //             })
-            //         }
+                    let prompt
+                    if (comandoSemPrefixo === 'fofoca') prompt = PROMPTS.fofoca(nomeGrupo, nomes)
+                    else if (comandoSemPrefixo === 'crime') prompt = PROMPTS.crime(nomeGrupo, nomes, alvo.nome)
+                    else if (comandoSemPrefixo === 'tribunal') prompt = PROMPTS.tribunal(nomeGrupo, nomes, alvo.nome)
+                    else if (comandoSemPrefixo === 'horoscopo') {
+                        prompt = PROMPTS.horoscopo(nomeGrupo, nomes, alvo.nome, texto_recebido || '')
+                    } else if (comandoSemPrefixo === 'cancelado') prompt = PROMPTS.cancelado(nomeGrupo, nomes, alvo.nome)
+                    else if (comandoSemPrefixo === 'boladocotidiano') {
+                        prompt = PROMPTS.boladocotidiano(nomeGrupo, nomes, alvo.nome)
+                    } else if (comandoSemPrefixo === 'jornal') {
+                        const { historicoGrupo } = await import('../controles/HistoricoGrupoControle.js')
+                        const msgs = await historicoGrupo.obterUltimas(id_chat, 40)
+                        const trechos = (msgs || [])
+                            .map((m) => `${m.nome_usuario}: ${String(m.texto || '').slice(0, 80)}`)
+                            .join('\n')
+                            .slice(0, 2000)
+                        prompt = PROMPTS.jornal(nomeGrupo, nomes, trechos)
+                    }
 
-            //         if (frasesFiltradas.length > 0) {
-            //             const { frases } = await traduzirFrases(frasesFiltradas)
-            //             const fraseSelecionada = frases[Math.floor(Math.random() * frases.length)]
-            //             const mensagemResposta = `🌟 *Nível:* ${nivel}\n🔥 *Tipo:* ${tipoEscolhaMapeado === 'truth' ? '🔮 Verdade' : '🎲 Desafio'}\n💬 *Frase:* ${fraseSelecionada.summary}`
-            //             await socket.responderTexto(c, id_chat, mensagemResposta, mensagem)
-            //         } else {
-            //             await socket.responderTexto(c, id_chat, "Não foram encontradas frases com o nível e tipo especificados.", mensagem)
-            //         }
-            //     } catch (err) {
-            //         throw err
-            //     }
-            //     break
+                    const { resultado: textoIA } = await api.IA.gerarTextoGrupoIA(prompt.user, prompt.system)
+                    if (!textoIA || textoIA.length < 40) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            criarTexto(comandos_info.outros.erro_api, comando, 'IA não gerou texto útil.'),
+                            mensagem
+                        )
+                    }
 
-            // case 'musica' removido — use !musica da categoria IA (ElevenLabs)
+                    const { texto: textoComTags, mentions } = aplicarMencoes(textoIA, membros, participantes)
+                    const comAudio = ['cancelado', 'boladocotidiano', 'jornal'].includes(comandoSemPrefixo)
+
+                    if (mentions.length) {
+                        await socket.responderComMencoes(c, id_chat, textoComTags.slice(0, 4000), mentions, mensagem)
+                    } else {
+                        await socket.responderTexto(c, id_chat, textoComTags.slice(0, 4000), mensagem)
+                    }
+
+                    if (comAudio) {
+                        const maxPalavras = comandoSemPrefixo === 'jornal' ? 900 : 280
+                        const { resultado: audio, mimetype } = await api.IA.gerarAudioNarrado(textoIA, { maxPalavras })
+                        await socket.responderVozBuffer(c, id_chat, audio, mensagem, mimetype || 'audio/ogg; codecs=opus')
+                    }
+                } catch (err) {
+                    if (!err.erro) throw err
+                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
+                }
+                break
 
         }
     } catch (err) {

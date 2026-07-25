@@ -129,9 +129,15 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
                     await socket.responderTexto(c, id_chat, comandos_info.utilidades.rbg.msgs.espera, mensagem)
                     let bufferImagem = await downloadMediaMessage(dadosMensagem.message, "buffer")
                     let {resultado: resultadoImagem} = await api.Imagens.removerFundo(bufferImagem)
-                    // PNG com alpha — mimetype image/png + também documento (preserva transparência total)
-                    await socket.responderArquivoBuffer(c, tiposMensagem.imagem, id_chat, resultadoImagem, '', mensagem, 'image/png')
-                    await socket.responderArquivoBuffer(c, 'documento', id_chat, resultadoImagem, 'sem-fundo.png', mensagem, 'image/png')
+                    await socket.responderArquivoBuffer(
+                        c,
+                        tiposMensagem.imagem,
+                        id_chat,
+                        resultadoImagem,
+                        '',
+                        mensagem,
+                        'image/png'
+                    )
                 } catch(err){
                     if(!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
@@ -318,27 +324,6 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
                 }
                 break
             
-            case "qualanime":
-                try{
-                    let dadosMensagem = {
-                        tipo: (mensagem_citada)? citacao.tipo : tipo,
-                        mimetype: (mensagem_citada)? citacao.mimetype : mimetype,
-                        mensagem: (mensagem_citada)? citacao.mensagem : mensagem
-                    }
-                    if(dadosMensagem.tipo != tiposMensagem.imagem) return await socket.responderTexto(c, id_chat,erroComandoMsg(comando, botInfo), mensagem)
-                    await socket.responderTexto(c, id_chat, comandos_info.utilidades.qualanime.msgs.espera, mensagem)
-                    let bufferImagem = await downloadMediaMessage(dadosMensagem.mensagem, "buffer")
-                    let {resultado: resultadoAnimeInfo} = await api.Imagens.obterAnimeInfo(bufferImagem)
-                    if(resultadoAnimeInfo.similaridade < 87) return await socket.responderTexto(c, id_chat, comandos_info.utilidades.qualanime.msgs.similaridade, mensagem)
-                    resultadoAnimeInfo.episodio = resultadoAnimeInfo.episodio || "---"
-                    let respostaAnimeInfo = criarTexto(comandos_info.utilidades.qualanime.msgs.resposta, resultadoAnimeInfo.titulo, resultadoAnimeInfo.episodio, resultadoAnimeInfo.tempoInicial, resultadoAnimeInfo.tempoFinal, resultadoAnimeInfo.similaridade, resultadoAnimeInfo.link_previa)                          
-                    await socket.responderArquivoLocal(c, tiposMensagem.video, id_chat, resultadoAnimeInfo.link_previa, respostaAnimeInfo, mensagem, "video/mp4")
-                } catch(err){
-                    if(!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
-                }
-                break
-            
             case "traduz":
                 try{
                     let usuarioTexto , idiomaTraducao, idiomasSuportados = ["pt", "es", "en", "ja", "it", "ru", "ko"]
@@ -401,8 +386,12 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
 
                     if (!usuarioTexto) return await socket.responderTexto(c, id_chat, comandos_info.utilidades.voz.msgs.texto_vazio , mensagem)
                     if (usuarioTexto.length > 4000) return await socket.responderTexto(c, id_chat, comandos_info.utilidades.voz.msgs.texto_longo, mensagem)
-                    let {resultado: resultadoAudio} = await api.Audios.textoParaVoz(idioma, usuarioTexto)
-                    await socket.responderArquivoBuffer(c, tiposMensagem.audio, id_chat, resultadoAudio, '', mensagem, 'audio/mpeg')
+                    let {resultado: resultadoAudio, mimetype, ptt} = await api.Audios.textoParaVoz(idioma, usuarioTexto)
+                    if (ptt !== false) {
+                        await socket.responderVozBuffer(c, id_chat, resultadoAudio, mensagem, mimetype || 'audio/ogg; codecs=opus')
+                    } else {
+                        await socket.responderArquivoBuffer(c, tiposMensagem.audio, id_chat, resultadoAudio, '', mensagem, mimetype || 'audio/mpeg')
+                    }
                 } catch(err){
                     if(!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)

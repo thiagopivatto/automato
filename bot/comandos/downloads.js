@@ -128,9 +128,22 @@ export const downloads = async(c, mensagemBaileys, botInfo) => {
                 try{
                     if(!args.length) return await socket.responderTexto(c, id_chat,erroComandoMsg(comando, botInfo),mensagem)
                     let usuarioTexto = texto_recebido
+                    await socket.responderTexto(c, id_chat, '🎬 Baixando TikTok…', mensagem)
                     const {resultado : resultadoTK} = await api.Downloads.obterMidiaTiktok(usuarioTexto)
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.downloads.tk.msgs.espera, resultadoTK.autor_perfil, resultadoTK.descricao),mensagem)
-                    await socket.responderArquivoUrl(c, tiposMensagem.video, id_chat, resultadoTK.url, '', mensagem, "video/mp4")
+                    const legenda = criarTexto(
+                        comandos_info.downloads.tk.msgs.espera,
+                        resultadoTK.autor_perfil || '',
+                        resultadoTK.descricao || ''
+                    ).replace(/\[AGUARDE\].*/i, '').trim()
+                    if (resultadoTK.buffer?.length) {
+                        const tipoMidia = resultadoTK.tipo === 'imagem' ? tiposMensagem.imagem : tiposMensagem.video
+                        const mime = resultadoTK.tipo === 'imagem' ? 'image/jpeg' : 'video/mp4'
+                        await socket.responderArquivoBuffer(c, tipoMidia, id_chat, resultadoTK.buffer, legenda || '', mensagem, mime)
+                    } else if (resultadoTK.url) {
+                        await socket.responderArquivoUrl(c, tiposMensagem.video, id_chat, resultadoTK.url, legenda || '', mensagem, "video/mp4")
+                    } else {
+                        throw { erro: 'Não foi possível obter a mídia do TikTok.' }
+                    }
                 } catch(err){
                     if(!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)

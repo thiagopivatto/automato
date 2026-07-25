@@ -56,11 +56,22 @@ export class GrupoControle {
         dadosGrupo.antiflood = { status: false, max: 10, intervalo: 10, msgs: [] }
         dadosGrupo.autosticker = false
         dadosGrupo.autosimi = false
-        dadosGrupo.contador = { status: false, inicio: '' }
+        dadosGrupo.automsg = true
+        dadosGrupo.ultima_msg_humana = Date.now()
+        dadosGrupo.ultima_automsg = 0
+        dadosGrupo.prefeito = null
+        dadosGrupo.contador = { status: true, inicio: moment(moment.now()).format('DD/MM HH:mm:ss') }
         dadosGrupo.block_cmds = []
         dadosGrupo.lista_negra = []
 
         await this.grupo.registrarGrupo(dadosGrupo)
+        try {
+            if (dadosGrupo.participantes?.length) {
+                await this.registrarContagemGrupo(dadosGrupo.id_grupo, dadosGrupo.participantes)
+            }
+        } catch (e) {
+            console.log(`contador auto - ${e.message}`)
+        }
     }
 
     async atualizarNomeGrupo(id_grupo, nome) {
@@ -370,6 +381,28 @@ export class GrupoControle {
     //Recurso AUTO-SIMI
     async alterarAutoSimi(id_grupo, status = true) {
         await this.grupo.alterarAutoSimi(id_grupo, status)
+    }
+
+    //Recurso AUTO-MSG
+    async alterarAutoMsg(id_grupo, status = true) {
+        await this.grupo.alterarAutoMsg(id_grupo, status)
+        if (status) await this.grupo.atualizarUltimaMsgHumana(id_grupo, Date.now())
+    }
+
+    async atualizarUltimaMsgHumana(id_grupo) {
+        await this.grupo.atualizarUltimaMsgHumana(id_grupo, Date.now())
+    }
+
+    async atualizarUltimaAutoMsg(id_grupo) {
+        await this.grupo.atualizarUltimaAutoMsg(id_grupo, Date.now())
+    }
+
+    async definirPrefeito(id_grupo, dados) {
+        await this.grupo.definirPrefeito(id_grupo, dados)
+    }
+
+    async obterGruposAutoMsg() {
+        return await this.grupo.obterGruposAutoMsg()
     }
 
     //Recurso ANTI-FAKE

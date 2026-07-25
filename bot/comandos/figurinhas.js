@@ -86,16 +86,20 @@ export const figurinhas = async(c, mensagemBaileys, botInfo) => {
                     let [emoji1, emoji2] = texto_recebido.split("+")
                     if(!emoji1 || !emoji2) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
                     let {resultado: resultadoEmoji} = await api.Imagens.misturarEmojis(emoji1, emoji2)
-                    // Fundo transparente: remove verde (ffmpeg) antes do sticker
                     let bufferMix = resultadoEmoji
                     try {
-                        const { removerVerdeFfmpeg } = await import('../../vendor/lbot-api-comandos/lib/rembg.js')
-                        bufferMix = await removerVerdeFfmpeg(resultadoEmoji, { agressivo: true })
-                    } catch { /* colorkey no sticker */ }
+                        const { resultado: semFundo } = await api.Imagens.removerFundo(resultadoEmoji)
+                        if (semFundo?.length > 200) bufferMix = semFundo
+                    } catch {
+                        try {
+                            const { removerVerdeFfmpeg } = await import('../../vendor/lbot-api-comandos/lib/rembg.js')
+                            bufferMix = await removerVerdeFfmpeg(resultadoEmoji, { agressivo: true })
+                        } catch { /* segue com original */ }
+                    }
                     let {resultado : resultadoSticker} = await api.Stickers.criarSticker(bufferMix, {
                         pack: nome_pack?.trim(),
                         autor: nome_bot?.trim(),
-                        tipo: 'emojimix'
+                        tipo: 'ssf'
                     })
                     await socket.enviarFigurinha(c, id_chat, resultadoSticker)
                 } catch(err){
@@ -103,6 +107,32 @@ export const figurinhas = async(c, mensagemBaileys, botInfo) => {
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
                 }
 
+                break
+
+            case 'ssf':
+                try{
+                    let dadosMensagem = {
+                        tipo : (mensagem_citada) ? citacao.tipo : tipo,
+                        mimetype : (mensagem_citada) ? citacao.mimetype : mimetype,
+                        message: (mensagem_citada) ? citacao.mensagem  : mensagem,
+                    }
+                    if(dadosMensagem.tipo != tiposMensagem.imagem) {
+                        return await socket.responderTexto(c, id_chat, `Envie/responda uma *imagem* com *${prefixo}ssf*`, mensagem)
+                    }
+                    await socket.responderTexto(c, id_chat, '✂️ Removendo fundo e criando sticker…', mensagem)
+                    let bufferMidia = await downloadMediaMessage(dadosMensagem.message, "buffer")
+                    let {resultado: semFundo} = await api.Imagens.removerFundo(bufferMidia)
+                    // tipo auto: preserva alpha (sem colorkey verde)
+                    let {resultado: resultadoSticker} = await api.Stickers.criarSticker(semFundo, {
+                        pack: nome_pack?.trim(),
+                        autor: nome_bot?.trim(),
+                        tipo: 'ssf'
+                    })
+                    await socket.enviarFigurinha(c, id_chat, resultadoSticker)
+                } catch(err){
+                    if(!err.erro) throw err
+                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
+                }
                 break
         }
 

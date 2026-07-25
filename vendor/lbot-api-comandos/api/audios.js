@@ -6,9 +6,7 @@ import {converterMp4ParaMp3} from './videos.js'
 import duration from 'format-duration-time'
 import acrcloud from 'acrcloud'
 import {createClient} from '@deepgram/sdk'
-import { getAudioBase64 } from 'google-tts-api'
-import { openAiTts, rapidKey } from '../lib/rapidapi.js'
-import { elevenKey, textoParaVozEleven } from '../lib/elevenlabs.js'
+import { textoParaVozRobusto } from '../lib/tts-robusto.js'
 
 async function obterChavesApi() {
     try {
@@ -19,95 +17,19 @@ async function obterChavesApi() {
     }
 }
 
-const vozPorIdioma = {
-    pt: { voice: 'nova', instructions: 'Speak clearly in Brazilian Portuguese (pt-BR).' },
-    'pt-br': { voice: 'nova', instructions: 'Speak clearly in Brazilian Portuguese (pt-BR).' },
-    br: { voice: 'nova', instructions: 'Speak clearly in Brazilian Portuguese (pt-BR).' },
-    en: { voice: 'alloy', instructions: 'Speak clearly in English.' },
-    es: { voice: 'nova', instructions: 'Speak clearly in Spanish.' },
-    it: { voice: 'nova', instructions: 'Speak clearly in Italian.' },
-    fr: { voice: 'nova', instructions: 'Speak clearly in French.' },
-    de: { voice: 'onyx', instructions: 'Speak clearly in German.' },
-    ja: { voice: 'shimmer', instructions: 'Speak clearly in Japanese.' },
-    jp: { voice: 'shimmer', instructions: 'Speak clearly in Japanese.' },
-    ko: { voice: 'nova', instructions: 'Speak clearly in Korean.' },
-    ru: { voice: 'echo', instructions: 'Speak clearly in Russian.' },
-    sv: { voice: 'alloy', instructions: 'Speak clearly in Swedish.' },
-    zh: { voice: 'nova', instructions: 'Speak clearly in Chinese.' },
-    cn: { voice: 'nova', instructions: 'Speak clearly in Chinese.' },
-    ar: { voice: 'onyx', instructions: 'Speak clearly in Arabic.' },
-    hi: { voice: 'nova', instructions: 'Speak clearly in Hindi.' }
-}
-
-const mapaIdiomaTtsGoogle = {
-    pt: 'pt',
-    'pt-br': 'pt',
-    br: 'pt',
-    en: 'en',
-    es: 'es',
-    it: 'it',
-    fr: 'fr',
-    de: 'de',
-    ja: 'ja',
-    jp: 'ja',
-    zh: 'zh',
-    cn: 'zh',
-    ru: 'ru',
-    ar: 'ar',
-    hi: 'hi',
-    ko: 'ko',
-    sv: 'sv'
-}
-
 export const textoParaVoz = async (idioma, texto) => {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const langKey = String(idioma || 'pt').toLowerCase()
-            const cfg = vozPorIdioma[langKey] || vozPorIdioma.pt
-
-            if (elevenKey()) {
-                try {
-                    const buffer = await textoParaVozEleven(texto, { idioma: langKey })
-                    if (buffer?.length > 500) {
-                        resolve({ resultado: buffer })
-                        return
-                    }
-                } catch (errEl) {
-                    console.log(`API textoParaVoz ElevenLabs - ${errEl?.erro || errEl.message || errEl}`)
-                }
-            }
-
-            if (rapidKey()) {
-                try {
-                    const buffer = await openAiTts(texto, {
-                        voice: cfg.voice,
-                        model: 'tts-1',
-                        instructions: cfg.instructions
-                    })
-                    resolve({ resultado: buffer })
-                    return
-                } catch (errRapid) {
-                    console.log(`API textoParaVoz RapidTTS - ${errRapid.message || errRapid}`)
-                }
-            }
-
-            const lang = mapaIdiomaTtsGoogle[langKey] || 'pt'
-            const base64 = await getAudioBase64(texto, {
-                lang,
-                slow: false,
-                host: 'https://translate.google.com',
-                timeout: 15000
-            })
-            resolve({ resultado: Buffer.from(base64, 'base64') })
-        } catch (err) {
-            console.log(`API textoParaVoz - ${err.message}`)
-            reject({
-                erro: !elevenKey() && !rapidKey()
-                    ? 'Configure ELEVENLABS_API_KEY (ou RAPIDAPI_KEY) no .env para TTS.'
-                    : 'Erro na conversão de texto para voz.'
-            })
+    try {
+        const { resultado, mimetype, ptt } = await textoParaVozRobusto(texto, {
+            idioma: String(idioma || 'pt').toLowerCase(),
+            maxPalavras: 1200
+        })
+        return { resultado, mimetype, ptt: ptt !== false }
+    } catch (err) {
+        console.log(`API textoParaVoz - ${err?.erro || err?.message || err}`)
+        throw {
+            erro: err?.erro || 'Erro na conversão de texto para voz.'
         }
-    })
+    }
 }
 
 export const obterTranscricaoAudio = async (bufferAudio, {deepgram_secret_key} = {}) => {

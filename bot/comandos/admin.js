@@ -633,23 +633,113 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
             
             case "ping":
                 try{
-                    let tempoResposta = (moment.now()/1000) - t
-                    let memoriaTotal = os.totalmem()/1024000000, memoriaUsada = (os.totalmem() - os.freemem())/1024000000
-                    let sistemaOperacional = `${os.type()} ${os.release()}`
-                    let nomeProcessador = os.cpus()[0].model
-                    let gruposAtuais = await grupos.obterTodosGruposInfo()
-                    let contatos = await usuarios.obterDadosTodosUsuarios()
-                    await socket.responderTexto(c, id_chat, criarTexto(
-                    comandos_info.admin.ping.msgs.resposta, 
-                    sistemaOperacional, 
-                    nomeProcessador, 
-                    memoriaUsada.toFixed(2), 
-                    memoriaTotal.toFixed(2), 
-                    tempoResposta.toFixed(3),
-                    contatos.length,
-                    gruposAtuais.length,
-                    timestampParaData(botInfo.iniciado)), mensagem)
+                    const tempoResposta = (moment.now()/1000) - t
+                    const memoriaTotal = os.totalmem()
+                    const memoriaLivre = os.freemem()
+                    const memoriaUsada = memoriaTotal - memoriaLivre
+                    const cpus = os.cpus() || []
+                    const nomeProcessador = cpus[0]?.model || 'N/A'
+                    const nucleos = cpus.length
+                    const load = typeof os.loadavg === 'function' ? os.loadavg() : [0, 0, 0]
+                    const uptimeOs = os.uptime()
+                    const uptimeProc = process.uptime()
+                    const fmtUptime = (seg) => {
+                        const d = Math.floor(seg / 86400)
+                        const h = Math.floor((seg % 86400) / 3600)
+                        const m = Math.floor((seg % 3600) / 60)
+                        const s = Math.floor(seg % 60)
+                        return `${d}d ${h}h ${m}m ${s}s`
+                    }
+                    const toGB = (b) => (b / 1024 / 1024 / 1024).toFixed(2)
+                    const memNode = process.memoryUsage()
+                    const gruposAtuais = await grupos.obterTodosGruposInfo()
+                    const contatos = await usuarios.obterDadosTodosUsuarios()
+                    let gpuLinha = 'GPU: não detectada'
+                    try {
+                        const { detectarGpu, torchTemCuda, deviceDemucs } = await import('../../vendor/lbot-api-comandos/lib/gpu.js')
+                        const g = detectarGpu()
+                        if (g.disponivel) {
+                            gpuLinha = `GPU: ${g.nome}\nTorch CUDA: ${torchTemCuda() ? 'sim' : 'não'} · demucs: ${deviceDemucs()}`
+                        }
+                    } catch { /* ignore */ }
+
+                    const texto =
+                        `🖥️ *INFORMAÇÃO DO SISTEMA*\n\n` +
+                        `*Host*: ${os.hostname()}\n` +
+                        `*OS*: ${os.type()} ${os.release()} (${os.arch()})\n` +
+                        `*Plataforma*: ${os.platform()}\n` +
+                        `*CPU*: ${nomeProcessador}\n` +
+                        `*Núcleos*: ${nucleos}\n` +
+                        `*Load avg*: ${load.map((n) => Number(n).toFixed(2)).join(' / ')}\n` +
+                        `*RAM*: ${toGB(memoriaUsada)} / ${toGB(memoriaTotal)} GB (livre ${toGB(memoriaLivre)} GB)\n` +
+                        `*Node heap*: ${(memNode.heapUsed / 1024 / 1024).toFixed(1)} / ${(memNode.heapTotal / 1024 / 1024).toFixed(1)} MB\n` +
+                        `*RSS*: ${(memNode.rss / 1024 / 1024).toFixed(1)} MB\n` +
+                        `*Node*: ${process.version}\n` +
+                        `*PID*: ${process.pid}\n` +
+                        `*Uptime OS*: ${fmtUptime(uptimeOs)}\n` +
+                        `*Uptime bot*: ${fmtUptime(uptimeProc)}\n` +
+                        `*Resposta*: ${tempoResposta.toFixed(3)}s\n` +
+                        `*Usuários*: ${contatos.length}\n` +
+                        `*Grupos*: ${gruposAtuais.length}\n` +
+                        `*Cmds executados*: ${botInfo.cmds_executados || 0}\n` +
+                        `*Online desde*: ${timestampParaData(botInfo.iniciado)}\n` +
+                        `${gpuLinha}`
+
+                    await socket.responderTexto(c, id_chat, texto, mensagem)
                 } catch(err){
+                    throw err
+                }
+                break
+
+            case 'limpar':
+                try {
+                    await socket.responderTexto(c, id_chat, '🧹 Limpando cache, mídias temporárias e mensagens…', mensagem)
+                    const { limparCacheBot } = await import('../lib/limparCache.js')
+                    const r = await limparCacheBot()
+                    const lista = (r.detalhes || []).map((d) => `• ${d}`).join('\n') || '• nada pendente'
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        `✅ *Limpeza concluída*\n` +
+                            `Liberado ~*${r.liberadoMb} MB*\n\n` +
+                            `${lista}\n\n` +
+                            `_Mantidos: usuários, grupos, contador, sessão e bot.json._`,
+                        mensagem
+                    )
+                } catch (err) {
+                    throw err
+                }
+                break
+
+            case 'sugestoes':
+                try {
+                    const { Sugestao } = await import('../modelos/Sugestao.js')
+                    const store = new Sugestao()
+                    const argsLower = (texto_recebido || '').trim().toLowerCase()
+                    if (argsLower === 'limpar' || argsLower === 'clear') {
+                        const n = await store.limparLidas()
+                        await socket.responderTexto(c, id_chat, `✅ Removidas *${n}* sugestões já lidas.`, mensagem)
+                        break
+                    }
+                    const lista = await store.listar({ limite: 25 })
+                    if (!lista.length) {
+                        await socket.responderTexto(c, id_chat, '📭 Nenhuma sugestão registrada.', mensagem)
+                        break
+                    }
+                    const abertas = await store.contarAbertas()
+                    let texto = `💡 *Sugestões* (${lista.length} recentes · ${abertas} abertas)\n\n`
+                    for (let i = 0; i < lista.length; i++) {
+                        const s = lista[i]
+                        const data = timestampParaData(s.timestamp)
+                        const status = s.status === 'aberta' ? '🆕' : '👁'
+                        texto += `${status} *${i + 1}.* [${data}] ${s.nome_usuario}\n${s.texto}\n\n`
+                        if (s.status === 'aberta') {
+                            try { await store.marcarLida(s._id) } catch { /* ignore */ }
+                        }
+                    }
+                    texto += `_Use *${prefixo}sugestoes limpar* para apagar as já lidas._`
+                    await socket.responderTexto(c, id_chat, texto.slice(0, 4000), mensagem)
+                } catch (err) {
                     throw err
                 }
                 break

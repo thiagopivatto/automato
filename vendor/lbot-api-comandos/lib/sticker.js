@@ -101,6 +101,9 @@ async function edicaoImagemFfmpeg(buffer, tipo){
     let vf
     if (tipo === 'auto') {
         vf = 'format=rgba,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000'
+    } else if (tipo === 'ssf' || tipo === 'alpha') {
+        // Já veio com fundo transparente (rembg) — só enquadra
+        vf = 'format=rgba,scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000'
     } else if (tipo === 'transparente' || tipo === 'emojimix') {
         // Remove fundos verdes (Emoji Kitchen) com agressividade alta + alpha
         vf = [

@@ -285,7 +285,7 @@ async function viaCobalt(link) {
                     headers: {
                         Accept: 'application/json',
                         'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 AutomatoBot'
+                        'User-Agent': 'Mozilla/5.0 UltronBot'
                     },
                     validateStatus: () => true
                 }

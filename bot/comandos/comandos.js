@@ -28,6 +28,13 @@ export function comandosInfo(botInfo){
                     "*Problema* : {p3}\n"
                 }
             },
+            sugerir: {
+                descricao: '',
+                guia:
+                    `Ex: *${prefixo}sugerir* adicionar comando X - Envia sugestão de comando/correção.\n` +
+                    `O dono vê a lista com *${prefixo}sugestoes*.\n`,
+                msgs: {}
+            },
             meusdados: {
                 descricao: '',
                 guia: `Ex: *${prefixo}meusdados* - Exibe seus dados gerais como comandos, mensagens, tipo de usuário, etc.\n`,
@@ -79,6 +86,11 @@ figurinhas: {
                 msgs: {
                     erro: ''
                 }
+            },
+            ssf: {
+                descricao: '',
+                guia: `Ex: Envie/responda uma *imagem* com *${prefixo}ssf* - Remove o fundo e cria sticker transparente.\n`,
+                msgs: {}
             },
             snome: {
                 descricao: '',
@@ -162,7 +174,7 @@ figurinhas: {
             },
             rbg: {
                 descricao: '',
-                guia: `Ex: Envie/responda uma *imagem* com *${prefixo}rbg* - Retira o fundo da imagem.\n\n`,
+                guia: `Ex: Envie/responda uma *imagem* com *${prefixo}rbg* - Remove o fundo (PNG transparente).\n\n`,
                 msgs: {
                     invalido: "[❗] Este comando só funciona com IMAGENS.",
                     espera: "[AGUARDE] 📸 O fundo da imagem está sendo removido.",
@@ -343,21 +355,6 @@ figurinhas: {
                     resposta: "📱 Estado : *{p1}* / Região : *{p2}*"
                 }
             },
-            qualanime: {
-                descricao: '',
-                guia: `Ex: Envie/responda uma imagem com *${prefixo}qualanime* - Procura o anime pela imagem.\n\n`+
-                `*Obs*: Este comando funciona apenas com *IMAGENS* e deve ser uma *CENA VÁLIDA DE ANIME*, *NÃO* podendo ser imagens com *baixa qualidade*, *wallpappers*, *imagens editadas/recortadas*.\n`,
-                msgs: {
-                    espera: "⏳ Estou processando a imagem e pesquisando o anime.",
-                    similaridade: "[❗] Nível de similaridade é muito baixo, certifique se enviar uma cena VÁLIDA de anime (Não funciona com imagens não oficiais, Wallpapers ou imagens recortadas e/ou baixa qualidade).",
-                    resposta: "〘 Pesquisa de anime 〙\n\n"+
-                    "Título: *{p1}*\n"+
-                    "Episódio: {p2}\n"+
-                    "Tempo da cena: *{p3} - {p4}*\n"+
-                    "Similaridade: *{p5}%*\n"+
-                    "Prévia : {p6}",
-                }
-            },
             qualmusica: {
                 descricao: '',
                 guia: `Ex: Envie/responda um audio/video com *${prefixo}qualmusica* - Procura a música tocada no audio/video.\n\n`+
@@ -439,26 +436,22 @@ figurinhas: {
                 `Ex: *${prefixo}resuma* texto longo...\n`,
                 msgs: {}
             },
-            grok: {
-                descricao: '',
-                guia: `Ex: *${prefixo}grok* pergunta - Responde com Grok (RapidAPI).\n`+
-                `Requer *RAPIDAPI_KEY* (subscribe em grok-2-0-ai).\n`,
-                msgs: {}
-            },
-            vagas: {
-                descricao: '',
-                guia: `Ex: *${prefixo}vagas* desenvolvedor node remoto - Busca vagas (JSearch RapidAPI).\n`+
-                `Requer *RAPIDAPI_KEY* (subscribe em jsearch).\n`,
-                msgs: {}
-            },
             criaimg: {
                 descricao: '',
-                guia: `Ex: *${prefixo}criaimg* prompt - Cria imagem por IA.\n`,
+                guia: `Ex: *${prefixo}criaimg* prompt - Cria imagem via Pollinations AI.\n`+
+                `Requer *POLLINATIONS_API_KEY* no .env.\n`,
                 msgs: {}
             },
             criavideo: {
                 descricao: '',
-                guia: `Ex: *${prefixo}criavideo* prompt - Cria um vídeo curto a partir do prompt.\n`,
+                guia: `Ex: *${prefixo}criavideo* prompt - Cria vídeo em slideshow com imagens IA (sem vídeo Pollinations).\n`,
+                msgs: {}
+            },
+            i2i: {
+                descricao: '',
+                guia:
+                    `Ex: Envie/responda uma imagem com *${prefixo}i2i* prompt - Image-to-image (Pollinations kontext).\n` +
+                    `Ex: *${prefixo}i2i* estilo anime, luz neon\n`,
                 msgs: {}
             },
             upscale: {
@@ -473,20 +466,20 @@ figurinhas: {
             },
             vocalsonly: {
                 descricao: '',
-                guia: `Ex: Responda um áudio com *${prefixo}vocalsonly* - Isola vocais (UVR5 / ElevenLabs).\n`,
+                guia: `Ex: Responda um áudio com *${prefixo}vocalsonly* - Isola vocais via UVR.\n`,
                 msgs: {}
             },
             instrumentalonly: {
                 descricao: '',
-                guia: `Ex: Responda um áudio com *${prefixo}instrumentalonly* - Isola instrumental (UVR5).\n`,
+                guia: `Ex: Responda um áudio com *${prefixo}instrumentalonly* - Isola instrumental via UVR.\n`,
                 msgs: {}
             },
             resumodogrupo: {
-                descricao: 'Resumo sarcástico das últimas 300 msgs (áudio ~3min)',
+                descricao: 'Resumo sarcástico das últimas msgs em áudio (~3min)',
                 guia:
-                    `Ex: *${prefixo}resumodogrupo* - Resume as últimas 300 mensagens do grupo em áudio (pt-BR, ElevenLabs, máx. ~3 min).\n` +
-                    `Tom sarcástico e direto, com nomes reais/apelidos.\n` +
-                    `*Requisitos:* grupo; ELEVENLABS_API_KEY; bot coletando mensagens.\n`,
+                    `Ex: *${prefixo}resumodogrupo* - Resume as últimas mensagens em *nota de voz* (~3 min).\n` +
+                    `TTS: ElevenLabs → Edge → OpenAI se a cota acabar.\n` +
+                    `*Requisitos:* grupo; bot coletando mensagens.\n`,
                 msgs: {}
             },
         },
@@ -588,6 +581,10 @@ figurinhas: {
                         autosimi:{
                             on: "Recurso Auto-Simi : ✅\n",
                             off: "Recurso Auto-Simi : ❌\n"
+                        },
+                        automsg:{
+                            on: "Recurso Auto-Msg : ✅\n",
+                            off: "Recurso Auto-Msg : ❌\n"
                         },
                         antilink:{
                             on: "Recurso Anti-Link : ✅\n",
@@ -822,6 +819,19 @@ figurinhas: {
                     desligado: "✅ AUTO-SIMI desativado."
                 }
             },
+            automsg: {
+                descricao: 'Ativa/desativa mensagens automáticas inteligentes do bot no grupo',
+                guia:
+                    `Ex: *${prefixo}automsg* ativar — Liga interações automáticas (ligado por padrão).\n` +
+                    `Ex: *${prefixo}automsg* desativar — Desliga.\n` +
+                    `Ex: *${prefixo}automsg* — Alterna o estado.\n` +
+                    `*Apenas admins.* Sem spam na madrugada.\n`,
+                msgs: {
+                    ligado:
+                        '✅ AUTO-MSG ativado! O bot vai interagir de forma aleatória (bom dia, boa noite, piadas, menções leves…) sem spam e sem madrugada.',
+                    desligado: '✅ AUTO-MSG desativado.'
+                }
+            },
             bv: {
                 descricao: '',
                 guia: `Ex: *${prefixo}bv*  - Liga/desliga a mensagem de bem-vindo para novos membros.\n\n`+
@@ -887,7 +897,8 @@ figurinhas: {
             },
             contador: {
                 descricao: '',
-                guia: `Ex: *${prefixo}contador* - Liga/desliga a contagem de mensagens no grupo.\n`,
+                guia: `Ex: *${prefixo}contador* - Liga/desliga a contagem de mensagens no grupo.\n`+
+                `*Obs*: Em grupos novos o contador já inicia *ativado*.\n`,
                 msgs: {
                     ligado: "✅ O recurso de CONTADOR foi ligado com sucesso",
                     desligado: "✅ O recurso de CONTADOR foi desligado com sucesso",
@@ -1004,8 +1015,7 @@ diversao: {
                 descricao: '',
                 guia: `Ex: *${prefixo}simi* frase  - Envia um texto para o SimSimi responder.\n`,
                 msgs: {
-                    resposta : `{p1} - 🐤 *SIMI* : \n\n`+
-                    `{p2}`,
+                    resposta : `{p1}`,
                 }
             },
             viadometro: {
@@ -1120,6 +1130,11 @@ diversao: {
                     resposta_itens: "╠➥ {p1} {p2}° Lugar @{p3}\n"
                 }
             },
+            sortear: {
+                descricao: '',
+                guia: `Ex: *${prefixo}sortear* - Sorteia um membro aleatório do grupo.\n`,
+                msgs: {}
+            },
             par: {
                 descricao: '',
                 guia: `Ex: *${prefixo}par* @membro1 @membro2 - Mede o nível de compatibilidade dos 2 membros mencionados.\n`,
@@ -1132,13 +1147,6 @@ diversao: {
                     '❤️❤️❤️❤️❤️ *100%*\n - CASAL PERFEITO: PREPAREM-SE PARA VIVER ATÉ A VELHICE JUNTOS',
                     ],
                     resposta: "👩‍❤️‍👨 PAR - @{p1} & @{p2}\n\n{p3}"
-                }
-            },
-            malacos: {
-                descricao: '',
-                guia: `Ex: *${prefixo}malacos* - Exibe o melhor time da Serie Z.\n`,
-                msgs: {
-                    resposta: 'Somos o problema'
                 }
             },
             chance: {
@@ -1207,7 +1215,24 @@ trisal: {
             },
             joke: {
                 descricao: '',
-                guia: `Ex: *${prefixo}joke* - Conta uma piada aleatória.\n`,
+                guia: `Ex: *${prefixo}joke* - Conta uma piada aleatória (alias de *${prefixo}piada*).\n`,
+                msgs: {}
+            },
+            piada: {
+                descricao: '',
+                guia: `Ex: *${prefixo}piada* - Conta uma piada real (banco local + APIs).\n`,
+                msgs: {}
+            },
+            issoouaquilo: {
+                descricao: 'Pergunta aleatória “isso ou aquilo”',
+                guia:
+                    `Ex: *${prefixo}issoouaquilo* - Sorteia uma pergunta de escolha.\n` +
+                    `Ex: *${prefixo}ioa* - Atalho.\n`,
+                msgs: {}
+            },
+            ioa: {
+                descricao: '',
+                guia: `Ex: *${prefixo}ioa* - Atalho de *${prefixo}issoouaquilo*.\n`,
                 msgs: {}
             },
             verdadeoudesafio: {
@@ -1220,6 +1245,46 @@ trisal: {
             vod: {
                 descricao: '',
                 guia: `Ex: *${prefixo}vod* [verdade|desafio] [1-5] - Atalho de verdade ou desafio.\n`,
+                msgs: {}
+            },
+            fofoca: {
+                descricao: 'IA inventa fofoca absurda entre membros',
+                guia: `Ex: *${prefixo}fofoca* - Inventa uma fofoca absurda do grupo.\n`,
+                msgs: {}
+            },
+            crime: {
+                descricao: 'Inventa um "crime" cômico de um membro',
+                guia: `Ex: *${prefixo}crime* - Inventa um crime ridículo.\nEx: *${prefixo}crime* @membro\n`,
+                msgs: {}
+            },
+            tribunal: {
+                descricao: 'Julgamento humorístico (acusação, defesa, sentença)',
+                guia: `Ex: *${prefixo}tribunal* - Julga alguém do grupo.\nEx: *${prefixo}tribunal* @membro\n`,
+                msgs: {}
+            },
+            prefeito: {
+                descricao: 'Escolhe o prefeito do grupo por 24h',
+                guia: `Ex: *${prefixo}prefeito* - Sorteia o prefeito do dia.\n`,
+                msgs: {}
+            },
+            cancelado: {
+                descricao: 'Cancelamento humorístico em áudio',
+                guia: `Ex: *${prefixo}cancelado* - Gera cancelamento engraçado (texto + voz).\nEx: *${prefixo}cancelado* @membro\n`,
+                msgs: {}
+            },
+            horoscopo: {
+                descricao: 'Horóscopo engraçado personalizado',
+                guia: `Ex: *${prefixo}horoscopo* - Horóscopo engraçado.\nEx: *${prefixo}horoscopo* @membro\nEx: *${prefixo}horoscopo* leão\n`,
+                msgs: {}
+            },
+            boladocotidiano: {
+                descricao: 'Drama cotidiano em tom épico (voz)',
+                guia: `Ex: *${prefixo}boladocotidiano* - Narra drama banal em tom épico (texto + áudio).\n`,
+                msgs: {}
+            },
+            jornal: {
+                descricao: 'Jornal fictício do grupo (~5 min de áudio)',
+                guia: `Ex: *${prefixo}jornal* - Notícias fictícias do grupo (texto + áudio ~5 min).\n`,
                 msgs: {}
             }
         },
@@ -1675,6 +1740,21 @@ trisal: {
                     "*Online desde*: {p8}"
                 }
             },
+            limpar: {
+                descricao: '',
+                guia:
+                    `Ex: *${prefixo}limpar* - Limpa cache, mídias temporárias e mensagens guardadas.\n` +
+                    `*Mantém* dados de usuários, grupos, contador e sessão.\n` +
+                    `*Só dono do bot.*\n`,
+                msgs: {}
+            },
+            sugestoes: {
+                descricao: '',
+                guia:
+                    `Ex: *${prefixo}sugestoes* - Lista sugestões enviadas com *${prefixo}sugerir* (só dono).\n` +
+                    `Ex: *${prefixo}sugestoes limpar* - Apaga sugestões já lidas.\n`,
+                msgs: {}
+            },
             devtest: {
                 descricao: 'Testes',
                 guia: 'Testes',
@@ -1683,11 +1763,12 @@ trisal: {
         },
         //OUTROS
         outros : {
-            inicializando: 'Inicializando o BOT na versão v{p1}...',
-            dados_bot: "✓ Obteve dados do BOT",
-            servidor_iniciado: '✓ Servidor iniciado!',
-            grupos_carregados: '✓ Todos os grupos foram carregados e atualizados.',
-            dono_cadastrado: `✅ Seu número foi cadastrado como DONO, agora você pode utilizar os comandos de ${prefixo}admin`,
+            inicializando: 'Ultron v{p1}',
+            dados_bot: 'Bot pronto',
+            servidor_iniciado: 'Online',
+            grupos_carregados: 'Grupos sincronizados',
+            dono_cadastrado: `Número cadastrado como dono. Use ${prefixo}admin`,
+            automsg_ok: 'AutoMsg ativo',
             cabecalho_guia: `❔ USO DO COMANDO ❔\n\n`,
             usuario_novo: "[ 🤖 Boas Vindas ao {p1} 🤖]\n\n"+
             `👋 Olá {p2}, vi que você é um usuário novo para abrir o menu de comandos digite *${prefixo}menu*`,

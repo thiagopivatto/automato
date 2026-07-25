@@ -1,14 +1,19 @@
 {
-  "name": "automato",
+  "name": "ultron",
   "version": "1.0.0",
-  "description": "Bot brasileiro para WhatsApp com utilidades, downloads e IA.",
+  "description": "Ultron — bot brasileiro para WhatsApp com utilidades, downloads e IA.",
   "type": "module",
   "exports": "./app.js",
   "scripts": {
     "start": "node app.js",
     "dev": "node app.js",
     "smoke": "node scripts/smoke-apis.js",
-    "docs:comandos": "node scripts/gerar-comandos-md.js"
+    "test": "node scripts/test-smoke.js && node scripts/test-integracao.js",
+    "test:smoke": "node scripts/test-smoke.js",
+    "test:integracao": "node scripts/test-integracao.js",
+    "test:regressao": "node scripts/test-smoke.js",
+    "docs:comandos": "node scripts/gerar-comandos-md.js",
+    "gerar:conteudo": "node scripts/gerar-conteudo-json.js"
   },
   "author": "Thiago Pivatto",
   "license": "MIT",
@@ -17,7 +22,7 @@
     "whatsapp-bot",
     "bot",
     "sticker",
-    "automato"
+    "ultron"
   ],
   "dependencies": {
     "@hapi/boom": "^10.0.1",

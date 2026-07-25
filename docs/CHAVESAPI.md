@@ -10,6 +10,8 @@
 | `YTDLP_PATH` | Caminho do yt-dlp (opcional se no PATH) | Sim — binário open-source |
 | `acr_*` | `!qualmusica` | Conta gratuita limitada |
 | `dg_secret_key` | `!ouvir` | Créditos iniciais Deepgram |
+| `ELEVENLABS_API_KEY` | TTS / música / stems | Plano free limitado |
+| `POLLINATIONS_API_KEY` | Imagem/vídeo | Sim |
 
 Ordem da IA: **Gemini → OpenRouter → Pollinations**.
 

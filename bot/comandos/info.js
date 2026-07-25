@@ -61,6 +61,44 @@ export const info = async(c, mensagemBaileys, botInfo) => {
                     throw err
                 }
                 break
+
+            case 'sugerir':
+                try {
+                    if (!args.length) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `Ex: *${prefixo}sugerir* adicionar comando X\nOu: *${prefixo}sugerir* corrigir o Y`,
+                            mensagem
+                        )
+                    }
+                    const { Sugestao } = await import('../modelos/Sugestao.js')
+                    const sugestoes = new Sugestao()
+                    await sugestoes.adicionar({
+                        id_usuario: remetente,
+                        nome_usuario,
+                        texto: texto_recebido,
+                        id_chat
+                    })
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        '✅ Sugestão enviada! O dono do bot poderá ver na lista.',
+                        mensagem
+                    )
+                    if (numero_dono) {
+                        try {
+                            await socket.enviarTexto(
+                                c,
+                                numero_dono,
+                                `💡 *Nova sugestão*\nDe: ${nome_usuario}\nContato: ${String(remetente).replace(/@.*/, '')}\n\n${texto_recebido.slice(0, 800)}`
+                            )
+                        } catch { /* ignore */ }
+                    }
+                } catch (err) {
+                    throw err
+                }
+                break
             
             case `meusdados`:
                 try{

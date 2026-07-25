@@ -1,4 +1,4 @@
-# Lista completa de comandos — Automato
+# Lista completa de comandos — Ultron
 
 > **Manutenção obrigatória:** sempre que o projeto for atualizado (novos comandos, remoções ou mudanças de uso), atualize este arquivo.
 > No WhatsApp: `!comando guia` mostra a ajuda embutida.
@@ -20,6 +20,15 @@ Ex: *!menu* - Exibe o menu de comandos gerais.
 **Como usar / exemplos:**
 
 Ex: *!reportar* mensagem - Reporta uma mensagem para a administração do Bot.
+
+---
+
+### `!sugerir`
+
+**Como usar / exemplos:**
+
+Ex: *!sugerir* adicionar comando X - Envia sugestão de comando/correção.
+O dono vê a lista com *!sugestoes*.
 
 ---
 
@@ -68,6 +77,14 @@ Ex: Responda um sticker com *!simg* - Transforma o sticker em imagem.
 Ex: *!emojimix* 💩+😀 - Junta os dois emojis e transforma em sticker.
 
 *Obs*: Nem todos os emojis são compátiveis, então vá tentando fazer combinações.
+
+---
+
+### `!ssf`
+
+**Como usar / exemplos:**
+
+Ex: Envie/responda uma *imagem* com *!ssf* - Remove o fundo e cria sticker transparente.
 
 ---
 
@@ -152,7 +169,7 @@ Ex: *!tabela* - Exibe a tabela de letras para criação de nicks.
 
 **Como usar / exemplos:**
 
-Ex: Envie/responda uma *imagem* com *!rbg* - Retira o fundo da imagem.
+Ex: Envie/responda uma *imagem* com *!rbg* - Remove o fundo (PNG transparente).
 
 
 ---
@@ -300,16 +317,6 @@ Ex: Responda com *!ddd* - Exibe qual estado e região do membro respondido.
 
 ---
 
-### `!qualanime`
-
-**Como usar / exemplos:**
-
-Ex: Envie/responda uma imagem com *!qualanime* - Procura o anime pela imagem.
-
-*Obs*: Este comando funciona apenas com *IMAGENS* e deve ser uma *CENA VÁLIDA DE ANIME*, *NÃO* podendo ser imagens com *baixa qualidade*, *wallpappers*, *imagens editadas/recortadas*.
-
----
-
 ### `!qualmusica`
 
 **Como usar / exemplos:**
@@ -422,29 +429,12 @@ Ex: *!resuma* texto longo...
 
 ---
 
-### `!grok`
-
-**Como usar / exemplos:**
-
-Ex: *!grok* pergunta - Responde com Grok (RapidAPI).
-Requer *RAPIDAPI_KEY* (subscribe em grok-2-0-ai).
-
----
-
-### `!vagas`
-
-**Como usar / exemplos:**
-
-Ex: *!vagas* desenvolvedor node remoto - Busca vagas (JSearch RapidAPI).
-Requer *RAPIDAPI_KEY* (subscribe em jsearch).
-
----
-
 ### `!criaimg`
 
 **Como usar / exemplos:**
 
-Ex: *!criaimg* prompt - Cria imagem por IA.
+Ex: *!criaimg* prompt - Cria imagem via Pollinations AI.
+Requer *POLLINATIONS_API_KEY* no .env.
 
 ---
 
@@ -452,7 +442,16 @@ Ex: *!criaimg* prompt - Cria imagem por IA.
 
 **Como usar / exemplos:**
 
-Ex: *!criavideo* prompt - Cria um vídeo curto a partir do prompt.
+Ex: *!criavideo* prompt - Cria vídeo em slideshow com imagens IA (sem vídeo Pollinations).
+
+---
+
+### `!i2i`
+
+**Como usar / exemplos:**
+
+Ex: Envie/responda uma imagem com *!i2i* prompt - Image-to-image (Pollinations kontext).
+Ex: *!i2i* estilo anime, luz neon
 
 ---
 
@@ -476,7 +475,7 @@ Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
 
 **Como usar / exemplos:**
 
-Ex: Responda um áudio com *!vocalsonly* - Isola vocais (UVR5 / ElevenLabs).
+Ex: Responda um áudio com *!vocalsonly* - Isola vocais via UVR.
 
 ---
 
@@ -484,19 +483,19 @@ Ex: Responda um áudio com *!vocalsonly* - Isola vocais (UVR5 / ElevenLabs).
 
 **Como usar / exemplos:**
 
-Ex: Responda um áudio com *!instrumentalonly* - Isola instrumental (UVR5).
+Ex: Responda um áudio com *!instrumentalonly* - Isola instrumental via UVR.
 
 ---
 
 ### `!resumodogrupo`
 
-**Descrição:** Resumo sarcástico das últimas 300 msgs (áudio ~3min)
+**Descrição:** Resumo sarcástico das últimas msgs em áudio (~3min)
 
 **Como usar / exemplos:**
 
-Ex: *!resumodogrupo* - Resume as últimas 300 mensagens do grupo em áudio (pt-BR, ElevenLabs, máx. ~3 min).
-Tom sarcástico e direto, com nomes reais/apelidos.
-*Requisitos:* grupo; ELEVENLABS_API_KEY; bot coletando mensagens.
+Ex: *!resumodogrupo* - Resume as últimas mensagens em *nota de voz* (~3 min).
+TTS: ElevenLabs → Edge → OpenAI se a cota acabar.
+*Requisitos:* grupo; bot coletando mensagens.
 
 ---
 
@@ -788,6 +787,19 @@ Ex: *!autosimi* - Liga/desliga respostas automáticas do Simi (sem comando). *Ap
 
 ---
 
+### `!automsg`
+
+**Descrição:** Ativa/desativa mensagens automáticas inteligentes do bot no grupo
+
+**Como usar / exemplos:**
+
+Ex: *!automsg* ativar — Liga interações automáticas (ligado por padrão).
+Ex: *!automsg* desativar — Desliga.
+Ex: *!automsg* — Alterna o estado.
+*Apenas admins.* Sem spam na madrugada.
+
+---
+
 ### `!bv`
 
 **Como usar / exemplos:**
@@ -855,6 +867,7 @@ Ex: *!topativos* 10 - Marca os 10 membros com mais mensagens do grupo.
 **Como usar / exemplos:**
 
 Ex: *!contador* - Liga/desliga a contagem de mensagens no grupo.
+*Obs*: Em grupos novos o contador já inicia *ativado*.
 
 ---
 
@@ -1050,19 +1063,19 @@ Ex: *!top* 5 tema - Ranking com N membros e o tema escolhido.
 
 ---
 
+### `!sortear`
+
+**Como usar / exemplos:**
+
+Ex: *!sortear* - Sorteia um membro aleatório do grupo.
+
+---
+
 ### `!par`
 
 **Como usar / exemplos:**
 
 Ex: *!par* @membro1 @membro2 - Mede o nível de compatibilidade dos 2 membros mencionados.
-
----
-
-### `!malacos`
-
-**Como usar / exemplos:**
-
-Ex: *!malacos* - Exibe o melhor time da Serie Z.
 
 ---
 
@@ -1118,7 +1131,34 @@ Ex: *!fernandometro* @membro - Mede o nível de fernando.
 
 **Como usar / exemplos:**
 
-Ex: *!joke* - Conta uma piada aleatória.
+Ex: *!joke* - Conta uma piada aleatória (alias de *!piada*).
+
+---
+
+### `!piada`
+
+**Como usar / exemplos:**
+
+Ex: *!piada* - Conta uma piada real (banco local + APIs).
+
+---
+
+### `!issoouaquilo`
+
+**Descrição:** Pergunta aleatória “isso ou aquilo”
+
+**Como usar / exemplos:**
+
+Ex: *!issoouaquilo* - Sorteia uma pergunta de escolha.
+Ex: *!ioa* - Atalho.
+
+---
+
+### `!ioa`
+
+**Como usar / exemplos:**
+
+Ex: *!ioa* - Atalho de *!issoouaquilo*.
 
 ---
 
@@ -1137,6 +1177,91 @@ Níveis 4-5: NSFW.
 **Como usar / exemplos:**
 
 Ex: *!vod* [verdade|desafio] [1-5] - Atalho de verdade ou desafio.
+
+---
+
+### `!fofoca`
+
+**Descrição:** IA inventa fofoca absurda entre membros
+
+**Como usar / exemplos:**
+
+Ex: *!fofoca* - Inventa uma fofoca absurda do grupo.
+
+---
+
+### `!crime`
+
+**Descrição:** Inventa um "crime" cômico de um membro
+
+**Como usar / exemplos:**
+
+Ex: *!crime* - Inventa um crime ridículo.
+Ex: *!crime* @membro
+
+---
+
+### `!tribunal`
+
+**Descrição:** Julgamento humorístico (acusação, defesa, sentença)
+
+**Como usar / exemplos:**
+
+Ex: *!tribunal* - Julga alguém do grupo.
+Ex: *!tribunal* @membro
+
+---
+
+### `!prefeito`
+
+**Descrição:** Escolhe o prefeito do grupo por 24h
+
+**Como usar / exemplos:**
+
+Ex: *!prefeito* - Sorteia o prefeito do dia.
+
+---
+
+### `!cancelado`
+
+**Descrição:** Cancelamento humorístico em áudio
+
+**Como usar / exemplos:**
+
+Ex: *!cancelado* - Gera cancelamento engraçado (texto + voz).
+Ex: *!cancelado* @membro
+
+---
+
+### `!horoscopo`
+
+**Descrição:** Horóscopo engraçado personalizado
+
+**Como usar / exemplos:**
+
+Ex: *!horoscopo* - Horóscopo engraçado.
+Ex: *!horoscopo* @membro
+Ex: *!horoscopo* leão
+
+---
+
+### `!boladocotidiano`
+
+**Descrição:** Drama cotidiano em tom épico (voz)
+
+**Como usar / exemplos:**
+
+Ex: *!boladocotidiano* - Narra drama banal em tom épico (texto + áudio).
+
+---
+
+### `!jornal`
+
+**Descrição:** Jornal fictício do grupo (~5 min de áudio)
+
+**Como usar / exemplos:**
+
+Ex: *!jornal* - Notícias fictícias do grupo (texto + áudio ~5 min).
 
 ---
 
@@ -1516,6 +1641,25 @@ Ex: *!ping* - Exibe as informações do sistema do BOT e o tempo de resposta del
 
 ---
 
+### `!limpar`
+
+**Como usar / exemplos:**
+
+Ex: *!limpar* - Limpa cache, mídias temporárias e mensagens guardadas.
+*Mantém* dados de usuários, grupos, contador e sessão.
+*Só dono do bot.*
+
+---
+
+### `!sugestoes`
+
+**Como usar / exemplos:**
+
+Ex: *!sugestoes* - Lista sugestões enviadas com *!sugerir* (só dono).
+Ex: *!sugestoes limpar* - Apaga sugestões já lidas.
+
+---
+
 ### `!devtest`
 
 **Descrição:** Testes
@@ -1531,11 +1675,13 @@ Testes
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure `.env` (`ELEVENLABS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `RAPIDAPI_KEY`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: `yt-dlp` recomendado no PATH (ou `YTDLP_PATH`).
-- `!resumodogrupo`: só em grupos; resume mensagens coletadas enquanto o bot está online (últimas 48h). Na primeira execução o histórico pode estar vazio.
+- `!resumodogrupo`: só áudio (nota de voz); histórico enquanto o bot está online (~7 dias).
+- Bancos locais (≥2000 itens): `conteudo/` — veja docs/CONTEUDO.md
+- `!automsg`: ligado por padrão; só admins ligam/desligam.
 - `!verdadeoudesafio` / `!vod`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.
 - `!chat`: contexto separado por **grupo** (ou por usuário no PV), em memória (reinicia com o processo).
 - `!vocalsonly` / `!instrumentalonly`: áudios longos são cortados (~70s) para responder mais rápido.
 
 ---
 
-*Gerado a partir de `bot/comandos/comandos.js` — 158 comandos.*
+*Gerado a partir de `bot/comandos/comandos.js` — 172 comandos.*

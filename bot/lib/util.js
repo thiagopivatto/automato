@@ -112,21 +112,22 @@ export const criacaoEnv = async ()=>{
 
 export const verificarEnv = async ()=>{
     try{
-      let resposta = {
-          acrcloud :{
-            resposta: (process.env.acr_host?.trim() == "??????" || process.env.acr_access_key.trim() == "??????" || process.env.acr_access_secret.trim() == "??????")
-              ? "A API do ACRCloud ainda não foi configurada corretamente" : "✓ API ACRCloud configurada.",
-            cor_resposta: (process.env.acr_host?.trim() == "??????" || process.env.acr_access_key.trim() == "??????" || process.env.acr_access_secret.trim() == "??????")
-            ? "#d63e3e" : false
-          },
-          deepgram : {
-            resposta: (process.env.dg_secret_key?.trim() == "??????") ? "A API do DEEPGRAM ainda não foi configurada" : "✓ API DEEPGRAM configurada.",
-            cor_resposta: (process.env.dg_secret_key?.trim() == "??????") ? "#d63e3e" : false
-          },
-        }
-    
-        console.log("[ENV]", corTexto(resposta.acrcloud.resposta, resposta.acrcloud.cor_resposta))
-        console.log("[ENV]", corTexto(resposta.deepgram.resposta, resposta.deepgram.cor_resposta))
+      const { registrarBootApi } = await import('./boot.js')
+      const acrOk = !(
+        process.env.acr_host?.trim() == "??????" ||
+        process.env.acr_access_key?.trim() == "??????" ||
+        process.env.acr_access_secret?.trim() == "??????"
+      )
+      const dgOk = !!(process.env.dg_secret_key?.trim() && process.env.dg_secret_key.trim() != "??????")
+      const elevenOk = !!(process.env.ELEVENLABS_API_KEY?.trim())
+      const rapidOk = !!(process.env.RAPIDAPI_KEY?.trim())
+      const geminiOk = !!(process.env.GEMINI_API_KEY?.trim())
+
+      registrarBootApi('ACRCloud', acrOk)
+      registrarBootApi('Deepgram', dgOk)
+      registrarBootApi('ElevenLabs', elevenOk)
+      registrarBootApi('RapidAPI', rapidOk)
+      registrarBootApi('Gemini', geminiOk)
     } catch(err){
         err.message = `verificarEnv - ${err.message}`
         throw err
@@ -134,10 +135,9 @@ export const verificarEnv = async ()=>{
   }
 
 export const verificarNumeroDono = async()=>{
+    const { registrarBootDono } = await import('./boot.js')
     const numero_dono = await new UsuarioControle().obterIdDono()
-    let resposta = (!numero_dono) ? "O número do DONO ainda não foi configurado, digite !admin para cadastrar seu número como dono." : "✓ Número do DONO configurado."
-    let cor_resposta = (!numero_dono) ? "#d63e3e" : false
-    console.log("[DONO]", corTexto(resposta, cor_resposta))
+    registrarBootDono(!!numero_dono)
 }
 
 export async function criarArquivosNecessarios(){
