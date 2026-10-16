@@ -318,21 +318,32 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     if (!mensagem_grupo) {
                         return await socket.responderTexto(c, id_chat, `O comando *${prefixo}resumodogrupo* só funciona em *grupos*.`, mensagem)
                     }
-                    const { historicoGrupo } = await import('../controles/HistoricoGrupoControle.js')
-                    const msgs = await historicoGrupo.obterUltimas(id_chat, 300)
+                    const idGrupo = grupo?.id_grupo || id_chat
+                    const limiteSuperior = Date.now()
+                    const { historicoGrupo, obterJanelaResumoGrupo } = await import('../controles/HistoricoGrupoControle.js')
+                    const { msgs, teveResumoAnterior, marcoNovo } = await obterJanelaResumoGrupo(idGrupo, prefixo, limiteSuperior)
                     if (!msgs?.length) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            'Ainda não há mensagens guardadas deste grupo. Deixe o bot online enquanto o pessoal conversa e tente de novo.',
-                            mensagem
-                        )
+                        const avisoVazio = teveResumoAnterior
+                            ? `Desde o último *${prefixo}resumodogrupo* não entrou mensagem nova. Deixa o grupo falar e chama de novo.`
+                            : 'Ainda não há mensagens guardadas deste grupo. Deixe o bot online enquanto o pessoal conversa e tente de novo.'
+                        return await socket.responderTexto(c, id_chat, avisoVazio, mensagem)
                     }
+                    const semVozIa = !(process.env.ELEVENLABS_API_KEY?.trim() || process.env.XI_API_KEY?.trim())
+                    let espera = 'Tô montando o comentário do grupo. A nota de voz sai com *5 a 10 minutos*, então espera um pouco.'
+                    if (semVozIa) {
+                        espera += '\n\n[❗] Erro: a IA de voz não está disponível (ElevenLabs sem chave). O resumo vai no *TTS gratuito*.'
+                    }
+                    await socket.responderTexto(c, id_chat, espera, mensagem)
                     const nomeGrupo = grupo?.nome || 'o grupo'
-                    const { resultado, mimetype } = await api.IA.gerarResumoGrupoAudio({
+                    const { resultado, mimetype, avisoTts } = await api.IA.gerarResumoGrupoAudio({
                         mensagens: msgs,
-                        nomeGrupo
+                        nomeGrupo,
+                        teveResumoAnterior,
+                        avisarSemVozIa: !semVozIa
                     })
+                    if (avisoTts) {
+                        await socket.responderTexto(c, id_chat, avisoTts, mensagem)
+                    }
                     await socket.responderVozBuffer(
                         c,
                         id_chat,
@@ -340,6 +351,11 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         mensagem,
                         mimetype || 'audio/ogg; codecs=opus'
                     )
+                    try {
+                        await historicoGrupo.definirMarcoResumo(idGrupo, marcoNovo || limiteSuperior)
+                    } catch (erroMarco) {
+                        consoleErro(erroMarco, 'RESUMO GRUPO')
+                    }
                 } catch (err) {
                     if (!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)

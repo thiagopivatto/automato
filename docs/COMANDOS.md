@@ -489,12 +489,13 @@ Ex: Responda um áudio com *!instrumentalonly* - Isola instrumental via UVR.
 
 ### `!resumodogrupo`
 
-**Descrição:** Resumo sarcástico das últimas msgs em áudio (~3min)
+**Descrição:** Comentário ácido do grupo em áudio (5–10 min)
 
 **Como usar / exemplos:**
 
-Ex: *!resumodogrupo* - Resume as últimas mensagens em *nota de voz* (~3 min).
-TTS: ElevenLabs → Edge → OpenAI se a cota acabar.
+Ex: *!resumodogrupo* - Nota de voz de *5 a 10 min*, ácida e opinativa.
+Se pedir de novo, só entra mensagem de *depois* do último comando.
+Se a IA de voz não estiver disponível, avisa o erro e usa TTS gratuito.
 *Requisitos:* grupo; bot coletando mensagens.
 
 ---
@@ -1675,7 +1676,7 @@ Testes
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure `.env` (`ELEVENLABS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `RAPIDAPI_KEY`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: `yt-dlp` recomendado no PATH (ou `YTDLP_PATH`).
-- `!resumodogrupo`: só áudio (nota de voz); histórico enquanto o bot está online (~7 dias).
+- `!resumodogrupo`: nota de voz de 5 a 10 min, ácida; na repetição, só mensagens depois do último comando; se a IA de voz falhar, avisa e usa TTS gratuito; histórico enquanto o bot está online (~7 dias).
 - Bancos locais (≥2000 itens): `conteudo/` — veja docs/CONTEUDO.md
 - `!automsg`: ligado por padrão; só admins ligam/desligam.
 - `!verdadeoudesafio` / `!vod`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.

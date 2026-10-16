@@ -45,7 +45,7 @@ md += `## Restrições gerais
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure \`.env\` (\`ELEVENLABS_API_KEY\`, \`GEMINI_API_KEY\`, \`OPENROUTER_API_KEY\`, \`RAPIDAPI_KEY\`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: \`yt-dlp\` recomendado no PATH (ou \`YTDLP_PATH\`).
-- \`!resumodogrupo\`: só áudio (nota de voz); histórico enquanto o bot está online (~7 dias).
+- \`!resumodogrupo\`: nota de voz de 5 a 10 min, ácida; na repetição, só mensagens depois do último comando; se a IA de voz falhar, avisa e usa TTS gratuito; histórico enquanto o bot está online (~7 dias).
 - Bancos locais (≥2000 itens): \`conteudo/\` — veja docs/CONTEUDO.md
 - \`!automsg\`: ligado por padrão; só admins ligam/desligam.
 - \`!verdadeoudesafio\` / \`!vod\`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.

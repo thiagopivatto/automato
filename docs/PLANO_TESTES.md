@@ -17,7 +17,7 @@ Bot online (`npm start`). Prefixo: `!`
 | 3 | `!curiosidade` | fato do banco local |
 | 4 | `!vod 1` | verdade/desafio nível 1 |
 | 5 | `!voz oi tudo bem` | nota de voz (opus) |
-| 6 | `!resumodogrupo` | só áudio (grupo com histórico) |
+| 6 | `!resumodogrupo` | nota de voz 5–10 min, tom ácido; repetir só pega msgs novas; se a voz IA falhar, avisa e usa TTS grátis |
 | 7 | `!automsg` | toggle (admin) |
 | 8 | `!fofoca` | texto com menções |
 | 9 | `!play` música curta | áudio |

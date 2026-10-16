@@ -475,10 +475,11 @@ figurinhas: {
                 msgs: {}
             },
             resumodogrupo: {
-                descricao: 'Resumo sarcástico das últimas msgs em áudio (~3min)',
+                descricao: 'Comentário ácido do grupo em áudio (5–10 min)',
                 guia:
-                    `Ex: *${prefixo}resumodogrupo* - Resume as últimas mensagens em *nota de voz* (~3 min).\n` +
-                    `TTS: ElevenLabs → Edge → OpenAI se a cota acabar.\n` +
+                    `Ex: *${prefixo}resumodogrupo* - Nota de voz de *5 a 10 min*, ácida e opinativa.\n` +
+                    `Se pedir de novo, só entra mensagem de *depois* do último comando.\n` +
+                    `Se a IA de voz não estiver disponível, avisa o erro e usa TTS gratuito.\n` +
                     `*Requisitos:* grupo; bot coletando mensagens.\n`,
                 msgs: {}
             },

@@ -70,4 +70,48 @@ export async function registrarHistoricoGrupo(mensagemBaileys) {
     }
 }
 
+/** Mensagem cujo primeiro token é o comando de resumo (não uma citação no meio da frase). */
+export function textoEhComandoResumo(texto, prefixo = '!') {
+    const bruto = String(texto || '').trim().toLowerCase()
+    if (!bruto) return false
+    const cmd = `${String(prefixo || '!').toLowerCase()}resumodogrupo`
+    const primeira = bruto.split(/\s+/)[0]
+    return primeira === cmd
+}
+
+/**
+ * Esta janela para no envio deste !resumodogrupo.
+ * A próxima começa estritamente depois desse envio.
+ */
+export function filtrarJanelaResumo(brutas, prefixo, limiteSuperior = Date.now()) {
+    const limite = Number(limiteSuperior) || Date.now()
+    let tsComandoAtual = 0
+    const candidatas = []
+    for (const m of brutas || []) {
+        if (!m?.texto) continue
+        const ts = Number(m.timestamp) || 0
+        if (ts > limite) continue
+        if (textoEhComandoResumo(m.texto, prefixo)) {
+            if (ts >= tsComandoAtual) tsComandoAtual = ts
+            continue
+        }
+        candidatas.push(m)
+    }
+    const msgs = tsComandoAtual
+        ? candidatas.filter((m) => Number(m.timestamp) <= tsComandoAtual)
+        : candidatas
+    return { msgs, marcoNovo: tsComandoAtual || limite }
+}
+
+/**
+ * Janela do !resumodogrupo: tudo depois do último resumo bem-sucedido
+ * e antes do envio deste comando. O próprio comando não entra.
+ */
+export async function obterJanelaResumoGrupo(id_grupo, prefixo, limiteSuperior = Date.now()) {
+    const marco = await historico.obterMarcoResumo(id_grupo)
+    const brutas = await historico.obterDesde(id_grupo, marco, 1200)
+    const { msgs, marcoNovo } = filtrarJanelaResumo(brutas, prefixo, limiteSuperior)
+    return { msgs, marco, teveResumoAnterior: marco > 0, marcoNovo }
+}
+
 export { historico as historicoGrupo }
