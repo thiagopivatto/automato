@@ -74,8 +74,25 @@ export async function converterMensagem(m, botInfo) {
 
             const texto_completo = extrairTextoMensagem(raw.message, tipo)
             let [comando, ...args] = texto_completo.trim().split(/\s+/)
-            let numero_dono = await new UsuarioControle().obterIdDono()
-            let mensagem_dono = listaContemJid([numero_dono], remetente)
+            const usuariosCtrl = new UsuarioControle()
+            let numero_dono = await usuariosCtrl.obterIdDono()
+            // Dono: PN + LID + participant* (listaContemJid sozinho falha LID≠telefone)
+            let mensagem_dono = await usuariosCtrl.ehDono(
+                remetente,
+                raw.key.participantPn,
+                raw.key.participantAlt,
+                raw.key.participant,
+                raw.key.remoteJid
+            )
+            if (!mensagem_dono && numero_dono) {
+                mensagem_dono = listaContemJid(
+                    [numero_dono],
+                    remetente,
+                    raw.key.participantPn,
+                    raw.key.participantAlt,
+                    raw.key.participant
+                )
+            }
             let mensagem_grupo = String(raw.key.remoteJid || '').includes('@g.us')
 
             let respostaInformacoes = {

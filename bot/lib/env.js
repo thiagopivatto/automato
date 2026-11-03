@@ -38,6 +38,9 @@ export const ENV_MATRIZ = {
     obrigatorias_basicas: [],
     recomendadas_ia: ['GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'RAPIDAPI_KEY'],
     opcionais: [
+        'DONO',
+        'DONO_JID',
+        'NUMERO_DONO',
         'ELEVENLABS_API_KEY',
         'OPENROUTER_MODEL',
         'YTDLP_PATH',

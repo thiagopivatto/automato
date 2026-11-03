@@ -31,8 +31,36 @@ export class UsuarioControle{
     }
 
     async cadastrarDono(id_usuario){
+        const jid = String(id_usuario || '').trim()
+        if (!jid) return
         await this.usuario.resetarDonos()
-        await this.usuario.atualizarDono(id_usuario)
+        const existe = await this.usuario.obterUsuario(jid)
+        if (!existe) {
+            await this.usuario.adicionarUsuario({
+                id_usuario: jid,
+                nome: 'Dono',
+                comandos_total: 0,
+                comandos_dia: 0,
+                recebeuBoasVindas: true,
+                tipo: 'dono'
+            })
+        } else {
+            await this.usuario.atualizarDono(jid)
+        }
+    }
+
+    /** True se o JID/LID/PN for o dono (compara dígitos do telefone). */
+    async ehDono(id_usuario, ...aliases) {
+        const dono = await this.obterIdDono()
+        if (!dono) return false
+        const dig = (j) => String(j || '').split('@')[0].split(':')[0].replace(/\D/g, '')
+        const donoDig = dig(dono)
+        if (!donoDig) return false
+        const candidatos = [id_usuario, ...aliases].filter(Boolean)
+        return candidatos.some((j) => {
+            const d = dig(j)
+            return d && (d === donoDig || d.endsWith(donoDig) || donoDig.endsWith(d))
+        })
     }
 
     async obterDadosTodosUsuarios(){

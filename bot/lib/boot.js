@@ -8,7 +8,7 @@ import { versaoAtual } from './util.js'
 import { raizProjeto } from './caminhos.js'
 
 /** Muda a cada correção relevante — confira no Linux se bate com o Windows. */
-export const BUILD_ID = '20261103-evon'
+export const BUILD_ID = '20261103-recv2'
 
 const W = 54
 
@@ -143,7 +143,7 @@ export function bootPronto() {
     row('Prefixo', _meta.prefixo || '!')
     row('Número', _meta.numero || '—')
     row('LID', _meta.lid || '—')
-    row('Dono', _dono === false ? 'use !admin' : 'cadastrado', _dono !== false)
+    row('Dono JID', _meta.dono || (_dono === false ? 'use !admin' : 'cadastrado'), _dono !== false || !!_meta.dono)
     row('AutoMsg', _autoMsg === false ? 'desligada' : 'ligada', _autoMsg !== false)
     if (_conteudo) {
         row(
