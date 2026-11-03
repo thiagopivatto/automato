@@ -13,7 +13,7 @@ export default function configSocket(state, cacheTentativasEnvio, versaoWaWeb) {
         defaultQueryTimeoutMs: undefined,
         syncFullHistory: false,
         markOnlineOnConnect: false,
-        // Web padrão — QR e pareamento estáveis no Baileys 6.7.x
+        // Web padrão para autenticação por QR.
         browser: Browsers.ubuntu('Chrome'),
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),

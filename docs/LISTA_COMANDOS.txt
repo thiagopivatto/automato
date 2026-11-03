@@ -23,12 +23,18 @@ RESTRIÇÕES GERAIS
   • Downloads YT/IG: yt-dlp no PATH (ou YTDLP_PATH / cookies)
 
 ================================================================================
-  INFO  (5 comandos)
+  INFO  (6 comandos)
 ================================================================================
 
 ▶ !menu
+  O que faz : Lista completa de comandos (exceto dono)
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !menu - Exibe o menu de comandos gerais.
+  Como usar : Ex: !menu - Lista todos os comandos com breve explicação. | Alias: !comandos | Ajuda de um comando: !comando guia
+
+▶ !comandos
+  O que faz : Alias de !menu — lista completa de comandos
+  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
+  Como usar : Ex: !comandos - Mesmo que !menu.
 
 ▶ !reportar
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
@@ -91,9 +97,9 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: !series - Exibe as tendências atuais de séries.
 
 ▶ !chat
-  O que faz : Conversa natural com memória e contexto do grupo
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !chat e aí, o que achou da conversa? | Conversa como pessoa real, com memória do chat. | Em grupo, usa o histórico recente (como o resumo) para responder no contexto. | Pode buscar informações atuais na internet quando precisar. | Requer GEMINI_API_KEY (grátis) no .env.
+  O que faz : Conversa com opinião; pesquisa na web antes (como !pesquisa)
+  Quem pode : Apenas o DONO do bot
+  Como usar : Ex: !chat o que rolou hoje na política? | Ex: !chat faz o resumo do grupo → roda !resumodogrupo | Antes de responder, pesquisa na internet (mesma lógica de !pesquisa) e trata o resultado em tom de conversa.
 
 ▶ !tabela
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
@@ -104,6 +110,7 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: Envie/responda uma imagem com !rbg - Remove o fundo (PNG transparente).
 
 ▶ !ouvir
+  O que faz : Transcreve áudio respondido em texto
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
   Como usar : Ex: Responda um áudio com !ouvir para transformar em texto.
 
@@ -152,7 +159,7 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: Envie/responda um audio/video com !qualmusica - Procura a música tocada no audio/video. | Obs: Este comando funciona apenas com AUDIO/VIDEO.
 
 ================================================================================
-  IA / GERACAO  (15 comandos)
+  IA / GERACAO  (17 comandos)
 ================================================================================
 
 ▶ !comofaz
@@ -212,9 +219,19 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: !musica prompt - Gera música por IA (ElevenLabs).
 
 ▶ !resumodogrupo
-  O que faz : Narrador sarcástico do grupo em áudio (3–5 min)
+  O que faz : Narrador agressivo/egocêntrico do grupo em áudio (3–5 min)
   Quem pode : Qualquer membro (só em grupo)
-  Como usar : Ex: !resumodogrupo - Nota de voz de 3 a 5 min com roast e leitura do grupo. | Na próxima vez, só entra o que foi dito depois deste pedido (anti-repetição). | Áudio: ElevenLabs com fallback automático silencioso. | Requisitos: grupo; bot coletando mensagens.
+  Como usar : Ex: !resumodogrupo - Nota de voz de 3 a 5 min, tom rebelde, egocêntrico e com palavrão. | Na próxima vez, só entra o que foi dito depois deste pedido (anti-repetição). | Personalidade por grupo: !personalidaderesumo | Requisitos: grupo; bot coletando mensagens.
+
+▶ !resumoportema
+  O que faz : Resumo do grupo separado por temas (últimas ~1000 msgs)
+  Quem pode : Qualquer membro (só em grupo)
+  Como usar : Ex: !resumoportema - Lê ~1000 mensagens recentes (inclui áudios transcritos) e monta um resumo por temas. | Cita membros e separa tópicos (futebol, cinema, conversas aleatórias, etc). | Requisitos: grupo; bot online coletando o histórico.
+
+▶ !personalidaderesumo
+  O que faz : Define a personalidade do resumodogrupo só neste grupo
+  Quem pode : Apenas o DONO do bot
+  Como usar : Ex: !personalidaderesumo fala como um tiozão fofoqueiro e chato | Ex: !personalidaderesumo ver - Mostra a personalidade atual | Ex: !personalidaderesumo reset - Volta ao padrão agressivo/egocêntrico | Alias: !resumopersona | Apenas admin do grupo (ou dono do bot).
 
 ================================================================================
   DOWNLOADS  (7 comandos)
@@ -249,8 +266,13 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: !img tema - Envia uma imagem com o tema que você digitar.
 
 ================================================================================
-  GRUPO  (39 comandos)
+  GRUPO  (43 comandos)
 ================================================================================
+
+▶ !statusgrupo
+  O que faz : Publica o texto ou imagem respondida no status deste grupo
+  Quem pode : Qualquer membro (só em grupo)
+  Como usar : Responda um texto ou imagem com !statusgrupo. | Imagens mantêm a legenda original. A publicação é feita no status do grupo de origem.
 
 ▶ !status
   Quem pode : Admin do grupo
@@ -283,6 +305,16 @@ RESTRIÇÕES GERAIS
 ▶ !ban
   Quem pode : Admin do grupo + bot precisa ser admin
   Como usar : Ex: !ban @membro - Para banir um membro marcando ele. | Ex: Responder alguém com !ban - Bane a pessoa que você respondeu.
+
+▶ !voteban
+  O que faz : Abre votação para banir um membro
+  Quem pode : Qualquer membro (só em grupo)
+  Como usar : Como usar !voteban | 1) Iniciar: !voteban @membro ou responda a msg da pessoa com !voteban | 2) Votar: !voteban ou !votar | 3) Ver: !voteban status | 4) Cancelar (admin): !voteban cancelar | • Precisa de 3–5 votos (conforme tamanho do grupo) | • Vale por 2 minutos | • Não banir admin/bot | • O bot precisa ser admin do grupo
+
+▶ !votar
+  O que faz : Vota na votação de ban aberta
+  Quem pode : Apenas o DONO do bot
+  Como usar : Ex: !votar - Confirma seu voto na !voteban aberta.
 
 ▶ !promover
   Quem pode : Admin do grupo + bot precisa ser admin
@@ -323,6 +355,11 @@ RESTRIÇÕES GERAIS
 ▶ !mutar
   Quem pode : Admin do grupo
   Como usar : Ex: !mutar - Liga/desliga a execução de comandos dos membros.
+
+▶ !shh
+  O que faz : Silencia um membro (apaga msgs) por X min ou até off
+  Quem pode : Admin do grupo + bot precisa ser admin
+  Como usar : Ex: !shh @membro 1 - Silencia por 1 minuto (apaga as msgs dele). | Ex: !shh @membro - Silencia por tempo indeterminado. | Ex: !shh @membro off - Remove o silêncio. | Ex: Responder alguém com !shh 5 - Silencia o respondido por 5 min. | Obs: Só admins. Não funciona no dono do grupo. O bot precisa ser admin.
 
 ▶ !link
   Quem pode : Admin do grupo + bot precisa ser admin
@@ -407,7 +444,7 @@ RESTRIÇÕES GERAIS
 
 ▶ !revelar
   Quem pode : Admin do grupo
-  Como usar : Ex: Responder mensagem única com !revelar - Revela e reenvia o conteúdo da mensagem única como uma mensagem normal.
+  Como usar : Ao receber visualização única (foto/vídeo/áudio/voz), o bot reenvia automaticamente como mídia normal. | Manual: responda a VO com !revelar (admin).
 
 ================================================================================
   DIVERSÃO  (33 comandos)
@@ -724,13 +761,13 @@ RESTRIÇÕES GERAIS
   Como usar : Testes
 
 ================================================================================
-  TOTAL: 164 comandos
+  TOTAL: 171 comandos
 ================================================================================
 
 ÍNDICE RÁPIDO (só nomes)
 --------------------------------------------------------------------------------
 INFO:
-  !menu, !reportar, !sugerir, !meusdados, !info
+  !menu, !comandos, !reportar, !sugerir, !meusdados, !info
 
 FIGURINHAS:
   !s, !simg, !emojimix, !ssf, !snome
@@ -739,13 +776,13 @@ UTILIDADES:
   !encurtar, !upimg, !filmes, !series, !chat, !tabela, !rbg, !ouvir, !audio, !traduz, !voz, !letra, !rastreio, !calc, !pesquisa, !moeda, !clima, !ddd, !qualmusica
 
 IA / GERACAO:
-  !comofaz, !curiosidade, !playlist, !explica, !spoiler, !argumentos, !proscons, !comparar, !cotacao, !simulado, !roteiro, !resuma, !upscale, !musica, !resumodogrupo
+  !comofaz, !curiosidade, !playlist, !explica, !spoiler, !argumentos, !proscons, !comparar, !cotacao, !simulado, !roteiro, !resuma, !upscale, !musica, !resumodogrupo, !resumoportema, !personalidaderesumo
 
 DOWNLOADS:
   !play, !yt, !fb, !ig, !tw, !tk, !img
 
 GRUPO:
-  !status, !fotogrupo, !regras, !addlista, !remlista, !listanegra, !add, !ban, !promover, !rebaixar, !mt, !mm, !mta, !rt, !adms, !enquete, !dono, !mutar, !link, !rlink, !restrito, !alink, !autosticker, !autosimi, !automsg, !bv, !afake, !aflood, !apg, !bantodos, !topativos, !contador, !atividade, !imarcar, !alterarcont, !ibanir, !bcmd, !dcmd, !revelar
+  !statusgrupo, !status, !fotogrupo, !regras, !addlista, !remlista, !listanegra, !add, !ban, !voteban, !votar, !promover, !rebaixar, !mt, !mm, !mta, !rt, !adms, !enquete, !dono, !mutar, !shh, !link, !rlink, !restrito, !alink, !autosticker, !autosimi, !automsg, !bv, !afake, !aflood, !apg, !bantodos, !topativos, !contador, !atividade, !imarcar, !alterarcont, !ibanir, !bcmd, !dcmd, !revelar
 
 DIVERSÃO:
   !mascote, !simi, !viadometro, !detector, !roletarussa, !casal, !caracoroa, !ppt, !gadometro, !bafometro, !top, !sortear, !par, !chance, !fch, !trisal, !jacometro, !bolometro, !fernandometro, !joke, !piada, !issoouaquilo, !ioa, !verdadeoudesafio, !vod, !fofoca, !crime, !tribunal, !prefeito, !cancelado, !horoscopo, !boladocotidiano, !jornal

@@ -9,9 +9,23 @@ Prefixo padrão: `!` (configurável pelo dono).
 
 ### `!menu`
 
+**Descrição:** Lista completa de comandos (exceto dono)
+
 **Como usar / exemplos:**
 
-Ex: *!menu* - Exibe o menu de comandos gerais.
+Ex: *!menu* - Lista *todos* os comandos com breve explicação.
+Alias: *!comandos*
+Ajuda de um comando: *!comando guia*
+
+---
+
+### `!comandos`
+
+**Descrição:** Alias de !menu — lista completa de comandos
+
+**Como usar / exemplos:**
+
+Ex: *!comandos* - Mesmo que *!menu*.
 
 ---
 
@@ -131,15 +145,13 @@ Ex: *!series* - Exibe as tendências atuais de séries.
 
 ### `!chat`
 
-**Descrição:** Conversa natural com memória e contexto do grupo
+**Descrição:** Conversa com opinião; pesquisa na web antes (como !pesquisa)
 
 **Como usar / exemplos:**
 
-Ex: *!chat* e aí, o que achou da conversa?
-Conversa como pessoa real, com memória do chat.
-Em *grupo*, usa o histórico recente (como o resumo) para responder no contexto.
-Pode buscar informações atuais na internet quando precisar.
-Requer *GEMINI_API_KEY* (grátis) no .env.
+Ex: *!chat* o que rolou hoje na política?
+Ex: *!chat* faz o resumo do grupo → roda *!resumodogrupo*
+Antes de responder, pesquisa na internet (mesma lógica de *!pesquisa*) e trata o resultado em tom de conversa.
 
 ---
 
@@ -161,6 +173,8 @@ Ex: Envie/responda uma *imagem* com *!rbg* - Remove o fundo (PNG transparente).
 ---
 
 ### `!ouvir`
+
+**Descrição:** Transcreve áudio respondido em texto
 
 **Como usar / exemplos:**
 
@@ -425,24 +439,40 @@ Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
 
 ### `!resumodogrupo`
 
-<<<<<<< HEAD
-**Descrição:** Narrador sarcástico do grupo em áudio (3–5 min)
+**Descrição:** Narrador agressivo/egocêntrico do grupo em áudio (3–5 min)
 
 **Como usar / exemplos:**
 
-Ex: *!resumodogrupo* - Nota de voz de *3 a 5 min* com roast e leitura do grupo.
+Ex: *!resumodogrupo* - Nota de voz de *3 a 5 min*, tom rebelde, egocêntrico e com palavrão.
 Na próxima vez, só entra o que foi dito *depois* deste pedido (anti-repetição).
-Áudio: ElevenLabs com fallback automático silencioso.
-=======
-**Descrição:** Comentário ácido do grupo em áudio (5–10 min)
+Personalidade por grupo: *!personalidaderesumo*
+*Requisitos:* grupo; bot coletando mensagens.
+
+---
+
+### `!resumoportema`
+
+**Descrição:** Resumo do grupo separado por temas (últimas ~1000 msgs)
 
 **Como usar / exemplos:**
 
-Ex: *!resumodogrupo* - Nota de voz de *5 a 10 min*, ácida e opinativa.
-Se pedir de novo, só entra mensagem de *depois* do último comando.
-Se a IA de voz não estiver disponível, avisa o erro e usa TTS gratuito.
->>>>>>> 67d8f2ac3ba6377e38df26725679b70c87913c80
-*Requisitos:* grupo; bot coletando mensagens.
+Ex: *!resumoportema* - Lê ~1000 mensagens recentes (inclui áudios transcritos) e monta um resumo por temas.
+Cita membros e separa tópicos (futebol, cinema, conversas aleatórias, etc).
+*Requisitos:* grupo; bot online coletando o histórico.
+
+---
+
+### `!personalidaderesumo`
+
+**Descrição:** Define a personalidade do resumodogrupo só neste grupo
+
+**Como usar / exemplos:**
+
+Ex: *!personalidaderesumo* fala como um tiozão fofoqueiro e chato
+Ex: *!personalidaderesumo* ver - Mostra a personalidade atual
+Ex: *!personalidaderesumo* reset - Volta ao padrão agressivo/egocêntrico
+Alias: *!resumopersona*
+*Apenas admin do grupo* (ou dono do bot).
 
 ---
 
@@ -519,6 +549,17 @@ Ex: *!img* tema - Envia uma imagem com o tema que você digitar.
 
 ## Grupo
 
+### `!statusgrupo`
+
+**Descrição:** Publica o texto ou imagem respondida no status deste grupo
+
+**Como usar / exemplos:**
+
+Responda um *texto ou imagem* com *!statusgrupo*.
+Imagens mantêm a legenda original. A publicação é feita no status do grupo de origem.
+
+---
+
 ### `!status`
 
 **Como usar / exemplos:**
@@ -589,6 +630,36 @@ Ex: *!add* 5521xxxxxxxxx, 5521xxxxxxxxx - Digite os numeros com o código do pa�
 Ex: *!ban* @membro - Para banir um membro marcando ele.
 
 Ex: Responder alguém com *!ban* - Bane a pessoa que você respondeu.
+
+---
+
+### `!voteban`
+
+**Descrição:** Abre votação para banir um membro
+
+**Como usar / exemplos:**
+
+*Como usar !voteban*
+
+1) Iniciar: *!voteban* @membro  *ou* responda a msg da pessoa com *!voteban*
+2) Votar: *!voteban*  *ou*  *!votar*
+3) Ver: *!voteban status*
+4) Cancelar (admin): *!voteban cancelar*
+
+• Precisa de 3–5 votos (conforme tamanho do grupo)
+• Vale por 2 minutos
+• Não banir admin/bot
+• O bot precisa ser *admin* do grupo
+
+---
+
+### `!votar`
+
+**Descrição:** Vota na votação de ban aberta
+
+**Como usar / exemplos:**
+
+Ex: *!votar* - Confirma seu voto na *!voteban* aberta.
 
 ---
 
@@ -683,6 +754,20 @@ Ex: *!dono* - Exibe e marca o dono do grupo.
 **Como usar / exemplos:**
 
 Ex: *!mutar* - Liga/desliga a execução de comandos dos membros.
+
+---
+
+### `!shh`
+
+**Descrição:** Silencia um membro (apaga msgs) por X min ou até off
+
+**Como usar / exemplos:**
+
+Ex: *!shh* @membro 1 - Silencia por 1 minuto (apaga as msgs dele).
+Ex: *!shh* @membro - Silencia por tempo indeterminado.
+Ex: *!shh* @membro off - Remove o silêncio.
+Ex: Responder alguém com *!shh* 5 - Silencia o respondido por 5 min.
+*Obs*: Só admins. Não funciona no dono do grupo. O bot precisa ser admin.
 
 ---
 
@@ -902,7 +987,8 @@ Ex: *!dcmd* diversao - Desbloqueia todos os comandos da categoria DIVERSÃO.
 
 **Como usar / exemplos:**
 
-Ex: Responder mensagem única com *!revelar* - Revela e reenvia o conteúdo da mensagem única como uma mensagem normal.
+Ao *receber* visualização única (foto/vídeo/áudio/voz), o bot reenvia automaticamente como mídia normal.
+Manual: responda a VO com *!revelar* (admin).
 
 ---
 
@@ -1622,11 +1708,8 @@ Testes
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure `.env` (`ELEVENLABS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `RAPIDAPI_KEY`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: `yt-dlp` recomendado no PATH (ou `YTDLP_PATH`).
-<<<<<<< HEAD
-- `!resumodogrupo`: nota de voz de 3 a 5 min; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
-=======
-- `!resumodogrupo`: nota de voz de 5 a 10 min, ácida; na repetição, só mensagens depois do último comando; se a IA de voz falhar, avisa e usa TTS gratuito; histórico enquanto o bot está online (~7 dias).
->>>>>>> 67d8f2ac3ba6377e38df26725679b70c87913c80
+- `!resumodogrupo`: nota de voz; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
+- `!resumoportema`: resumo textual por temas das últimas ~1000 msgs (inclui áudios transcritos).
 - Bancos locais (≥2000 itens): `conteudo/` — veja docs/CONTEUDO.md
 - `!automsg`: ligado por padrão; só admins ligam/desligam; interações humanas com intervalo longo.
 - `!verdadeoudesafio` / `!vod`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.
@@ -1634,4 +1717,4 @@ Testes
 
 ---
 
-*Gerado a partir de `bot/comandos/comandos.js` — 164 comandos.*
+*Gerado a partir de `bot/comandos/comandos.js` — 171 comandos.*

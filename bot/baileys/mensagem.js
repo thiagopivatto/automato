@@ -17,7 +17,8 @@ export async function converterMensagem(m, botInfo) {
             // Algumas versões mandam a mídia já “desembrulhada” com flag viewOnce
             if (!mensagem_vunica && m.message?.[tipo]?.viewOnce) mensagem_vunica = true
             if (m.message?.[tipo]?.viewOnce) m.message[tipo].viewOnce = false
-            let mensagem_citada = tipo == tiposMensagem.textoExt && m.message.extendedTextMessage?.contextInfo?.quotedMessage != undefined
+            const contexto = m.message[tipo]?.contextInfo || {}
+            let mensagem_citada = contexto.quotedMessage != undefined
             let { numero_bot, lid_bot } = botInfo
             let remetente = (m.key.fromMe) ? numero_bot : m.key.participant || m.key.remoteJid
             // Preferir participantPn / remoteJidAlt quando Baileys enviar o número real
@@ -95,7 +96,7 @@ export async function converterMensagem(m, botInfo) {
 
             // Se tiver citado alguma mensagem
             if (mensagem_citada) {
-                const ctxInfo = m.message.extendedTextMessage.contextInfo || {}
+                const ctxInfo = contexto
                 // Cópia do quote original (não mutar o wrapper antes de copiar a mídia)
                 let quotedOriginal = ctxInfo.quotedMessage
                 let quotedRaw = quotedOriginal

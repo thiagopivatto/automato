@@ -1,6 +1,11 @@
 /** Metadados da categoria `grupo` (gerado/fatiado de comandos.js). */
 export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
     return {
+            statusgrupo: {
+                descricao: 'Publica o texto ou imagem respondida no status deste grupo',
+                guia: `Responda um *texto ou imagem* com *${prefixo}statusgrupo*.\nImagens mantêm a legenda original. A publicação é feita no status do grupo de origem.\n`,
+                msgs: {}
+            },
             status: {
                 descricao: '',
                 guia: `Ex: *${prefixo}status* - Exibe as configurações atuais do grupo\n`,

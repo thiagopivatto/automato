@@ -1,6 +1,6 @@
 import {DisconnectReason, getContentType} from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
-import {criarTexto, consoleErro, corTexto, verificarEnv, criarArquivosNecessarios, verificarNumeroDono} from'../lib/util.js'
+import {criarTexto, consoleErro, corTexto, verificarEnv, criarArquivosNecessarios, verificarNumeroDono, listaContemJid} from'../lib/util.js'
 import {comandosInfo} from '../comandos/comandos.js'
 import fs from "fs-extra"
 import * as socket from './socket.js'
@@ -150,8 +150,10 @@ export const adicionadoEmGrupo = async (c, dadosGrupo, botInfo)=>{
 
 export const atualizacaoParticipantesGrupo = async (c, evento, botInfo)=>{
     try{
+        // Baileys 7 entrega contatos; os controles existentes trabalham com JIDs.
+        evento = { ...evento, participants: evento.participants.map((p) => typeof p === 'string' ? p : p.id) }
         const grupos = new GrupoControle()
-        const isBotUpdate = evento.participants[0] == botInfo.numero_bot
+        const isBotUpdate = listaContemJid([botInfo.numero_bot, botInfo.lid_bot].filter(Boolean), evento.participants[0])
         const g_info = await grupos.obterGrupoInfo(evento.id)
         if (evento.action == 'add') {
             //SE O PARTICIPANTE ESTIVER NA LISTA NEGRA, EXPULSE
