@@ -1,7 +1,8 @@
-import Datastore from '@seald-io/nedb'
+﻿import Datastore from '@seald-io/nedb'
+import { caminhoDados } from '../lib/caminhos.js'
 const db = {
-    grupos : new Datastore({filename : './dados/grupos.db', autoload: true}),
-    contador : new Datastore({filename : './dados/contador.db', autoload: true})
+    grupos : new Datastore({filename : caminhoDados('grupos.db'), autoload: true}),
+    contador : new Datastore({filename : caminhoDados('contador.db'), autoload: true})
 }
 
 export class Grupo{

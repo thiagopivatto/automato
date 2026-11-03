@@ -1,10 +1,11 @@
 import Datastore from '@seald-io/nedb'
+import { caminhoDados } from '../lib/caminhos.js'
 
-const db = new Datastore({ filename: './dados/historico_grupo.db', autoload: true })
+const db = new Datastore({ filename: caminhoDados('historico_grupo.db'), autoload: true })
 db.ensureIndex({ fieldName: 'id_grupo' })
 db.ensureIndex({ fieldName: 'timestamp' })
 
-const marcosResumo = new Datastore({ filename: './dados/marco_resumo_grupo.db', autoload: true })
+const marcosResumo = new Datastore({ filename: caminhoDados('marco_resumo_grupo.db'), autoload: true })
 marcosResumo.ensureIndex({ fieldName: 'id_grupo', unique: true })
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000

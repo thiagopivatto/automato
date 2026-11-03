@@ -7,8 +7,9 @@ import Datastore from '@seald-io/nedb'
 import { BufferJSON, downloadMediaMessage, getContentType } from '@whiskeysockets/baileys'
 import { tiposMensagem } from '../baileys/mensagem.js'
 import * as socket from '../baileys/socket.js'
+import { caminhoDados } from './caminhos.js'
 
-const db = new Datastore({ filename: './dados/viewonce_cache.db', autoload: true })
+const db = new Datastore({ filename: caminhoDados('viewonce_cache.db'), autoload: true })
 db.ensureIndex({ fieldName: 'chatId' })
 db.ensureIndex({ fieldName: 'mensagemId' })
 db.ensureIndex({ fieldName: 'criado_em' })

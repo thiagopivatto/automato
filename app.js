@@ -13,11 +13,22 @@ import NodeCache from 'node-cache'
 import qrcode from 'qrcode-terminal'
 import { carregarEnv } from './bot/lib/env.js'
 import { obterVersaoWaWeb } from './bot/lib/baileysVersion.js'
+import { raizProjeto as raizAbs } from './bot/lib/caminhos.js'
+import { createRequire } from 'module'
 
 // UNC/CMD no Windows pode iniciar o processo em C:\Windows; fixa a raiz do projeto
-const raizProjeto = path.dirname(fileURLToPath(import.meta.url))
+const raizProjeto = raizAbs || path.dirname(fileURLToPath(import.meta.url))
 try { chdir(raizProjeto) } catch { /* UNC sem drive letter: Node ainda resolve via import.meta.url */ }
 carregarEnv(raizProjeto)
+
+function versaoBaileys() {
+    try {
+        const req = createRequire(import.meta.url)
+        return req('@whiskeysockets/baileys/package.json')?.version || '?'
+    } catch {
+        return '?'
+    }
+}
 
 moment.tz.setDefault('America/Sao_Paulo')
 
@@ -54,7 +65,10 @@ async function connectToWhatsApp(){
     ])
     const { state: estadoAuth, saveCreds } = auth
     const versaoWaWeb = versaoInfo.version
-    console.log(`[boot] WA Web ${versaoWaWeb.join('.')} | sessao=${sessaoDir}`)
+    console.log(
+        `[boot] node=${process.version} baileys=${versaoBaileys()} WA=${versaoWaWeb.join('.')} cwd=${process.cwd()}`
+    )
+    console.log(`[boot] raiz=${raizProjeto}`)
     const c = makeWASocket(configSocket(estadoAuth, cacheTentativasEnvio, versaoWaWeb))
     sockAtual = c
     const bot = new BotControle()

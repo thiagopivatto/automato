@@ -197,10 +197,12 @@ export const verificarNumeroDono = async()=>{
 export async function criarArquivosNecessarios(){
     try {
         const bot = new BotControle()
-        const existePastaDados = fs.pathExistsSync(path.resolve("dados"))
+        const { raizProjeto, caminhoDados } = await import('./caminhos.js')
+        const pastaDados = caminhoDados()
+        const existePastaDados = fs.pathExistsSync(pastaDados)
         const existeBotJson = fs.existsSync(bot.obterCaminhoJSON())
-        const existeEnv = fs.existsSync(path.resolve('.env'))
-        if(!existePastaDados) fs.mkdirSync(path.resolve("dados"), {recursive: true})
+        const existeEnv = fs.existsSync(path.join(raizProjeto, '.env'))
+        if(!existePastaDados) fs.mkdirSync(pastaDados, {recursive: true})
         if(existeBotJson && existeEnv) return 
         if(!existeBotJson) await bot.criarArquivo()
         if(!existeEnv) await criacaoEnv()

@@ -1,6 +1,7 @@
 import Datastore from '@seald-io/nedb'
+import { caminhoDados } from '../lib/caminhos.js'
 
-const db = new Datastore({ filename: './dados/memoria_resumo_grupo.db', autoload: true })
+const db = new Datastore({ filename: caminhoDados('memoria_resumo_grupo.db'), autoload: true })
 db.ensureIndex({ fieldName: 'id_grupo' })
 db.ensureIndex({ fieldName: 'criado_em' })
 

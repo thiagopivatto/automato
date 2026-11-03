@@ -1,6 +1,7 @@
 import Datastore from '@seald-io/nedb'
+import { caminhoDados } from '../lib/caminhos.js'
 
-const db = new Datastore({ filename: './dados/mensagens.db', autoload: true })
+const db = new Datastore({ filename: caminhoDados('mensagens.db'), autoload: true })
 db.ensureIndex({ fieldName: 'chatId' })
 db.ensureIndex({ fieldName: 'mensagemId' })
 db.ensureIndex({ fieldName: 'criado_em' })

@@ -3,10 +3,10 @@
  */
 import axios from 'axios'
 import fs from 'fs-extra'
-import path from 'node:path'
 import { listarItens, sortearItem, tamanhoBanco } from './conteudo.js'
+import { caminhoDados } from './caminhos.js'
 
-const CACHE_PATH = path.resolve('dados/piadas_cache.json')
+const CACHE_PATH = caminhoDados('piadas_cache.json')
 let _cacheApi = null
 
 async function carregarCacheApi() {

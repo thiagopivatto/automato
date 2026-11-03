@@ -90,7 +90,8 @@ export async function limparCacheBot() {
         'sugestoes.db~'
     ])
     try {
-        const dadosDir = path.resolve('dados')
+        const { caminhoDados } = await import('./caminhos.js')
+        const dadosDir = caminhoDados()
         if (await fs.pathExists(dadosDir)) {
             const files = await fs.readdir(dadosDir)
             for (const f of files) {

@@ -113,14 +113,6 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
     const grupos = new GrupoControle()
     const mensagemBaileys = await converterMensagem(rawWa, botInfo)
 
-    // Diagnóstico: comando detectado
-    const pref = botInfo?.prefixo || '!'
-    if (String(mensagemBaileys.comando || '').startsWith(pref)) {
-        console.log(
-            `[msg] ${tipoUpsert || '?'} tipo=${mensagemBaileys.tipo} cmd=${mensagemBaileys.comando} de=${mensagemBaileys.remetente}`
-        )
-    }
-
     // SHH primeiro: apaga antes de histórico/filtros (qualquer tipo de mídia)
     if(!await grupos.filtroShh(c, mensagemBaileys, botInfo)) return
     // Histórico — guarda msgs de grupo (comandos + midia); áudios podem ser transcritos
@@ -128,20 +120,10 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
         const { registrarHistoricoGrupo } = await import('../controles/HistoricoGrupoControle.js')
         await registrarHistoricoGrupo(mensagemBaileys)
     } catch {}
-    if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) {
-        if (String(mensagemBaileys.comando || '').startsWith(pref)) {
-            console.log(`[msg] ignorada: tipo não permitido (${mensagemBaileys.tipo})`)
-        }
-        return
-    }
+    if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) return
     if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
     if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
-    if(!await checagemMensagem(c, mensagemBaileys, botInfo)) {
-        if (String(mensagemBaileys.comando || '').startsWith(pref)) {
-            console.log('[msg] bloqueada na checagemMensagem')
-        }
-        return
-    }
+    if(!await checagemMensagem(c, mensagemBaileys, botInfo)) return
     await chamadaComando(c, mensagemBaileys, botInfo)
 }
 

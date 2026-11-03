@@ -1,5 +1,6 @@
 import Datastore from '@seald-io/nedb'
-const db = new Datastore({filename : './dados/usuarios.db', autoload: true})
+import { caminhoDados } from '../lib/caminhos.js'
+const db = new Datastore({filename : caminhoDados('usuarios.db'), autoload: true})
 
 export class Usuario {
 

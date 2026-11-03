@@ -3,8 +3,9 @@
  */
 import fs from 'fs-extra'
 import path from 'node:path'
+import { raizProjeto } from './caminhos.js'
 
-const DIR = path.resolve('conteudo')
+const DIR = path.join(raizProjeto, 'conteudo')
 const cache = new Map()
 const recentes = new Map()
 

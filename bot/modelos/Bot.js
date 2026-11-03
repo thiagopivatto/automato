@@ -1,12 +1,10 @@
-import path from 'node:path'
 import fs from 'fs-extra'
-
+import { caminhoDados } from '../lib/caminhos.js'
 
 export class Bot{
     constructor(){
-        this.caminhoJSON =  path.resolve("dados/bot.json")
+        this.caminhoJSON = caminhoDados('bot.json')
     }
-
 
     async atualizarDados(dados){
         fs.writeFileSync(this.caminhoJSON, JSON.stringify(dados))

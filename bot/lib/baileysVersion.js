@@ -3,10 +3,10 @@
  * Sempre tenta online no pareamento (QR) para evitar versão inválida.
  */
 import fs from 'fs-extra'
-import path from 'node:path'
 import { fetchLatestBaileysVersion } from '@whiskeysockets/baileys'
+import { caminhoDados } from './caminhos.js'
 
-const CACHE = path.resolve('dados', 'baileys-version-cache.json')
+const CACHE = caminhoDados('baileys-version-cache.json')
 const TTL_MS = 6 * 60 * 60 * 1000
 const FALLBACK = [2, 3000, 1027934701]
 
