@@ -425,6 +425,7 @@ Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
 
 ### `!resumodogrupo`
 
+<<<<<<< HEAD
 **Descrição:** Narrador sarcástico do grupo em áudio (3–5 min)
 
 **Como usar / exemplos:**
@@ -432,6 +433,15 @@ Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
 Ex: *!resumodogrupo* - Nota de voz de *3 a 5 min* com roast e leitura do grupo.
 Na próxima vez, só entra o que foi dito *depois* deste pedido (anti-repetição).
 Áudio: ElevenLabs com fallback automático silencioso.
+=======
+**Descrição:** Comentário ácido do grupo em áudio (5–10 min)
+
+**Como usar / exemplos:**
+
+Ex: *!resumodogrupo* - Nota de voz de *5 a 10 min*, ácida e opinativa.
+Se pedir de novo, só entra mensagem de *depois* do último comando.
+Se a IA de voz não estiver disponível, avisa o erro e usa TTS gratuito.
+>>>>>>> 67d8f2ac3ba6377e38df26725679b70c87913c80
 *Requisitos:* grupo; bot coletando mensagens.
 
 ---
@@ -1612,7 +1622,11 @@ Testes
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure `.env` (`ELEVENLABS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `RAPIDAPI_KEY`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: `yt-dlp` recomendado no PATH (ou `YTDLP_PATH`).
+<<<<<<< HEAD
 - `!resumodogrupo`: nota de voz de 3 a 5 min; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
+=======
+- `!resumodogrupo`: nota de voz de 5 a 10 min, ácida; na repetição, só mensagens depois do último comando; se a IA de voz falhar, avisa e usa TTS gratuito; histórico enquanto o bot está online (~7 dias).
+>>>>>>> 67d8f2ac3ba6377e38df26725679b70c87913c80
 - Bancos locais (≥2000 itens): `conteudo/` — veja docs/CONTEUDO.md
 - `!automsg`: ligado por padrão; só admins ligam/desligam; interações humanas com intervalo longo.
 - `!verdadeoudesafio` / `!vod`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.

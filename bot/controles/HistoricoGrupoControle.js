@@ -120,42 +120,38 @@ export function textoEhComandoResumo(texto, prefixo = '!') {
 }
 
 /**
+ * Esta janela para no envio deste !resumodogrupo.
+ * A próxima começa estritamente depois desse envio.
+ */
+export function filtrarJanelaResumo(brutas, prefixo, limiteSuperior = Date.now()) {
+    const limite = Number(limiteSuperior) || Date.now()
+    let tsComandoAtual = 0
+    const candidatas = []
+    for (const m of brutas || []) {
+        if (!m?.texto) continue
+        const ts = Number(m.timestamp) || 0
+        if (ts > limite) continue
+        if (textoEhComandoResumo(m.texto, prefixo)) {
+            if (ts >= tsComandoAtual) tsComandoAtual = ts
+            continue
+        }
+        candidatas.push(m)
+    }
+    const msgs = tsComandoAtual
+        ? candidatas.filter((m) => Number(m.timestamp) <= tsComandoAtual)
+        : candidatas
+    return { msgs, marcoNovo: tsComandoAtual || limite }
+}
+
+/**
  * Janela do !resumodogrupo: tudo depois do último resumo bem-sucedido
- * e até o instante em que este pedido começou. O próprio comando não entra.
+ * e antes do envio deste comando. O próprio comando não entra.
  */
 export async function obterJanelaResumoGrupo(id_grupo, prefixo, limiteSuperior = Date.now()) {
     const marco = await historico.obterMarcoResumo(id_grupo)
     const brutas = await historico.obterDesde(id_grupo, marco, 1200)
-    const limite = Number(limiteSuperior) || Date.now()
-    const msgs = brutas.filter((m) => {
-        if (!m?.texto) return false
-        if (Number(m.timestamp) > limite) return false
-        if (textoEhComandoResumo(m.texto, prefixo)) return false
-        return true
-    })
-    const memoriaTexto = await memoriaResumo.obterContextoPrompt(id_grupo, 4)
-    return {
-        msgs,
-        marco,
-        teveResumoAnterior: marco > 0,
-        memoriaTexto,
-        periodoInicio: msgs[0]?.timestamp || marco || 0,
-        periodoFim: limite
-    }
+    const { msgs, marcoNovo } = filtrarJanelaResumo(brutas, prefixo, limiteSuperior)
+    return { msgs, marco, teveResumoAnterior: marco > 0, marcoNovo }
 }
 
-/** Últimas N mensagens do grupo para !resumoportema (inclui áudios já transcritos). */
-export async function obterJanelaResumoPorTema(id_grupo, limite = 1000) {
-    const msgs = await historico.obterUltimas(id_grupo, Math.min(Math.max(Number(limite) || 1000, 50), 1200))
-    return {
-        msgs: (msgs || []).filter((m) => m?.texto),
-        periodoInicio: msgs?.[0]?.timestamp || 0,
-        periodoFim: msgs?.length ? msgs[msgs.length - 1].timestamp : Date.now()
-    }
-}
-
-export async function registrarMemoriaResumo(id_grupo, dados) {
-    return memoriaResumo.registrar({ id_grupo, ...dados })
-}
-
-export { historico as historicoGrupo, memoriaResumo }
+export { historico as historicoGrupo }
