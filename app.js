@@ -97,9 +97,12 @@ async function connectToWhatsApp(){
                 tentativasReconexao = 0
                 await eventosSocket.conexaoAberta(c, botInfo)
                 // Sempre libera a fila de msgs — falha em grupos não pode travar comandos
-                inicializacaoCompleta = !!(await eventosSocket.atualizacaoDadosGrupos(c, botInfo).catch(() => true))
-                if (!inicializacaoCompleta) inicializacaoCompleta = true
-                await eventosSocket.realizarEventosEspera(c, eventosEsperando)
+                inicializacaoCompleta = true
+                await eventosSocket.atualizacaoDadosGrupos(c, botInfo).catch((e) => {
+                    console.error('[grupos.init]', e?.message || e)
+                })
+                // Processa fila direto (sem c.ev.emit — no Baileys 7 o re-emit se perde)
+                await eventosSocket.realizarEventosEspera(c, eventosEsperando, botInfo)
                 eventosEsperando = []
             } else if (connection == 'close'){
                 necessarioReconectar = await eventosSocket.conexaoEncerrada(update, botInfo)
@@ -124,22 +127,12 @@ async function connectToWhatsApp(){
             await saveCreds()
         }
 
-        // Ao receber novas mensagens
-        const delay = (ms) => new Promise(res => setTimeout(res, ms));
-
-        async function processarMensagemComDelay() {
-            const m = events['messages.upsert']
-            // Delay curto — 1s acumulava e parecia que “nenhum comando funciona”
-            await delay(150)
-            if(sockAtual !== c) return
-            await eventosSocket.receberMensagem(c, m, botInfo)
-        }
+        // Ao receber novas mensagens — await no ev.process (Baileys 7 exige)
         if(events['messages.upsert']){
             const m = events['messages.upsert']
             if(inicializacaoCompleta) {
-                processarMensagemComDelay().catch((err) => {
-                    console.error('[messages.upsert]', err?.message || err)
-                })
+                if(sockAtual !== c) return
+                await eventosSocket.receberMensagem(c, m, botInfo)
             } else {
                 eventosEsperando.push({evento: 'messages.upsert', dados: m})
             }

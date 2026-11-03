@@ -1,81 +1,128 @@
-import { getContentType } from '@whiskeysockets/baileys'
+import { getContentType, normalizeMessageContent } from '@whiskeysockets/baileys'
 import { GrupoControle } from '../controles/GrupoControle.js'
 import { UsuarioControle } from '../controles/UsuarioControle.js'
 import { listaContemJid } from '../lib/util.js'
 
+/** Chaves que não são conteúdo real (Baileys 7 / proto). */
+const TIPOS_IGNORAR = new Set([
+    'senderKeyDistributionMessage',
+    'messageContextInfo',
+    'messageSecret',
+    'botInfo',
+    'commentMetadata'
+])
+
+/**
+ * Tipo de conteúdo real — ignora messageContextInfo etc.
+ * Sem isso o Baileys 7 pode “ver” messageContextInfo e o bot ignora !comandos.
+ */
+export function obterTipoConteudo(message) {
+    const normalizado = normalizeMessageContent(message) || message
+    if (!normalizado || typeof normalizado !== 'object') return undefined
+    const keys = Object.keys(normalizado)
+    const key = keys.find(
+        (k) =>
+            (k === 'conversation' || k.endsWith('Message') || k.includes('Message')) &&
+            !TIPOS_IGNORAR.has(k) &&
+            !k.endsWith('ContextInfo')
+    )
+    return key || getContentType(normalizado)
+}
+
+export function extrairTextoMensagem(message, tipo) {
+    const msg = normalizeMessageContent(message) || message || {}
+    const t = tipo || obterTipoConteudo(msg)
+    const no = t ? msg[t] : null
+    if (typeof msg.conversation === 'string' && msg.conversation) return msg.conversation
+    if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text
+    if (no?.text) return no.text
+    if (no?.caption) return no.caption
+    if (no?.conversation) return no.conversation
+    return ''
+}
 
 export async function converterMensagem(m, botInfo) {
     return new Promise(async (resolve, reject) => {
         try {
-            m = m.messages[0]
-            let tipo = getContentType(m.message)
+            // Aceita upsert completo ou WAMessage único
+            const raw = Array.isArray(m?.messages) ? m.messages[0] : m
+            if (!raw?.message) throw new Error('mensagem sem conteúdo')
+
+            // Trabalha em cópia rasa da key; normaliza o corpo
+            const mensagemNorm = normalizeMessageContent(raw.message) || raw.message
+            raw.message = mensagemNorm
+
+            let tipo = obterTipoConteudo(raw.message)
             let mensagem_vunica = String(tipo || '').includes('viewOnce')
-            if (mensagem_vunica) {
-                m.message = m.message[tipo].message
-                tipo = getContentType(m.message)
+            if (mensagem_vunica && raw.message?.[tipo]?.message) {
+                raw.message = raw.message[tipo].message
+                tipo = obterTipoConteudo(raw.message)
             }
             // Algumas versões mandam a mídia já “desembrulhada” com flag viewOnce
-            if (!mensagem_vunica && m.message?.[tipo]?.viewOnce) mensagem_vunica = true
-            if (m.message?.[tipo]?.viewOnce) m.message[tipo].viewOnce = false
-            const contexto = m.message[tipo]?.contextInfo || {}
+            if (!mensagem_vunica && raw.message?.[tipo]?.viewOnce) mensagem_vunica = true
+            if (raw.message?.[tipo]?.viewOnce) raw.message[tipo].viewOnce = false
+
+            const contexto = raw.message[tipo]?.contextInfo || {}
             let mensagem_citada = contexto.quotedMessage != undefined
             let { numero_bot, lid_bot } = botInfo
-            let remetente = (m.key.fromMe) ? numero_bot : m.key.participant || m.key.remoteJid
-            // Preferir participantPn / remoteJidAlt quando Baileys enviar o número real
-            if (!m.key.fromMe) {
-                remetente = m.key.participantPn || m.key.participantAlt || m.key.participant || m.key.remoteJid
-            }
-            let texto_completo = m.message[tipo]?.caption || m.message.conversation || m.message.extendedTextMessage?.text || ''
-            let [comando, ...args] = texto_completo.trim().split(" ")
+            let remetente = raw.key.fromMe
+                ? numero_bot
+                : raw.key.participantPn ||
+                  raw.key.participantAlt ||
+                  raw.key.participant ||
+                  raw.key.remoteJid
+
+            const texto_completo = extrairTextoMensagem(raw.message, tipo)
+            let [comando, ...args] = texto_completo.trim().split(/\s+/)
             let numero_dono = await new UsuarioControle().obterIdDono()
-            let mensagem_dono = numero_dono == remetente
-            let mensagem_grupo = m.key.remoteJid.includes("@g.us")
+            let mensagem_dono = listaContemJid([numero_dono], remetente)
+            let mensagem_grupo = String(raw.key.remoteJid || '').includes('@g.us')
 
             let respostaInformacoes = {
-                id_mensagem: m.key.id,
+                id_mensagem: raw.key.id,
                 remetente,
                 tipo,
-                t: m.messageTimestamp,
-                id_chat: m.key.remoteJid,
-                nome_usuario: m.pushName,
-                corpo: m.message.conversation || m.message.extendedTextMessage?.text || '',
-                legenda: m.message[tipo]?.caption || '',
-                mencionados: m.message[tipo]?.contextInfo?.mentionedJid ?? [],
-                texto_recebido: args?.join(" ").trim() ?? '',
+                t: raw.messageTimestamp,
+                id_chat: raw.key.remoteJid,
+                nome_usuario: raw.pushName,
+                corpo: texto_completo,
+                legenda: raw.message[tipo]?.caption || '',
+                mencionados: raw.message[tipo]?.contextInfo?.mentionedJid ?? [],
+                texto_recebido: args?.join(' ').trim() ?? '',
                 comando: comando?.toLowerCase().trim() ?? '',
                 args,
                 mensagem_citada,
                 mensagem_grupo,
                 mensagem_vunica,
                 mensagem_dono,
-                mensagem_bot: m.key.fromMe,
-                mensagem_broadcast: m.key.remoteJid == "status@broadcast",
+                mensagem_bot: raw.key.fromMe,
+                mensagem_broadcast: raw.key.remoteJid == 'status@broadcast',
                 mensagem_midia: tipo != tiposMensagem.texto && tipo != tiposMensagem.textoExt,
-                mensagem: m,
+                mensagem: raw
             }
 
             // Se for mensagem de midia
             if (respostaInformacoes.mensagem_midia) {
                 respostaInformacoes.midia = {
-                    mimetype: m.message[tipo]?.mimetype,
-                    midia_url: m.message[tipo]?.url,
-                    segundos: m.message[tipo]?.seconds,
-                    tamanho_arquivo: m.message[tipo]?.fileLength,
+                    mimetype: raw.message[tipo]?.mimetype,
+                    midia_url: raw.message[tipo]?.url,
+                    segundos: raw.message[tipo]?.seconds,
+                    tamanho_arquivo: raw.message[tipo]?.fileLength
                 }
             }
 
             // Se for mensagem de grupo
             if (mensagem_grupo) {
-                let id_grupo = m.key.remoteJid
+                let id_grupo = raw.key.remoteJid
                 let grupoInfo = await new GrupoControle().obterGrupoInfo(id_grupo)
                 if (grupoInfo) {
                     respostaInformacoes.grupo = grupoInfo
                     respostaInformacoes.grupo.usuario_admin = listaContemJid(
                         grupoInfo.admins,
                         remetente,
-                        m.key.participant,
-                        m.key.participantPn,
-                        m.key.participantAlt
+                        raw.key.participant,
+                        raw.key.participantPn,
+                        raw.key.participantAlt
                     )
                     respostaInformacoes.grupo.bot_admin = listaContemJid(
                         grupoInfo.admins,
@@ -97,14 +144,13 @@ export async function converterMensagem(m, botInfo) {
             // Se tiver citado alguma mensagem
             if (mensagem_citada) {
                 const ctxInfo = contexto
-                // Cópia do quote original (não mutar o wrapper antes de copiar a mídia)
                 let quotedOriginal = ctxInfo.quotedMessage
-                let quotedRaw = quotedOriginal
-                let tipoMensagemCitada = getContentType(quotedRaw)
+                let quotedRaw = normalizeMessageContent(quotedOriginal) || quotedOriginal
+                let tipoMensagemCitada = obterTipoConteudo(quotedRaw)
                 let citacaoVunica = String(tipoMensagemCitada || '').includes('viewOnce')
                 if (citacaoVunica && quotedRaw?.[tipoMensagemCitada]?.message) {
                     quotedRaw = quotedRaw[tipoMensagemCitada].message
-                    tipoMensagemCitada = getContentType(quotedRaw)
+                    tipoMensagemCitada = obterTipoConteudo(quotedRaw)
                 }
                 if (!citacaoVunica && quotedRaw?.[tipoMensagemCitada]?.viewOnce) citacaoVunica = true
 
@@ -114,14 +160,12 @@ export async function converterMensagem(m, botInfo) {
 
                 const mensagemCitacaoBaixavel = {
                     key: {
-                        remoteJid: m.key.remoteJid,
+                        remoteJid: raw.key.remoteJid,
                         id: ctxInfo.stanzaId || undefined,
                         fromMe: false,
                         participant: ctxInfo.participant || undefined
                     },
-                    message: midiaCitada
-                        ? { [tipoMensagemCitada]: midiaCitada }
-                        : quotedRaw
+                    message: midiaCitada ? { [tipoMensagemCitada]: midiaCitada } : quotedRaw
                 }
                 respostaInformacoes.citacao = {
                     tipo: tipoMensagemCitada,
@@ -146,7 +190,6 @@ export async function converterMensagem(m, botInfo) {
             reject(err)
         }
     })
-
 }
 
 export const obterTipoDeMensagem = (tipo) => {
@@ -160,21 +203,21 @@ export const obterTipoDeMensagem = (tipo) => {
 }
 
 export const tiposMensagem = {
-    texto: "conversation",
-    textoExt: "extendedTextMessage",
-    imagem: "imageMessage",
-    documento: "documentMessage",
-    video: "videoMessage",
-    sticker: "stickerMessage",
-    audio: "audioMessage"
+    texto: 'conversation',
+    textoExt: 'extendedTextMessage',
+    imagem: 'imageMessage',
+    documento: 'documentMessage',
+    video: 'videoMessage',
+    sticker: 'stickerMessage',
+    audio: 'audioMessage'
 }
 
 export const tiposPermitidosMensagens = [
-    "conversation",
-    "extendedTextMessage",
-    "imageMessage",
-    "documentMessage",
-    "videoMessage",
-    "stickerMessage",
-    "audioMessage"
+    'conversation',
+    'extendedTextMessage',
+    'imageMessage',
+    'documentMessage',
+    'videoMessage',
+    'stickerMessage',
+    'audioMessage'
 ]
