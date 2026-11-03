@@ -65,6 +65,14 @@ export const conexaoAberta = async(c, botInfo)=>{
     }
 }
 
+const MSG_MAX_IDADE_S = 180 // ignora histórico antigo em batches "append"
+
+function timestampMsgSeg(rawWa) {
+    const t = Number(rawWa?.messageTimestamp || 0)
+    if (!t) return Math.floor(Date.now() / 1000)
+    return t > 1e12 ? Math.floor(t / 1000) : t
+}
+
 /** Processa uma única WAMessage (notify ou append). */
 async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
     if (!rawWa) return
@@ -83,6 +91,12 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
             } catch { /* */ }
         }
         return
+    }
+
+    // Append antigo = histórico — não reprocessa comandos velhos
+    if (tipoUpsert === 'append') {
+        const idade = Math.floor(Date.now() / 1000) - timestampMsgSeg(rawWa)
+        if (idade > MSG_MAX_IDADE_S) return
     }
 
     // Normaliza wrappers (ephemeral / documentWithCaption / etc.)
@@ -136,7 +150,6 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
         const lista = Array.isArray(mensagem?.messages) ? mensagem.messages : []
         if (!lista.length) return
 
-        // Processa TODAS as msgs do batch (antes só a [0] — no Linux o batch costuma vir cheio)
         for (const rawWa of lista) {
             try {
                 await processarUmaMensagem(c, rawWa, botInfo, tipoUpsert)
@@ -146,7 +159,6 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
         }
     } catch(err){
         consoleErro(err, "MESSAGES.UPSERT")
-        // Não derruba a conexão por erro de comando/mensagem
         try {
             const jid = mensagem?.messages?.[0]?.key?.remoteJid
             if (jid) await socket.enviarTexto(c, jid, '⚠️ Ocorreu um erro ao processar a mensagem, mas o bot continua ativo.').catch(()=>{})

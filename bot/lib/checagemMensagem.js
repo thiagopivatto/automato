@@ -35,10 +35,13 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         const msgGuia = (!args.length) ? false : args[0] === "guia"
         let usuarioBloqueado = false
         try {
-            const usuariosBloqueados = await socket.obterContatosBloqueados(c)
+            const usuariosBloqueados = await Promise.race([
+                socket.obterContatosBloqueados(c),
+                new Promise((resolve) => setTimeout(() => resolve([]), 2500))
+            ])
             usuarioBloqueado = Array.isArray(usuariosBloqueados) && usuariosBloqueados.includes(remetente)
         } catch {
-            // Baileys 7 / LID: blocklist pode falhar — não bloqueia comandos
+            // Baileys 7 / LID: blocklist pode falhar/hang — não bloqueia comandos
         }
         const comandoExiste = verificarComandoExiste(botInfo, comando)
         

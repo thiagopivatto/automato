@@ -12,7 +12,8 @@ export default function configSocket(state, cacheTentativasEnvio, versaoWaWeb) {
         msgRetryCounterCache: cacheTentativasEnvio,
         defaultQueryTimeoutMs: undefined,
         syncFullHistory: false,
-        markOnlineOnConnect: false,
+        // true ajuda a receber msgs de forma estável em VPS/Linux
+        markOnlineOnConnect: true,
         // Web padrão para autenticação por QR.
         browser: Browsers.ubuntu('Chrome'),
         printQRInTerminal: false,

@@ -83,8 +83,17 @@ async function connectToWhatsApp(){
         // Ignora eventos de sockets antigos após reconectar
         if(sockAtual !== c) return
 
-        //Obtendo dados do bot
-        const botInfo  = await bot.obterInformacoesBot()
+        //Obtendo dados do bot (timeout — não pode travar o ev.process)
+        let botInfo
+        try {
+            botInfo = await Promise.race([
+                bot.obterInformacoesBot(),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('timeout botInfo')), 4000))
+            ])
+        } catch (err) {
+            console.error('[botInfo]', err?.message || err)
+            return
+        }
 
         //Atualização na conexão
         if(events['connection.update']){
@@ -141,12 +150,19 @@ async function connectToWhatsApp(){
             await saveCreds()
         }
 
-        // Ao receber novas mensagens — await no ev.process (Baileys 7 exige)
+        // Mensagens FORA do await do ev.process — se awaitar aqui, qualquer
+        // hang (blocklist/metadata/histórico) trava TODOS os eventos no Linux.
         if(events['messages.upsert']){
             const m = events['messages.upsert']
             if(inicializacaoCompleta) {
-                if(sockAtual !== c) return
-                await eventosSocket.receberMensagem(c, m, botInfo)
+                const sock = c
+                const info = botInfo
+                setImmediate(() => {
+                    if (sockAtual !== sock) return
+                    eventosSocket.receberMensagem(sock, m, info).catch((err) => {
+                        console.error('[messages.upsert]', err?.message || err)
+                    })
+                })
             } else {
                 eventosEsperando.push({evento: 'messages.upsert', dados: m})
             }

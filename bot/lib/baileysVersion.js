@@ -3,6 +3,7 @@
  * Sempre tenta online no pareamento (QR) para evitar versão inválida.
  */
 import fs from 'fs-extra'
+import path from 'node:path'
 import { fetchLatestBaileysVersion } from '@whiskeysockets/baileys'
 import { caminhoDados } from './caminhos.js'
 
