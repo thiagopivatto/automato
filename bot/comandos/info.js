@@ -25,6 +25,7 @@ export const info = async(c, mensagemBaileys, botInfo) => {
         mensagem,
         id_chat,
         mensagem_grupo,
+        mensagem_dono,
         grupo
     } = mensagemBaileys
     const { usuario_admin } = {...grupo}
@@ -103,9 +104,11 @@ export const info = async(c, mensagemBaileys, botInfo) => {
             case `meusdados`:
                 try{
                     let dadosUsuario = await usuarios.obterDadosUsuario(remetente)
+                    if (!dadosUsuario) dadosUsuario = { tipo: mensagem_dono ? 'dono' : 'comum', nome: nome_usuario, comandos_total: 0, comandos_dia: 0 }
+                    if (mensagem_dono) dadosUsuario.tipo = 'dono'
                     let maxComandosDia = botInfo.limite_diario.limite_tipos[dadosUsuario.tipo].comandos ||  "Sem limite" 
                     let tipoUsuario = botInfo.limite_diario.limite_tipos[dadosUsuario.tipo].titulo
-                    let nomeUsuario = nome_usuario
+                    let nomeUsuario = nome_usuario || dadosUsuario.nome || 'usuário'
                     let resposta = criarTexto(comandos_info.info.meusdados.msgs.resposta_geral, tipoUsuario, nomeUsuario, dadosUsuario.comandos_total)
                     if(botInfo.limite_diario.status) resposta += criarTexto(comandos_info.info.meusdados.msgs.resposta_limite_diario, dadosUsuario.comandos_dia, maxComandosDia, maxComandosDia)
                     if(mensagem_grupo){
@@ -125,10 +128,12 @@ export const info = async(c, mensagemBaileys, botInfo) => {
             case 'comandos':
                 try{
                     let dadosUsuario = await usuarios.obterDadosUsuario(remetente)
+                    if (!dadosUsuario) dadosUsuario = { tipo: mensagem_dono ? 'dono' : 'comum', nome: nome_usuario, comandos_total: 0, comandos_dia: 0 }
+                    if (mensagem_dono) dadosUsuario.tipo = 'dono'
                     let maxComandosDia = botInfo.limite_diario.limite_tipos[dadosUsuario.tipo].comandos || "Sem limite"
-                    let totalComandos = dadosUsuario.comandos_total
+                    let totalComandos = dadosUsuario.comandos_total || 0
                     let tipoUsuario = botInfo.limite_diario.limite_tipos[dadosUsuario.tipo].titulo
-                    let nomeUsuario = nome_usuario
+                    let nomeUsuario = nome_usuario || dadosUsuario.nome || 'usuário'
                     let dadosResposta = ''
                     
                     if(botInfo.limite_diario.status){

@@ -1,5 +1,6 @@
 
 import {Usuario} from '../modelos/Usuario.js'
+import { env } from '../lib/env.js'
 
 
 export class UsuarioControle{
@@ -8,10 +9,21 @@ export class UsuarioControle{
         this.usuario = new Usuario()
     }
 
+    digitosJid(jid) {
+        return String(jid || '').split('@')[0].split(':')[0].replace(/\D/g, '')
+    }
+
+    /** Dígitos do dono: DB e/ou .env DONO / DONO_JID. */
+    digitosDonoEsperado(donoJid = '') {
+        const digDb = this.digitosJid(donoJid)
+        const digEnv = String(env('DONO_JID', 'DONO', 'NUMERO_DONO') || '5511999178699').replace(/\D/g, '')
+        return digDb || digEnv
+    }
+
     async registrarUsuario(id_usuario, nome){
         const dadosUsuario = {
             id_usuario,
-            nome,
+            nome: nome || 'Usuário',
             comandos_total: 0,
             comandos_dia: 0,
             recebeuBoasVindas: false,
@@ -22,7 +34,8 @@ export class UsuarioControle{
     }
 
     async atualizarNome(id_usuario, nome){
-        await this.usuario.atualizarNome(id_usuario, nome)
+        if (!id_usuario || nome == null || String(nome).trim() === '') return
+        await this.usuario.atualizarNome(id_usuario, String(nome).trim())
     }
 
     async verificarRegistro(id_usuario){
@@ -49,17 +62,24 @@ export class UsuarioControle{
         }
     }
 
-    /** True se o JID/LID/PN for o dono (compara dígitos do telefone). */
+    /**
+     * True se o JID/LID/PN for o dono.
+     * Compara dígitos do telefone (PN) e também .env — LID puro sem PN não casa por dígitos.
+     */
     async ehDono(id_usuario, ...aliases) {
         const dono = await this.obterIdDono()
-        if (!dono) return false
-        const dig = (j) => String(j || '').split('@')[0].split(':')[0].replace(/\D/g, '')
-        const donoDig = dig(dono)
+        const donoDig = this.digitosDonoEsperado(dono)
         if (!donoDig) return false
         const candidatos = [id_usuario, ...aliases].filter(Boolean)
         return candidatos.some((j) => {
-            const d = dig(j)
-            return d && (d === donoDig || d.endsWith(donoDig) || donoDig.endsWith(d))
+            // LID não tem dígitos de telefone confiáveis — só PN casa com o dono
+            if (String(j).endsWith('@lid')) {
+                // Se o próprio dono no DB for esse LID (cadastro antigo), aceita
+                return dono && String(dono) === String(j)
+            }
+            const d = this.digitosJid(j)
+            if (!d) return false
+            return d === donoDig || d.endsWith(donoDig) || donoDig.endsWith(d)
         })
     }
 
@@ -69,6 +89,67 @@ export class UsuarioControle{
 
     async obterDadosUsuario(id_usuario){
         return await this.usuario.obterUsuario(id_usuario)
+    }
+
+    /** Busca usuário por qualquer alias (PN/LID). */
+    async obterDadosUsuarioPorAliases(...ids) {
+        for (const id of ids.filter(Boolean)) {
+            const u = await this.usuario.obterUsuario(id)
+            if (u) return u
+        }
+        return null
+    }
+
+    /**
+     * Garante registro certo: PN canônico, promove dono, não grava nome null.
+     * Retorna { usuario, idCanonico }.
+     */
+    async garantirIdentidade({ remetente, aliases = [], nome, mensagem_dono = false } = {}) {
+        const ids = [...new Set([remetente, ...aliases].filter(Boolean))]
+        const pn = ids.find((j) => /@s\.whatsapp\.net$/i.test(String(j)))
+        let idCanonico = pn || remetente
+        const donoId = await this.obterIdDono()
+        const isDono = mensagem_dono || (await this.ehDono(remetente, ...aliases))
+
+        if (isDono && donoId) {
+            idCanonico = /@s\.whatsapp\.net$/i.test(String(donoId)) ? donoId : (pn || donoId)
+        }
+
+        let usuario = await this.obterDadosUsuarioPorAliases(idCanonico, ...ids)
+        const nomeOk = nome && String(nome).trim() && String(nome).trim() !== 'null'
+            ? String(nome).trim()
+            : null
+
+        if (!usuario) {
+            await this.registrarUsuario(idCanonico, nomeOk || (isDono ? 'Dono' : 'Usuário'))
+            if (isDono) await this.cadastrarDono(idCanonico)
+            usuario = await this.usuario.obterUsuario(idCanonico)
+        } else {
+            // Achou sob LID: promove/migra para PN do dono
+            if (isDono && usuario.id_usuario !== idCanonico) {
+                await this.cadastrarDono(idCanonico)
+                const sobPn = await this.usuario.obterUsuario(idCanonico)
+                if (!sobPn) {
+                    await this.registrarUsuario(idCanonico, nomeOk || usuario.nome || 'Dono')
+                    await this.cadastrarDono(idCanonico)
+                }
+                // Soma contadores do LID no PN se forem registros distintos
+                if (usuario.id_usuario !== idCanonico) {
+                    try {
+                        await this.usuario.addContagemTotal(idCanonico)
+                    } catch { /* */ }
+                }
+                usuario = await this.usuario.obterUsuario(idCanonico)
+            } else if (isDono && usuario.tipo !== 'dono') {
+                await this.cadastrarDono(usuario.id_usuario)
+                idCanonico = usuario.id_usuario
+                usuario = await this.usuario.obterUsuario(idCanonico)
+            }
+            if (nomeOk) await this.atualizarNome(usuario.id_usuario, nomeOk)
+            usuario = await this.usuario.obterUsuario(usuario.id_usuario)
+        }
+
+        return { usuario, idCanonico }
     }
 
     async obterUsuariosTipo(tipo){
@@ -97,6 +178,7 @@ export class UsuarioControle{
 
     async verificarUltrapassouLimiteComandos(id_usuario, botInfo){
         let usuario = await this.usuario.obterUsuario(id_usuario)
+        if (!usuario) return false
         const maxComandos = botInfo.limite_diario.limite_tipos[usuario.tipo].comandos
         if(!maxComandos) return false
         return (usuario.comandos_dia >= maxComandos)

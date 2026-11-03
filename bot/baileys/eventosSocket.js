@@ -152,21 +152,34 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
     const grupos = new GrupoControle()
     const mensagemBaileys = await converterMensagem(rawWa, botInfo)
 
-    // LID → PN no remetente/chat privado (Linux Baileys 7)
+    // Completa PN via mapa LID do Baileys quando a key só trouxe @lid
     try {
-        mensagemBaileys.remetente = await resolverJidPn(c, mensagemBaileys.remetente)
-        if (!mensagemBaileys.mensagem_grupo) {
-            mensagemBaileys.id_chat = await resolverJidPn(c, mensagemBaileys.id_chat)
+        const { aliasesRemetenteKey, escolherRemetente } = await import('./mensagem.js')
+        const aliases = [
+            ...(mensagemBaileys.aliases_remetente || []),
+            ...aliasesRemetenteKey(rawWa.key)
+        ]
+        let remetente = escolherRemetente(rawWa.key, botInfo?.numero_bot)
+        if (String(remetente).endsWith('@lid')) {
+            remetente = await resolverJidPn(c, remetente)
         }
-        if (!mensagemBaileys.mensagem_dono) {
-            const { UsuarioControle } = await import('../controles/UsuarioControle.js')
-            mensagemBaileys.mensagem_dono = await new UsuarioControle().ehDono(
-                mensagemBaileys.remetente,
-                rawWa.key.participantPn,
-                rawWa.key.participantAlt,
-                rawWa.key.participant,
-                rawWa.key.remoteJid
-            )
+        mensagemBaileys.remetente = remetente
+        mensagemBaileys.aliases_remetente = [...new Set(aliases.filter(Boolean))]
+        if (!mensagemBaileys.mensagem_grupo) {
+            const chat = await resolverJidPn(c, mensagemBaileys.id_chat)
+            if (chat) mensagemBaileys.id_chat = chat
+        }
+        const { UsuarioControle } = await import('../controles/UsuarioControle.js')
+        const uc = new UsuarioControle()
+        mensagemBaileys.mensagem_dono = await uc.ehDono(
+            mensagemBaileys.remetente,
+            ...mensagemBaileys.aliases_remetente
+        )
+        if (mensagemBaileys.mensagem_dono) {
+            const donoId = await uc.obterIdDono()
+            if (donoId && String(mensagemBaileys.remetente).endsWith('@lid')) {
+                mensagemBaileys.remetente = donoId
+            }
         }
     } catch { /* */ }
 

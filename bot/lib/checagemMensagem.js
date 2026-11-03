@@ -16,7 +16,7 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         const {prefixo, nome_bot} = botInfo
         const numero_dono = await usuarios.obterIdDono()
         const comandos_info = comandosInfo(botInfo)
-        const {
+        let {
             comando,
             args,
             remetente,
@@ -29,7 +29,8 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
             id_mensagem,
             mensagem_vunica,
             grupo,
-            citacao
+            citacao,
+            aliases_remetente
         } = mensagemBaileys
         const {id_grupo, usuario_admin, bot_admin} = {...grupo}
         const msgGuia = (!args.length) ? false : args[0] === "guia"
@@ -44,10 +45,21 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
             // Baileys 7 / LID: blocklist pode falhar/hang — não bloqueia comandos
         }
         const comandoExiste = verificarComandoExiste(botInfo, comando)
-        
-        // Verificação se o usuário existe e se não existir faça o cadastro.
-        let usuarioRegistrado = await usuarios.verificarRegistro(remetente)
-        if(!usuarioRegistrado) await usuarios.registrarUsuario(remetente, nome_usuario)
+
+        // Identidade canônica (PN) + promove dono; evita "Comum" / "Olá null" com LID
+        const { usuario: dadosUsuarioGarantido, idCanonico } = await usuarios.garantirIdentidade({
+            remetente,
+            aliases: aliases_remetente || [],
+            nome: nome_usuario,
+            mensagem_dono
+        })
+        remetente = idCanonico
+        mensagemBaileys.remetente = idCanonico
+        if ((!nome_usuario || nome_usuario === 'null') && dadosUsuarioGarantido?.nome) {
+            nome_usuario = dadosUsuarioGarantido.nome
+            mensagemBaileys.nome_usuario = nome_usuario
+        }
+        if (mensagem_dono) mensagemBaileys.mensagem_dono = true
 
         //Se não houver um usuário do tipo 'dono' e o comando for !admin, altere o tipo de quem fez o comando como dono.
         if(!numero_dono && comando == `${prefixo}admin`) {
@@ -57,7 +69,7 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         }
 
         // OBTENDO DADOS ATUALIZADOS DO USUÁRIO
-        const dadosUsuario = await usuarios.obterDadosUsuario(remetente)
+        const dadosUsuario = dadosUsuarioGarantido || await usuarios.obterDadosUsuario(remetente)
 
         //SE O CONTADOR TIVER ATIVADO E FOR UMA MENSAGEM DE GRUPO, VERIFICA SE O USUARIO EXISTE NO CONTADOR , REGISTRA ELE E ADICIONA A CONTAGEM
         if(mensagem_grupo && grupo?.contador.status) {
@@ -75,8 +87,9 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         if(mensagem_grupo && !bot_admin && grupo?.restrito_msg) return false
 
         //SE O USUÁRIO MANDAR MENSAGEM NO PV E AINDA NÃO TIVER RECEBIDO A MENSAGEM DE BOAS VINDAS, ENVIE.
-        if(!mensagem_grupo && !dadosUsuario.recebeuBoasVindas && botInfo.pvliberado){
-            await socket.enviarTexto(c, id_chat, criarTexto(comandos_info.outros.usuario_novo, nome_bot?.trim(), nome_usuario), mensagem)
+        if(!mensagem_grupo && dadosUsuario && !dadosUsuario.recebeuBoasVindas && botInfo.pvliberado){
+            const nomeBv = nome_usuario || dadosUsuario.nome || 'usuário'
+            await socket.enviarTexto(c, id_chat, criarTexto(comandos_info.outros.usuario_novo, nome_bot?.trim(), nomeBv), mensagem)
             await usuarios.recebeuBoasVindas(remetente)
         }
 
@@ -84,9 +97,9 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         try {
             await socket.lerMensagem(c, id_chat, remetente, id_mensagem)
         } catch { /* */ }
-        //ATUALIZE NOME DO USUÁRIO 
+        //ATUALIZE NOME DO USUÁRIO (não grava null)
         try {
-            await usuarios.atualizarNome(remetente, nome_usuario)
+            if (nome_usuario && nome_usuario !== 'null') await usuarios.atualizarNome(remetente, nome_usuario)
         } catch { /* */ }
 
         // Autorevelar (cópia pro dono) — reenvio no grupo já ocorre em receberMensagem

@@ -3,6 +3,25 @@ import { GrupoControle } from '../controles/GrupoControle.js'
 import { UsuarioControle } from '../controles/UsuarioControle.js'
 import { listaContemJid } from '../lib/util.js'
 
+/** Prefere JID de telefone (@s.whatsapp.net); LID só se não houver PN. */
+export function aliasesRemetenteKey(key = {}) {
+    return [
+        key.participantPn,
+        key.participantAlt,
+        key.participant,
+        key.remoteJidAlt,
+        key.remoteJid,
+        key.participantLid
+    ].filter(Boolean)
+}
+
+export function escolherRemetente(key = {}, numeroBot = '') {
+    if (key.fromMe) return numeroBot
+    const aliases = aliasesRemetenteKey(key)
+    const pn = aliases.find((j) => /@s\.whatsapp\.net$/i.test(String(j)) || /@hosted$/i.test(String(j)))
+    return pn || aliases[0] || ''
+}
+
 /** Chaves que não são conteúdo real (Baileys 7 / proto). */
 const TIPOS_IGNORAR = new Set([
     'senderKeyDistributionMessage',
@@ -65,43 +84,32 @@ export async function converterMensagem(m, botInfo) {
             const contexto = raw.message[tipo]?.contextInfo || {}
             let mensagem_citada = contexto.quotedMessage != undefined
             let { numero_bot, lid_bot } = botInfo
-            let remetente = raw.key.fromMe
-                ? numero_bot
-                : raw.key.participantPn ||
-                  raw.key.participantAlt ||
-                  raw.key.participant ||
-                  raw.key.remoteJid
+            const aliasesRemetente = aliasesRemetenteKey(raw.key)
+            let remetente = escolherRemetente(raw.key, numero_bot)
 
             const texto_completo = extrairTextoMensagem(raw.message, tipo)
             let [comando, ...args] = texto_completo.trim().split(/\s+/)
             const usuariosCtrl = new UsuarioControle()
             let numero_dono = await usuariosCtrl.obterIdDono()
-            // Dono: PN + LID + participant* (listaContemJid sozinho falha LID≠telefone)
-            let mensagem_dono = await usuariosCtrl.ehDono(
-                remetente,
-                raw.key.participantPn,
-                raw.key.participantAlt,
-                raw.key.participant,
-                raw.key.remoteJid
-            )
+            // Dono: PN preferencial + todos os aliases da key (LID/PN)
+            let mensagem_dono = await usuariosCtrl.ehDono(remetente, ...aliasesRemetente)
             if (!mensagem_dono && numero_dono) {
-                mensagem_dono = listaContemJid(
-                    [numero_dono],
-                    remetente,
-                    raw.key.participantPn,
-                    raw.key.participantAlt,
-                    raw.key.participant
-                )
+                mensagem_dono = listaContemJid([numero_dono], remetente, ...aliasesRemetente)
+            }
+            // Se é dono mas o remetente ainda é LID, ancora no JID canônico do dono
+            if (mensagem_dono && numero_dono && String(remetente).endsWith('@lid')) {
+                remetente = numero_dono
             }
             let mensagem_grupo = String(raw.key.remoteJid || '').includes('@g.us')
 
             let respostaInformacoes = {
                 id_mensagem: raw.key.id,
                 remetente,
+                aliases_remetente: aliasesRemetente,
                 tipo,
                 t: raw.messageTimestamp,
                 id_chat: raw.key.remoteJid,
-                nome_usuario: raw.pushName,
+                nome_usuario: raw.pushName || null,
                 corpo: texto_completo,
                 legenda: raw.message[tipo]?.caption || '',
                 mencionados: raw.message[tipo]?.contextInfo?.mentionedJid ?? [],
