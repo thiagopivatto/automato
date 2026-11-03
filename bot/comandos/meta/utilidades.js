@@ -38,10 +38,24 @@ export function metaUtilidades({ prefixo, nome_adm, nome_bot }) {
                 guia: `Ex: marque o bot *@Ultron* oi, tudo bem?\n`+
                 `Ex: *@bot* o que rolou hoje na política?\n`+
                 `Ex: *${prefixo}chat* faz o resumo do grupo → roda *${prefixo}resumodogrupo*\n`+
+                `Ex: envie/responda uma *imagem* com *${prefixo}chat* o que é isso?\n`+
                 `No grupo, basta marcar o número do bot — ele escuta tudo e só responde quando for mencionado.\n`+
                 `Pesquisa na web só em perguntas de fato/atualidade (bate-papo fica mais rápido).\n`,
                 msgs: {
                     resposta: "{p1}"
+                }
+            },
+            oquetemaqui: {
+                descricao: 'Descreve o que tem na imagem marcada ou enviada',
+                guia:
+                    `Ex: Envie uma *imagem* com legenda *${prefixo}oquetemaqui*\n` +
+                    `Ex: Responda uma *imagem* com *${prefixo}oquetemaqui*\n` +
+                    `Ex: Responda uma imagem com *${prefixo}oquetemaqui* quem é essa pessoa?\n`,
+                msgs: {
+                    sem_imagem:
+                        '[❗] Envie ou responda uma *imagem* com este comando.',
+                    espera: '👀 Olhando a imagem…',
+                    resposta: '🖼️ O que tem aqui:\n\n{p1}'
                 }
             },
             tabela: {

@@ -22,6 +22,33 @@ function placeholderMidia(tipo) {
     }
 }
 
+/** Descreve imagem em background e atualiza o histórico. */
+async function descreverImagemEmBackground({ id_grupo, id_usuario, timestamp, mensagemWa, legenda }) {
+    try {
+        const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
+        const api = (await import('@victorsouzaleal/lbot-api-comandos')).default
+        const buffer = await downloadMediaMessage(mensagemWa, 'buffer')
+        if (!buffer?.length) return
+        const pergunta = legenda
+            ? `Descreva a imagem em 1-2 frases (pt-BR). Legenda do usuário: ${legenda.slice(0, 200)}`
+            : 'Descreva a imagem em 1-2 frases objetivas (pt-BR).'
+        const { resultado } = await api.IA.analisarImagemIA(buffer, pergunta)
+        const desc = String(resultado || '').trim().slice(0, 400)
+        if (!desc) return
+        const texto = legenda && legenda !== '[enviou uma imagem]'
+            ? `[imagem] ${legenda} — ${desc}`
+            : `[imagem] ${desc}`
+        await historico.atualizarTextoPorChave({
+            id_grupo,
+            id_usuario,
+            timestamp,
+            texto
+        })
+    } catch (err) {
+        console.log(`HistoricoGrupo imagem - ${err?.message || err}`)
+    }
+}
+
 /** Transcreve áudio em background e atualiza o histórico (não bloqueia o fluxo). */
 async function transcreverAudioEmBackground({ id_grupo, id_usuario, timestamp, mensagemWa }) {
     try {
@@ -96,6 +123,20 @@ export async function registrarHistoricoGrupo(mensagemBaileys) {
                     id_usuario: remetente,
                     timestamp,
                     mensagemWa: mensagemBaileys.mensagem
+                })
+            })
+        }
+
+        // Imagem: descreve em background (alimenta resumodogrupo / chat)
+        if (tipo === tiposMensagem.imagem && mensagemBaileys.mensagem) {
+            const legenda = String(mensagemBaileys.legenda || corpoTxt || '').trim()
+            setImmediate(() => {
+                descreverImagemEmBackground({
+                    id_grupo,
+                    id_usuario: remetente,
+                    timestamp,
+                    mensagemWa: mensagemBaileys.mensagem,
+                    legenda
                 })
             })
         }

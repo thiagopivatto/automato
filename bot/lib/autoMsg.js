@@ -112,9 +112,14 @@ const SYSTEM_HUMANO =
     'Mensagem curta (1–3 frases), natural, sem ser robô, sem listas, sem emoji excessivo. ' +
     'Não diga que é IA/bot. Não invente números de telefone. Pode zoar leve se couber no contexto.'
 
-async function gerarTextoHumano(prompt) {
+async function gerarTextoHumano(prompt, personalidade = '') {
     try {
-        const { resultado } = await api.IA.gerarTextoIA(prompt, SYSTEM_HUMANO, {
+        let system = SYSTEM_HUMANO
+        const persona = String(personalidade || '').trim()
+        if (persona) {
+            system += `\n\n[PERSONALIDADE DESTE GRUPO]\n${persona.slice(0, 800)}`
+        }
+        const { resultado } = await api.IA.gerarTextoIA(prompt, system, {
             temperature: 0.9,
             timeout: 45000
         })
@@ -151,6 +156,10 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
     const alvos1 = membros.length ? sortearNomes(membros, 1) : []
     const alvos2 = membros.length >= 2 ? sortearNomes(membros, randEntre(1, Math.min(2, membros.length))) : alvos1
     const nomes = listaNomesTexto(membros, 16)
+    let personalidade = ''
+    try {
+        personalidade = (await new GrupoControle().obterPersonalidade(grupoInfo.id_grupo)) || ''
+    } catch { /* ignore */ }
 
     const tentarUnico = async (factory, tentativas = 3) => {
         for (let i = 0; i < tentativas; i++) {
@@ -166,7 +175,8 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
             return tentarUnico(async () => {
                 const ia = await gerarTextoHumano(
                     `Grupo "${nomeGrupo}". Escreva um bom dia NATURAL, como alguém do grupo mandando mensagem de manhã.` +
-                        (trechos ? `\nContexto recente:\n${trechos.slice(0, 900)}` : '')
+                        (trechos ? `\nContexto recente:\n${trechos.slice(0, 900)}` : ''),
+                    personalidade
                 )
                 return {
                     texto: ia || `Bom dia, galera. Como tá o dia aí?`,
@@ -178,7 +188,8 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
             return tentarUnico(async () => {
                 const ia = await gerarTextoHumano(
                     `Grupo "${nomeGrupo}". Boa noite natural, como pessoa do grupo.` +
-                        (trechos ? `\nO que rolou hoje:\n${trechos.slice(0, 900)}` : '')
+                        (trechos ? `\nO que rolou hoje:\n${trechos.slice(0, 900)}` : ''),
+                    personalidade
                 )
                 return {
                     texto: ia || `Boa noite, pessoal. Descansem aí.`,
@@ -196,7 +207,8 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
                 }
                 const ia = await gerarTextoHumano(
                     `Com base no chat recente do grupo "${nomeGrupo}", mande UMA mensagem humana comentando algo que realmente apareceu ` +
-                        `(pergunta, opinião ou reação). Não invente fatos.\n\n${trechos}`
+                        `(pergunta, opinião ou reação). Não invente fatos.\n\n${trechos}`,
+                    personalidade
                 )
                 if (!ia) return { texto: 'Li o papo de vocês e fiquei curioso: e aí, como ficou isso?', mentions: [] }
                 return textoComMembros(ia, membros.slice(0, 10), participantes)
@@ -210,7 +222,8 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
                     `Fale com ${nomesAlvos} no grupo "${nomeGrupo}" de forma natural (pergunta ou comentário). ` +
                         `Use o(s) nome(s) no texto.` +
                         (trechos ? `\nContexto:\n${trechos.slice(0, 800)}` : '') +
-                        `\nOutros membros: ${nomes}`
+                        `\nOutros membros: ${nomes}`,
+                    personalidade
                 )
                 const txt = ia || `${nomesAlvos}, e aí? Sumiram ou só lendo?`
                 return textoComMembros(txt, alvos2, participantes)
@@ -221,7 +234,8 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
                 const ia = await gerarTextoHumano(
                     `O grupo "${nomeGrupo}" está parado há um tempo. Mande uma mensagem curta e humana para puxar assunto, ` +
                         `sem forçar piada.` +
-                        (trechos ? `\nÚltimo contexto:\n${trechos.slice(0, 700)}` : '')
+                        (trechos ? `\nÚltimo contexto:\n${trechos.slice(0, 700)}` : ''),
+                    personalidade
                 )
                 return {
                     texto: ia || 'Sumiram todos? Alguém aparece aí.',

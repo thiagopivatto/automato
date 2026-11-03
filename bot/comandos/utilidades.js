@@ -80,12 +80,60 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
 
             case "chat":
                 try{
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                    const temImgChat =
+                        tipo === tiposMensagem.imagem ||
+                        citacao?.tipo === tiposMensagem.imagem
+                    if (!args.length && !temImgChat) {
+                        return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                    }
                     const { processarChatIA } = await import('../lib/processarChat.js')
                     await processarChatIA(c, mensagemBaileys, botInfo, texto_recebido)
                 } catch(err){
                     if(!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
+                }
+                break
+
+            case 'oquetemaqui':
+                try {
+                    const temImg =
+                        tipo === tiposMensagem.imagem ||
+                        citacao?.tipo === tiposMensagem.imagem
+                    if (!temImg) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            comandos_info.utilidades.oquetemaqui.msgs.sem_imagem,
+                            mensagem
+                        )
+                    }
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        comandos_info.utilidades.oquetemaqui.msgs.espera,
+                        mensagem
+                    )
+                    const perguntaExtra = String(texto_recebido || '').trim()
+                    const { descreverImagemMensagem } = await import('../lib/visao.js')
+                    const desc = await descreverImagemMensagem(
+                        mensagemBaileys,
+                        perguntaExtra ||
+                            'Descreva com detalhes o que aparece nesta imagem (pessoas, objetos, texto, ambiente). Português do Brasil.'
+                    )
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.utilidades.oquetemaqui.msgs.resposta, desc),
+                        mensagem
+                    )
+                } catch (err) {
+                    if (!err.erro) throw err
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.outros.erro_api, comando, err.erro),
+                        mensagem
+                    )
                 }
                 break
 

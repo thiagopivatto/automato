@@ -28,6 +28,10 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                             on: "Recurso Auto-Simi : ✅\n",
                             off: "Recurso Auto-Simi : ❌\n"
                         },
+                        ofensa:{
+                            on: "Recurso Ofensa : ✅\n",
+                            off: "Recurso Ofensa : ❌\n"
+                        },
                         automsg:{
                             on: "Recurso Auto-Msg : ✅\n",
                             off: "Recurso Auto-Msg : ❌\n"
@@ -318,6 +322,30 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                     ligado: "✅ AUTO-SIMI ativado — o bot responde mensagens de texto automaticamente.",
                     desligado: "✅ AUTO-SIMI desativado."
                 }
+            },
+            ofensa: {
+                descricao: 'Rebate ofensas com resposta bem mais pesada (ligado por padrão)',
+                guia:
+                    `Ex: *${prefixo}ofensa* on — Liga (padrão).\n` +
+                    `Ex: *${prefixo}ofensa* off — Desliga.\n` +
+                    `Ex: *${prefixo}ofensa* — Mostra se está ligada/desligada.\n` +
+                    `Quando alguém xinga no grupo, o bot devolve uma ofensa bem pior. ` +
+                    `Se a ofensa for contra membro do grupo ou pessoa pública, o bot defende a vítima ` +
+                    `(exceto temas gravíssimos). *Apenas admins.*\n`,
+                msgs: {
+                    ligado:
+                        '✅ OFENSA ativada! Se alguém xingar, o bot responde bem mais pesado (e defende membro/figura pública).',
+                    desligado: '✅ OFENSA desativada.'
+                }
+            },
+            personalidade: {
+                descricao: 'Define a personalidade do bot neste grupo (chat, resumo, etc.)',
+                guia:
+                    `Ex: *${prefixo}personalidade* fala como um tiozão fofoqueiro e chato\n` +
+                    `Ex: *${prefixo}personalidade* ver — Mostra a atual\n` +
+                    `Ex: *${prefixo}personalidade* padrão — Volta ao padrão do bot\n` +
+                    `Vale para *chat*, *@bot*, *resumodogrupo*, automsg e afins. *Apenas admins.*\n`,
+                msgs: {}
             },
             automsg: {
                 descricao: 'Interações humanas esporádicas no grupo',

@@ -53,12 +53,21 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
     const comandos_info = comandosInfo(botInfo)
     const { remetente, mensagem, id_chat, nome_usuario } = mensagemBaileys
 
-    const pergunta = String(textoUsuario || '').trim()
-    if (!pergunta) {
+    let pergunta = String(textoUsuario || '').trim()
+
+    // Visão: se veio imagem (legenda/citação), analisa e injeta no contexto
+    const { contextoImagemParaChat, baixarImagemMensagem } = await import('./visao.js')
+    let bufferImg = null
+    try {
+        bufferImg = await baixarImagemMensagem(mensagemBaileys)
+    } catch {
+        bufferImg = null
+    }
+    if (!pergunta && !bufferImg) {
         await socket.responderTexto(
             c,
             id_chat,
-            'Me marca e fala o que você quer — ou usa *!chat* + texto.',
+            'Me marca e fala o que você quer — ou usa *!chat* + texto (também dá pra mandar/marcar imagem).',
             mensagem
         )
         return 'conversa'
@@ -69,6 +78,17 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         c.presenceSubscribe(id_chat).catch(() => {})
         c.sendPresenceUpdate('composing', id_chat).catch(() => {})
     } catch { /* */ }
+
+    if (bufferImg) {
+        const ctxImg = await contextoImagemParaChat(mensagemBaileys, pergunta)
+        if (ctxImg) {
+            pergunta = pergunta
+                ? `${pergunta}\n\n${ctxImg}`
+                : `O que tem nessa imagem?\n\n${ctxImg}`
+        } else if (!pergunta) {
+            pergunta = 'Descreva a imagem que eu enviei.'
+        }
+    }
 
     const { decidirAcaoChat, aplicarComandoNaMensagem } = await import('./chatRoteador.js')
     const decisao = await decidirAcaoChat(pergunta, botInfo, {
@@ -89,10 +109,21 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
     }
 
     const { historicoGrupoTexto, nomeGrupo } = await carregarHistoricoGrupo(mensagemBaileys)
+    let personalidade = ''
+    try {
+        if (mensagemBaileys.mensagem_grupo) {
+            const { GrupoControle } = await import('../controles/GrupoControle.js')
+            personalidade =
+                (await new GrupoControle().obterPersonalidade(
+                    mensagemBaileys.grupo?.id_grupo || id_chat
+                )) || ''
+        }
+    } catch { /* ignore */ }
     const { resultado: resultadoTexto } = await api.IA.obterRespostaIA(pergunta, remetente, id_chat, {
         historicoGrupo: historicoGrupoTexto,
         nomeGrupo,
         nomeUsuario: nome_usuario || '',
+        personalidade,
         // pesquisa só quando a pergunta parece precisar de fatos atuais
         usarPesquisa: 'auto'
     })

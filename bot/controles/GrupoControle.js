@@ -57,6 +57,7 @@ export class GrupoControle {
         dadosGrupo.antiflood = { status: false, max: 10, intervalo: 10, msgs: [] }
         dadosGrupo.autosticker = false
         dadosGrupo.autosimi = false
+        dadosGrupo.ofensa = true
         dadosGrupo.automsg = true
         dadosGrupo.ultima_msg_humana = Date.now()
         dadosGrupo.ultima_automsg = 0
@@ -529,18 +530,31 @@ export class GrupoControle {
         await this.grupo.alterarAutoSimi(id_grupo, status)
     }
 
+    // Recurso OFENSA (padrão: ligado)
+    async alterarOfensa(id_grupo, status = true) {
+        await this.grupo.alterarOfensa(id_grupo, status)
+    }
+
     //Recurso AUTO-MSG
     async alterarAutoMsg(id_grupo, status = true) {
         await this.grupo.alterarAutoMsg(id_grupo, status)
         if (status) await this.grupo.atualizarUltimaMsgHumana(id_grupo, Date.now())
     }
 
+    async definirPersonalidade(id_grupo, texto) {
+        await this.grupo.definirPersonalidade(id_grupo, texto)
+    }
+
+    async obterPersonalidade(id_grupo) {
+        return await this.grupo.obterPersonalidade(id_grupo)
+    }
+
     async definirPersonalidadeResumo(id_grupo, texto) {
-        await this.grupo.definirPersonalidadeResumo(id_grupo, texto)
+        await this.grupo.definirPersonalidade(id_grupo, texto)
     }
 
     async obterPersonalidadeResumo(id_grupo) {
-        return await this.grupo.obterPersonalidadeResumo(id_grupo)
+        return await this.grupo.obterPersonalidade(id_grupo)
     }
 
     async atualizarUltimaMsgHumana(id_grupo) {

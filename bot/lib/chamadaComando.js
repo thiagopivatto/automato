@@ -14,6 +14,7 @@ import {downloads as downloadsComandos} from '../comandos/downloads.js'
 import {comandosInfo, verificarComandoExiste, obterGuiaComando} from '../comandos/comandos.js'
 import api from '@victorsouzaleal/lbot-api-comandos'
 import { botFoiMencionado, limparTextoMencaoBot, processarChatIA } from './processarChat.js'
+import { ofensaAtivaNoGrupo, processarOfensaAutomatica, textoPareceOfensa } from './ofensa.js'
 import PQueue from 'p-queue';
 const queueMensagem = new PQueue({concurrency: 10, timeout: 180000})
 
@@ -96,7 +97,9 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             mensagem_grupo &&
             !mensagem_bot &&
             !ehComando &&
-            (tipo == tiposMensagem.texto || tipo == tiposMensagem.textoExt) &&
+            (tipo == tiposMensagem.texto ||
+                tipo == tiposMensagem.textoExt ||
+                tipo == tiposMensagem.imagem) &&
             botFoiMencionado(mensagemBaileys.mencionados, botInfo) &&
             !String(comando || '').startsWith(prefixo) &&
             !textoSimi.startsWith(prefixo)
@@ -109,6 +112,17 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             !botMarcado &&
             (tipo == tiposMensagem.texto || tipo == tiposMensagem.textoExt) &&
             textoSimi.length > 0 &&
+            !String(comando || '').startsWith(prefixo) &&
+            !textoSimi.startsWith(prefixo)
+
+        const autoOfensaGrupo =
+            mensagem_grupo &&
+            !mensagem_bot &&
+            ofensaAtivaNoGrupo(grupo) &&
+            !ehComando &&
+            !botMarcado &&
+            (tipo == tiposMensagem.texto || tipo == tiposMensagem.textoExt) &&
+            textoPareceOfensa(textoSimi) &&
             !String(comando || '').startsWith(prefixo) &&
             !textoSimi.startsWith(prefixo)
 
@@ -180,6 +194,20 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, '@chat', msg), mensagem).catch(()=>{})
                 }
             }, 4)
+        } else if (autoOfensaGrupo) {
+            enfileirar(c, id_chat, mensagem, "AUTO-OFENSA", botInfo, async()=>{
+                const respondeu = await processarOfensaAutomatica(c, mensagemBaileys, botInfo)
+                if (respondeu) {
+                    consoleComando(mensagem_grupo, "DIVERSÃO", "AUTO-OFENSA", "#c62828", t, nome_usuario, nome_grupo)
+                    return
+                }
+                // Se não era ofensa e autosimi está on, cai no simi
+                if (autoSimiGrupo) {
+                    const { resultado } = await api.IA.obterRespostaSimi(textoSimi, remetente)
+                    await socket.responderTexto(c, id_chat, resultado, mensagem)
+                    consoleComando(mensagem_grupo, "DIVERSÃO", "AUTO-SIMI", "#22e3dd", t, nome_usuario, nome_grupo)
+                }
+            }, 2)
         } else if (autoSimiGrupo) {
             enfileirar(c, id_chat, mensagem, "AUTO-SIMI", botInfo, async()=>{
                 const { resultado } = await api.IA.obterRespostaSimi(textoSimi, remetente)

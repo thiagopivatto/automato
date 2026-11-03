@@ -107,24 +107,40 @@ export class Grupo{
         await db.grupos.updateAsync({id_grupo}, {$set:{autosimi: status}})
     }
 
+    async alterarOfensa(id_grupo, status){
+        await db.grupos.updateAsync({id_grupo}, {$set:{ofensa: !!status}})
+    }
+
     async alterarAutoMsg(id_grupo, status){
         await db.grupos.updateAsync({id_grupo}, {$set:{automsg: !!status}})
     }
 
-    /** Personalidade do !resumodogrupo só deste grupo (texto livre). */
-    async definirPersonalidadeResumo(id_grupo, texto){
+    /**
+     * Personalidade do bot neste grupo (chat, resumo, automsg…).
+     * Mantém personalidade_resumo espelhado por compatibilidade.
+     */
+    async definirPersonalidade(id_grupo, texto){
         const limpo = String(texto || '').trim().slice(0, 1200)
         await db.grupos.updateAsync(
             { id_grupo },
             limpo
-                ? { $set: { personalidade_resumo: limpo } }
-                : { $unset: { personalidade_resumo: true } }
+                ? { $set: { personalidade: limpo, personalidade_resumo: limpo } }
+                : { $unset: { personalidade: true, personalidade_resumo: true } }
         )
     }
 
-    async obterPersonalidadeResumo(id_grupo){
+    async obterPersonalidade(id_grupo){
         const g = await db.grupos.findOneAsync({ id_grupo })
-        return g?.personalidade_resumo || ''
+        return g?.personalidade || g?.personalidade_resumo || ''
+    }
+
+    /** Alias legado → mesma personalidade do grupo. */
+    async definirPersonalidadeResumo(id_grupo, texto){
+        await this.definirPersonalidade(id_grupo, texto)
+    }
+
+    async obterPersonalidadeResumo(id_grupo){
+        return await this.obterPersonalidade(id_grupo)
     }
 
     async atualizarUltimaMsgHumana(id_grupo, ts = Date.now()){

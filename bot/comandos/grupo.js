@@ -112,8 +112,17 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     resposta += (grupo.autosticker) ? comandos_info.grupo.status.msgs.resposta_variavel.autosticker.on : comandos_info.grupo.status.msgs.resposta_variavel.autosticker.off
                     //Auto-Simi
                     resposta += (grupo.autosimi) ? comandos_info.grupo.status.msgs.resposta_variavel.autosimi.on : comandos_info.grupo.status.msgs.resposta_variavel.autosimi.off
+                    // Ofensa (padrão: ligado)
+                    resposta += (grupo.ofensa !== false) ? comandos_info.grupo.status.msgs.resposta_variavel.ofensa.on : comandos_info.grupo.status.msgs.resposta_variavel.ofensa.off
                     //Auto-Msg (padrão: ligado)
                     resposta += (grupo.automsg !== false) ? comandos_info.grupo.status.msgs.resposta_variavel.automsg.on : comandos_info.grupo.status.msgs.resposta_variavel.automsg.off
+                    // Personalidade
+                    try {
+                        const pers = (await grupos.obterPersonalidade(id_grupo)) || ''
+                        resposta += pers
+                            ? `Personalidade : ✅\n- ${pers.slice(0, 80)}${pers.length > 80 ? '…' : ''}\n`
+                            : 'Personalidade : padrão\n'
+                    } catch { /* ignore */ }
                     //Anti-Link
                     resposta += (grupo.antilink) ? comandos_info.grupo.status.msgs.resposta_variavel.antilink.on : comandos_info.grupo.status.msgs.resposta_variavel.antilink.off
                     //Anti-fake
@@ -269,6 +278,78 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                         c,
                         id_chat,
                         ligar ? comandos_info.grupo.automsg.msgs.ligado : comandos_info.grupo.automsg.msgs.desligado,
+                        mensagem
+                    )
+                } catch (err) {
+                    throw err
+                }
+                break
+
+            case 'ofensa':
+                try {
+                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                    const argOf = String(texto_recebido || args[0] || '').toLowerCase().trim()
+                    const atualOf = grupo.ofensa !== false
+                    let ligarOf
+                    if (argOf === 'ativar' || argOf === 'on' || argOf === 'liga' || argOf === 'ligar') ligarOf = true
+                    else if (argOf === 'desativar' || argOf === 'off' || argOf === 'desliga' || argOf === 'desligar') ligarOf = false
+                    else {
+                        // Sem on/off: só mostra status (não alterna — evita desligar sem querer)
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            atualOf
+                                ? `🔥 OFENSA está *ligada* neste grupo.\nUse *${prefixo}ofensa off* pra desligar.`
+                                : `🔥 OFENSA está *desligada* neste grupo.\nUse *${prefixo}ofensa on* pra ligar.`,
+                            mensagem
+                        )
+                    }
+                    await grupos.alterarOfensa(id_grupo, ligarOf)
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        ligarOf ? comandos_info.grupo.ofensa.msgs.ligado : comandos_info.grupo.ofensa.msgs.desligado,
+                        mensagem
+                    )
+                } catch (err) {
+                    throw err
+                }
+                break
+
+            case 'personalidade':
+                try {
+                    if (!mensagem_grupo) {
+                        return await socket.responderTexto(c, id_chat, 'Só funciona em *grupos*.', mensagem)
+                    }
+                    if (!usuario_admin && !mensagem_dono) {
+                        return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                    }
+                    const textoPers = String(texto_recebido || '').trim()
+                    if (!textoPers || /^ver|atual|mostrar|status$/i.test(textoPers)) {
+                        const atual = (await grupos.obterPersonalidade(id_grupo)) || ''
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            atual
+                                ? `🎭 Personalidade deste grupo:\n${atual}\n\n_Use *${prefixo}personalidade padrão* pra resetar._`
+                                : `🎭 Personalidade deste grupo: *padrão do bot*.\nEx: *${prefixo}personalidade* fala como um tiozão fofoqueiro`,
+                            mensagem
+                        )
+                    }
+                    if (/^(padrao|padrão|reset|limpar|default)$/i.test(textoPers)) {
+                        await grupos.definirPersonalidade(id_grupo, '')
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            '✅ Personalidade deste grupo voltou ao *padrão* (chat, resumo, automsg, etc.).',
+                            mensagem
+                        )
+                    }
+                    await grupos.definirPersonalidade(id_grupo, textoPers)
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        `✅ Personalidade salva *só neste grupo* (vale pro *chat*, *resumodogrupo*, automsg…):\n${textoPers.slice(0, 500)}`,
                         mensagem
                     )
                 } catch (err) {

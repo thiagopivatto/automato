@@ -267,7 +267,7 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     let personalidadeGrupo = ''
                     try {
                         const { GrupoControle } = await import('../controles/GrupoControle.js')
-                        personalidadeGrupo = (await new GrupoControle().obterPersonalidadeResumo(idGrupo)) || ''
+                        personalidadeGrupo = (await new GrupoControle().obterPersonalidade(idGrupo)) || ''
                     } catch { /* ignore */ }
                     const { gerado, limiteSuperior, periodoInicio, periodoFim } = await gerarResumoDaJanela(
                         janela,
@@ -314,6 +314,7 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
 
             case 'personalidaderesumo':
             case 'resumopersona':
+                // Alias legado → mesmo efeito de !personalidade
                 try {
                     if (!mensagem_grupo) {
                         return await socket.responderTexto(c, id_chat, `Só funciona em *grupos*.`, mensagem)
@@ -326,23 +327,23 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     const gruposCtrl = new GrupoControle()
                     const texto = String(texto_recebido || '').trim()
                     if (!texto || /^reset|padrao|padrão|limpar$/i.test(texto)) {
-                        await gruposCtrl.definirPersonalidadeResumo(idGrupo, '')
+                        await gruposCtrl.definirPersonalidade(idGrupo, '')
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            'Personalidade do *resumodogrupo* neste grupo voltou ao padrão (agressivo/egocêntrico).',
+                            `Personalidade deste grupo voltou ao padrão. (Prefira *${prefixo}personalidade*)`,
                             mensagem
                         )
                     }
                     if (/^ver|atual|mostrar$/i.test(texto)) {
-                        const atual = (await gruposCtrl.obterPersonalidadeResumo(idGrupo)) || '(padrão do bot)'
+                        const atual = (await gruposCtrl.obterPersonalidade(idGrupo)) || '(padrão do bot)'
                         return await socket.responderTexto(c, id_chat, `🎭 Personalidade atual deste grupo:\n${atual}`, mensagem)
                     }
-                    await gruposCtrl.definirPersonalidadeResumo(idGrupo, texto)
+                    await gruposCtrl.definirPersonalidade(idGrupo, texto)
                     await socket.responderTexto(
                         c,
                         id_chat,
-                        `✅ Personalidade do *resumodogrupo* salva *só neste grupo*.\nPróximos resumos usam:\n${texto.slice(0, 400)}`,
+                        `✅ Personalidade salva *só neste grupo* (chat + resumo + etc.).\n${texto.slice(0, 400)}`,
                         mensagem
                     )
                 } catch (err) {
