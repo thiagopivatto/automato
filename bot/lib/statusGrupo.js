@@ -7,6 +7,7 @@ import {
     proto
 } from '@whiskeysockets/baileys'
 import pino from 'pino'
+import { randomBytes } from 'node:crypto'
 
 const loggerMidia = pino({ level: 'silent' })
 
@@ -69,8 +70,7 @@ export async function publicarStatusGrupo(sock, mensagem, {
     if (!authorJid) throw new Error('O bot ainda não está conectado ao WhatsApp.')
     const contextInfo = {
         isGroupStatus: true,
-        featureEligibilities: { canBeReshared: true, canReceiveMultiReact: true },
-        statusAttributions: [{ type: proto.StatusAttribution.Type.GROUP_STATUS, groupStatus: { authorJid } }]
+        featureEligibilities: { canBeReshared: true, canReceiveMultiReact: true }
     }
     let conteudo
     if (citacao.tipo === 'imageMessage') {
@@ -105,7 +105,9 @@ export async function publicarStatusGrupo(sock, mensagem, {
         throw new Error('Por enquanto, o status do grupo aceita apenas texto ou imagem neste bot.')
     }
     const gerada = generateWAMessageFromContent(jid, {
-        groupStatusMessageV2: { message: conteudo }
+        groupStatusMessageV2: { message: conteudo },
+        // Mesmo contexto criado por generateWAMessageContent após envolver o status.
+        messageContextInfo: { messageSecret: randomBytes(32) }
     }, { userJid: authorJid })
     // Detecta versões antigas que descartam silenciosamente os campos novos.
     if (!gerada.message?.groupStatusMessageV2?.message) {

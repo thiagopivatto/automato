@@ -40,7 +40,9 @@ Este recurso usa os campos de protocolo do Baileys **7.0.0-rc14**, fixado nas de
 
 Se falhar, a resposta identifica a etapa: `SG_DOWNLOAD` (obter a imagem original), `SG_UPLOAD` (preparar/enviar a imagem) ou `SG_ENVIO` (enviar o status ao grupo). O erro técnico fica no terminal, marcado como `STATUS GRUPO`. Citações sem os dados da imagem original precisam ser reenviadas antes de executar o comando.
 
-Teste local: `npm run test:statusgrupo`. A suíte cobre o download e a criptografia reais do Baileys com uma imagem local, substituindo somente o transporte dos servidores. Isso não confirma a aceitação do status pelo WhatsApp, que exige validação com conta conectada.
+Na instalação, um patch local corrige a identificação de mídia dentro do pacote de status do Baileys 7.0.0-rc14. Se instalar com `--ignore-scripts`, execute `npm run patch:statusgrupo` antes de iniciar o bot. Ao atualizar o Baileys, revise esse patch.
+
+Teste local: `npm run test:statusgrupo` (Node.js 22.3+ para o teste de relay com módulos simulados). A suíte cobre download, criptografia e preparo de uma imagem local, além do envelope produzido pelo relay real do Baileys. O transporte remoto é simulado. Isso não confirma a aceitação do status pelo WhatsApp, que exige validação com conta conectada.
 
 ## Conteúdo local
 

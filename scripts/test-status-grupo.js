@@ -80,8 +80,8 @@ test('texto serializado é um status de grupo V2, com o conteúdo original', asy
     assert.equal(texto.text, 'a gente se vira')
     assert.equal(texto.contextInfo.isGroupStatus, true)
     assert.equal(texto.contextInfo.statusSourceType, proto.ContextInfo.StatusSourceType.TEXT)
-    assert.equal(texto.contextInfo.statusAttributions[0].type, proto.StatusAttribution.Type.GROUP_STATUS)
-    assert.equal(texto.contextInfo.statusAttributions[0].groupStatus.authorJid, bot.numero_bot)
+    assert.equal(texto.contextInfo.statusAttributions.length, 0)
+    assert.equal(envio.message.messageContextInfo.messageSecret.length, 32)
     assert.equal(envio.message.conversation, null)
 })
 
@@ -109,6 +109,7 @@ test('imagem é baixada da citação, reenviada com legenda e envolvida como sta
     })
     assert.equal(preparacoes, 1)
     const imagem = sock.envios[0].message.groupStatusMessageV2.message.imageMessage
+    assert.equal(sock.envios[0].message.messageContextInfo.messageSecret.length, 32)
     assert.deepEqual(sock.envios[0].options.additionalNodes, [{ tag: 'meta', attrs: { is_group_status: 'true' } }])
     assert.equal(imagem.caption, 'Legenda original')
     assert.equal(imagem.contextInfo.isGroupStatus, true)
