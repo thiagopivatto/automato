@@ -77,7 +77,15 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         //ATUALIZE NOME DO USUÁRIO 
         await usuarios.atualizarNome(remetente, nome_usuario)
 
-        //SE FOR VISUALIZACAO UNICA E O AUTO REVELAR ESTIVER ATIVO E TIVER UM NUMERO DE DONO JÁ CADASTRADO
+        // Backup de cache se a captura na chegada falhou
+        if (mensagem_vunica) {
+            try {
+                const { capturarViewOnceConvertida } = await import('./viewOnceCache.js')
+                await capturarViewOnceConvertida(c, mensagemBaileys)
+            } catch { /* */ }
+        }
+
+        // Autorevelar: também manda cópia normal pro PV do dono
         if(mensagem_vunica && botInfo.autorevelar && numero_dono){
             await bot.redirecionarMensagemRevelada(c, mensagemBaileys, botInfo)
         }

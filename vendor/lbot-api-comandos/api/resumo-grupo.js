@@ -1,11 +1,16 @@
 /**
  * Resumo falado do grupo (!resumodogrupo) — prompts + roteiro + TTS.
  * Fatia de api/ia.js para manutenção.
+ * NÃO importa ./ia.js no topo (evita dependência circular que quebra gerarTextoIA).
  */
 import { elevenKey } from '../lib/elevenlabs.js'
 import { estimarDuracaoSegundos, palavrasParaDuracao, WPM_TTS } from '../lib/tts-robusto.js'
-import { gerarTextoIA } from './ia.js'
 import { gerarAudioNarrado, gerarAudioNarradoGratis } from './tts-narrado.js'
+
+async function gerarTextoIA(...args) {
+    const mod = await import('./ia.js')
+    return mod.gerarTextoIA(...args)
+}
 
 const msgErro = (err) => err?.erro || err?.message || err?.response?.status || String(err || 'erro desconhecido')
 
@@ -311,17 +316,45 @@ function montarRoteiroLocalFallback(lista, nomeGrupo, analise = {}) {
 }
 
 async function sintetizarAudioResumo(texto, optsTts) {
-    // 1) ElevenLabs → Edge → OpenAI
-    try {
-        const audio = await gerarAudioNarrado(texto, optsTts)
-        if (audio?.resultado?.length) return audio
-    } catch (err) {
-        console.log(`API resumo TTS completo - ${msgErro(err)}`)
+    const tentativas = [
+        // 1) Pipeline completa (ElevenLabs → Edge → OpenAI)
+        async () => gerarAudioNarrado(texto, optsTts),
+        // 2) Só Edge neural gratuito
+        async () => gerarAudioNarradoGratis(texto, optsTts),
+        // 3) Edge sem ajuste de duração (ffmpeg atempo às vezes falha)
+        async () => gerarAudioNarradoGratis(texto, {
+            ...optsTts,
+            minSegundos: 0,
+            maxSegundos: 0,
+            forcarDuracaoMinima: false
+        }),
+        // 4) Texto enxuto + Edge (último recurso)
+        async () => {
+            const curto = String(texto || '').split(/\s+/).slice(0, 500).join(' ')
+            return gerarAudioNarradoGratis(curto, {
+                maxPalavras: 520,
+                minSegundos: 0,
+                maxSegundos: 0,
+                forcarDuracaoMinima: false
+            })
+        }
+    ]
+
+    let ultimo = null
+    for (let i = 0; i < tentativas.length; i++) {
+        try {
+            const audio = await tentativas[i]()
+            if (audio?.resultado?.length > 500) {
+                console.log(`resumo TTS ok tentativa=${i + 1} fonte=${audio.fonte}`)
+                return audio
+            }
+            ultimo = { erro: 'áudio vazio' }
+        } catch (err) {
+            ultimo = err
+            console.log(`API resumo TTS tentativa ${i + 1} - ${msgErro(err)}`)
+        }
     }
-    // 2) Força Edge neural gratuito (voz natural)
-    const gratis = await gerarAudioNarradoGratis(texto, optsTts)
-    if (!gratis?.resultado?.length) throw { erro: 'Áudio vazio no TTS gratuito' }
-    return gratis
+    throw { erro: `TTS falhou após fallbacks: ${msgErro(ultimo)}`.slice(0, 240) }
 }
 
 /**

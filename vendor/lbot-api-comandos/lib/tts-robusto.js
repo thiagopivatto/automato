@@ -1,8 +1,10 @@
 /**
  * TTS unificado (todos os comandos de voz/áudio):
  *   1) ElevenLabs (prioridade)
- *   2) Edge neural grátis — voz natural (fallback automático)
- *   3) OpenAI Rapid (última reserva)
+ *   2) Edge neural via Python edge-tts (grátis, voz natural) — JS msedge-tts está com 403
+ *   3) Edge JS (tentativa residual)
+ *   4) Google Translate TTS (grátis)
+ *   5) OpenAI Rapid (última reserva)
  * Saída: OGG/Opus PTT. Fallback silencioso (só log).
  */
 import fs from 'fs-extra'
@@ -12,6 +14,10 @@ import { obterCaminhoTemporario } from './util.js'
 import { elevenKey, textoLongoParaVozEleven } from './elevenlabs.js'
 import { openAiTts, rapidKey } from './rapidapi.js'
 import { concatenarMp3 } from './uvr5.js'
+import {
+    edgeTtsPythonDisponivel,
+    textoLongoParaVozEdgePython
+} from './edge-tts-python.js'
 
 /** Vozes neurais Edge (grátis) — preferência por naturalidade. */
 const VOZ_EDGE_NATURAL = {
@@ -229,8 +235,27 @@ export async function converterParaOpus(bufferAudio) {
     }
 }
 
+async function textoParaVozGoogle(texto, idioma = 'pt') {
+    const googleTTS = await import('google-tts-api')
+    const getAll = googleTTS.getAllAudioBase64 || googleTTS.default?.getAllAudioBase64
+    if (typeof getAll !== 'function') throw new Error('google-tts-api indisponível')
+    const langMap = { pt: 'pt', en: 'en', es: 'es', it: 'it', fr: 'fr', de: 'de', ja: 'ja', ko: 'ko', ru: 'ru', zh: 'zh-CN' }
+    const lang = langMap[normalizarIdioma(idioma)] || 'pt'
+    const partes = await getAll(String(texto), {
+        lang,
+        slow: false,
+        host: 'https://translate.google.com',
+        timeout: 15000
+    })
+    const buffers = (partes || [])
+        .map((p) => Buffer.from(p.base64, 'base64'))
+        .filter((b) => b.length > 100)
+    if (!buffers.length) throw new Error('Google TTS vazio')
+    return buffers.length === 1 ? buffers[0] : await concatenarMp3(buffers)
+}
+
 /**
- * Pipeline: ElevenLabs → Edge neural natural → OpenAI.
+ * Pipeline: ElevenLabs → Edge Python (natural) → Edge JS → Google → OpenAI.
  * @returns {{ resultado: Buffer, fonte: string, mimetype: string, ptt: true, duracao?: number }}
  */
 export async function textoParaVozRobusto(texto, {
@@ -241,7 +266,7 @@ export async function textoParaVozRobusto(texto, {
     minSegundos = 0,
     maxSegundos = 0,
     forcarDuracaoMinima = false,
-    /** Pula ElevenLabs e vai direto no Edge neural (grátis). */
+    /** Pula ElevenLabs e vai direto no TTS gratuito. */
     somenteEdge = false
 } = {}) {
     let limpo = String(texto || '').replace(/\s+/g, ' ').trim()
@@ -251,14 +276,17 @@ export async function textoParaVozRobusto(texto, {
 
     const lang = normalizarIdioma(idioma)
     const ehPt = lang === 'pt'
-    // pt: voz Ultron; outros idiomas: neural nativo (não força Antonio)
     const voz = vozEdge || (ehPt ? OPCOES_TTS_ULTRON.vozEdge : resolverVozEdge(lang))
     const prosodia = prosodiaEdge || OPCOES_TTS_ULTRON.prosodiaEdge
+    const ratePy = typeof prosodia.rate === 'number'
+        ? `${Math.round((prosodia.rate - 1) * 100)}%`
+        : (String(prosodia.rate || '-4%'))
+    const pitchPy = String(prosodia.pitch || '-1Hz')
 
     let audio = null
     let fonte = ''
 
-    // 1) ElevenLabs (exceto quando forçado Edge gratuito)
+    // 1) ElevenLabs
     if (!somenteEdge && elevenKey()) {
         try {
             const pedacos = await textoLongoParaVozEleven(limpo, { idioma: lang, chunkSize: 1800 })
@@ -271,19 +299,51 @@ export async function textoParaVozRobusto(texto, {
         }
     }
 
-    // 2) Edge neural (grátis, voz natural)
+    // 2) Edge neural via Python edge-tts (voz natural; JS atual dá 403)
     if (!audio) {
         try {
-            audio = await textoParaVozEdge(limpo, lang, { voz, prosodia })
-            if (audio?.length > 500) fonte = 'edge'
-            else audio = null
+            if (await edgeTtsPythonDisponivel()) {
+                const pedacos = await textoLongoParaVozEdgePython(limpo, {
+                    idioma: lang,
+                    voz,
+                    rate: ratePy.startsWith('-') || ratePy.startsWith('+') ? ratePy : '-4%',
+                    pitch: pitchPy
+                })
+                audio = pedacos.length === 1 ? pedacos[0] : await concatenarMp3(pedacos)
+                if (audio?.length > 500) fonte = 'edge'
+                else audio = null
+            }
         } catch (err) {
-            console.log(`TTS Edge → OpenAI - ${err?.message || err}`)
+            console.log(`TTS Edge Python → JS - ${err?.message || err}`)
             audio = null
         }
     }
 
-    // 3) OpenAI Rapid (reserva) — também pula se somenteEdge
+    // 3) Edge JS (msedge-tts) — residual
+    if (!audio) {
+        try {
+            audio = await textoParaVozEdge(limpo, lang, { voz, prosodia })
+            if (audio?.length > 500) fonte = 'edge-js'
+            else audio = null
+        } catch (err) {
+            console.log(`TTS Edge JS → Google - ${err?.message || err}`)
+            audio = null
+        }
+    }
+
+    // 4) Google TTS gratuito
+    if (!audio) {
+        try {
+            audio = await textoParaVozGoogle(limpo, lang)
+            if (audio?.length > 500) fonte = 'google'
+            else audio = null
+        } catch (err) {
+            console.log(`TTS Google → OpenAI - ${err?.message || err}`)
+            audio = null
+        }
+    }
+
+    // 5) OpenAI Rapid
     if (!audio && !somenteEdge && rapidKey()) {
         try {
             const pedacosTxt = fatiarTexto(limpo, 180)
@@ -304,12 +364,12 @@ export async function textoParaVozRobusto(texto, {
                 fonte = 'openai'
             }
         } catch (err) {
-            console.log(`TTS OpenAI falhou - ${err?.message || err}`)
+            console.log(`TTS OpenAI falhou - ${err?.erro || err?.message || err}`)
         }
     }
 
     if (!audio || audio.length < 500) {
-        throw { erro: 'Falha no TTS (ElevenLabs / Edge / OpenAI). Tente novamente.' }
+        throw { erro: 'Falha no TTS (ElevenLabs / Edge / Google / OpenAI). Instale: pip install edge-tts' }
     }
 
     let duracao = 0

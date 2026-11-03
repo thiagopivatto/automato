@@ -456,7 +456,8 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
             },
             revelar: {
                 descricao: '',
-                guia: `Ex: Responder mensagem única com *${prefixo}revelar* - Revela e reenvia o conteúdo da mensagem única como uma mensagem normal.\n`,
+                guia: `Ex: Responder visualização única com *${prefixo}revelar* — reenvia imagem/vídeo/áudio como mídia *normal*.\n` +
+                    `O bot também tenta reenviar automaticamente assim que *recebe* a visualização única.\n`,
                 msgs: {}
             },
         }

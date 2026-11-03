@@ -1,5 +1,4 @@
-import { generateWAMessageFromContent, getContentType } from '@whiskeysockets/baileys'
-import pino from 'pino'
+import { getContentType } from '@whiskeysockets/baileys'
 import { GrupoControle } from '../controles/GrupoControle.js'
 import { UsuarioControle } from '../controles/UsuarioControle.js'
 import { listaContemJid } from '../lib/util.js'
@@ -107,21 +106,32 @@ export async function converterMensagem(m, botInfo) {
                 if (!citacaoVunica && quotedRaw?.[tipoMensagemCitada]?.viewOnce) citacaoVunica = true
                 if (quotedRaw?.[tipoMensagemCitada]?.viewOnce) quotedRaw[tipoMensagemCitada].viewOnce = false
 
+                const ctxInfo = m.message.extendedTextMessage.contextInfo || {}
+                const midiaCitada = quotedRaw?.[tipoMensagemCitada] || null
+                // Preservar proto bruto da citação (rebuild via WAMessageFromContent zera mediaKey).
+                const mensagemCitacaoBaixavel = {
+                    key: {
+                        remoteJid: m.key.remoteJid,
+                        id: ctxInfo.stanzaId || undefined,
+                        fromMe: false,
+                        participant: ctxInfo.participant || undefined
+                    },
+                    message: quotedRaw
+                }
                 respostaInformacoes.citacao = {
                     tipo: tipoMensagemCitada,
-                    remetente: m.message.extendedTextMessage.contextInfo.participant || m.message.extendedTextMessage.contextInfo.remoteJid,
+                    remetente: ctxInfo.participant || ctxInfo.remoteJid,
+                    stanzaId: ctxInfo.stanzaId || null,
                     corpo: quotedRaw?.conversation || quotedRaw?.extendedTextMessage?.text,
-                    legenda: quotedRaw?.[tipoMensagemCitada]?.caption,
-                    midia_url: quotedRaw?.[tipoMensagemCitada]?.url,
-                    mimetype: quotedRaw?.[tipoMensagemCitada]?.mimetype,
-                    tamanho_arquivo: quotedRaw?.[tipoMensagemCitada]?.fileLength,
-                    segundos: quotedRaw?.[tipoMensagemCitada]?.seconds,
+                    legenda: midiaCitada?.caption,
+                    midia_url: midiaCitada?.url,
+                    mimetype: midiaCitada?.mimetype,
+                    tamanho_arquivo: midiaCitada?.fileLength,
+                    segundos: midiaCitada?.seconds,
                     mensagem_vunica: citacaoVunica,
-                    mensagem: generateWAMessageFromContent(
-                        m.message.extendedTextMessage.contextInfo.participant || m.message.extendedTextMessage.contextInfo.remoteJid,
-                        quotedRaw,
-                        { logger: pino({ level: 'silent' }) }
-                    )
+                    conteudo: quotedRaw,
+                    midia: midiaCitada,
+                    mensagem: mensagemCitacaoBaixavel
                 }
             }
 

@@ -67,10 +67,47 @@ export const conexaoAberta = async(c, botInfo)=>{
 
 export const receberMensagem = async (c, mensagem, botInfo)=>{
     try{
-        if(!mensagem.messages[0].message) return
-        const tipoMensagem = getContentType(mensagem.messages[0].message)
-        if(!tipoMensagem) return
-        if(mensagem.messages[0].key.fromMe) await new MensagemControle().armazenarMensagem(mensagem.messages[0])
+        const rawWa = mensagem.messages[0]
+        if (!rawWa) return
+
+        // Stub de VO sem conteúdo: Desktop não recebe a mídia
+        if (!rawWa.message) {
+            const stub = rawWa.messageStubParameters?.[0] || rawWa.messageStubType
+            if (stub || rawWa.key?.isViewOnce) {
+                console.log(`[REVELAR] VO como stub (${stub || 'sem message'}). Se persistir: apague sessao/ e escaneie QR (browser Android).`)
+            }
+            return
+        }
+
+        const tipoMensagem = getContentType(rawWa.message)
+        if (!tipoMensagem) return
+
+        const { ehViewOnceRaw, processarViewOnceChegada } = await import('../lib/viewOnceCache.js')
+        const isViewOnce = ehViewOnceRaw(rawWa.message)
+
+        if (rawWa.key.fromMe || isViewOnce) {
+            await new MensagemControle().armazenarMensagem(rawWa).catch(() => {})
+        }
+
+        // Baixa + reenvia como mídia NORMAL no mesmo chat (antes do converter mutar o proto)
+        if (isViewOnce && !rawWa.key.fromMe) {
+            let cloneVo = rawWa
+            try {
+                cloneVo = typeof structuredClone === 'function'
+                    ? structuredClone(rawWa)
+                    : {
+                        ...rawWa,
+                        key: { ...rawWa.key },
+                        message: JSON.parse(JSON.stringify(rawWa.message))
+                    }
+            } catch { /* */ }
+            try {
+                await processarViewOnceChegada(c, cloneVo)
+            } catch (err) {
+                console.log(`processarViewOnceChegada - ${err?.message || err}`)
+            }
+        }
+
         switch (mensagem.type) {
             case "notify":
                 const grupos = new GrupoControle()
@@ -164,6 +201,7 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
         } catch {
             console.log(corTexto('Online', false))
         }
+        console.log(corTexto('  VO: reenvio automático ativo (browser Android). Se chegar só stub, apague sessao/ e escaneie o QR.', '#8f8'))
         return true
     } catch(err){
         consoleErro(err, "GROUPS.UPDATE")

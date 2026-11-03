@@ -245,7 +245,26 @@ export class BotControle{
                 numeroDono,
                 criarTexto(comandos_info.admin.autorevelar.msgs.restransmissao, nomeUsuario, numeroUsuario, nomeGrupo, tipoMensagem)
             )
-            const buffer = await downloadMediaMessage(mensagem, 'buffer')
+            let buffer = null
+            try {
+                const { baixarMidiaViewOnce } = await import('../lib/revelarMidia.js')
+                const midia = mensagem?.message?.[tipo]
+                buffer = await baixarMidiaViewOnce({
+                    tipo,
+                    midia,
+                    conteudo: mensagem?.message,
+                    stanzaId: mensagem?.key?.id,
+                    remetente: mensagem?.key?.participant || mensagem?.key?.remoteJid,
+                    mensagem
+                }, c, mensagem?.key?.remoteJid)
+                if (!buffer?.length && midia?.mediaKey) {
+                    buffer = await downloadMediaMessage(mensagem, 'buffer', {}, {
+                        reuploadRequest: c.updateMediaMessage?.bind(c)
+                    })
+                }
+            } catch (err) {
+                console.log(`autorevelar download - ${err?.message || err}`)
+            }
             if (!buffer?.length) return
             const legenda = mensagemBaileys.legenda || ''
             if (tipo === tiposMensagem.imagem) {

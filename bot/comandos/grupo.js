@@ -261,15 +261,59 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
             case "revelar":
                 try{
                     if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!mensagem_citada || !citacao?.mensagem_vunica) {
+                    if (!mensagem_citada) {
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            `Responda uma *mensagem de visualização única* (imagem/vídeo/áudio) com *${prefixo}revelar*.`,
+                            `Responda uma *mensagem de visualização única* com *${prefixo}revelar*.\n` +
+                            `Obs: o bot também reenvia automaticamente ao *receber* a VO.`,
                             mensagem
                         )
                     }
-                    const tipoCit = citacao.tipo
+                    const {
+                        obterViewOnceCache,
+                        enviarMidiaNormal,
+                        capturarViewOnce
+                    } = await import('../lib/viewOnceCache.js')
+                    const { revelarViewOnce, retransmitirViewOnceSemDownload } = await import('../lib/revelarMidia.js')
+
+                    let cachedVo = citacao?.stanzaId
+                        ? await obterViewOnceCache(id_chat, citacao.stanzaId).catch(() => null)
+                        : null
+
+                    // Tenta baixar de novo a partir do quote bruto (se tiver mediaKey)
+                    if (!cachedVo?.buffer?.length && citacao?.conteudo) {
+                        try {
+                            await capturarViewOnce(c, {
+                                key: {
+                                    remoteJid: id_chat,
+                                    id: citacao.stanzaId,
+                                    fromMe: false,
+                                    participant: citacao.remetente
+                                },
+                                message: citacao.conteudo?.viewOnceMessageV2
+                                    || citacao.conteudo?.viewOnceMessage
+                                    || citacao.conteudo?.viewOnceMessageV2Extension
+                                    || {
+                                        viewOnceMessageV2: { message: citacao.conteudo }
+                                    }
+                            })
+                            cachedVo = await obterViewOnceCache(id_chat, citacao.stanzaId).catch(() => null)
+                        } catch (err) {
+                            console.log(`revelar captura quote - ${err?.message || err}`)
+                        }
+                    }
+
+                    if (!citacao?.mensagem_vunica && !cachedVo) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `Responda uma *mensagem de visualização única* com *${prefixo}revelar*.`,
+                            mensagem
+                        )
+                    }
+
+                    const tipoCit = cachedVo?.tipo || citacao.tipo
                     const tiposOk = [tiposMensagem.imagem, tiposMensagem.video, tiposMensagem.audio]
                     if (!tiposOk.includes(tipoCit)) {
                         return await socket.responderTexto(
@@ -279,38 +323,55 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                             mensagem
                         )
                     }
-                    const buffer = await downloadMediaMessage(citacao.mensagem, 'buffer')
-                    if (!buffer?.length) {
+
+                    if (cachedVo?.buffer?.length) {
+                        await enviarMidiaNormal(c, id_chat, {
+                            buffer: cachedVo.buffer,
+                            tipo: cachedVo.tipo || tipoCit,
+                            mimetype: cachedVo.mimetype || citacao.mimetype,
+                            caption: cachedVo.caption || citacao.legenda || ''
+                        }, mensagem)
+                        break
+                    }
+
+                    const revelado = await revelarViewOnce(citacao, c, id_chat)
+                    if (revelado?.buffer?.length) {
+                        await enviarMidiaNormal(c, id_chat, {
+                            buffer: revelado.buffer,
+                            tipo: revelado.tipo || tipoCit,
+                            mimetype: revelado.mimetype || citacao.mimetype,
+                            caption: revelado.legenda || citacao.legenda || ''
+                        }, mensagem)
+                        break
+                    }
+
+                    // Fallback clássico: relay do proto com viewOnce=false
+                    try {
+                        const protoMsg = citacao.conteudo || citacao.mensagem?.message
+                        if (protoMsg?.[tipoCit]) {
+                            const copia = {
+                                [tipoCit]: {
+                                    ...protoMsg[tipoCit],
+                                    viewOnce: false
+                                }
+                            }
+                            await socket.retransmitirMensagem(c, id_chat, copia, mensagem)
+                            break
+                        }
+                    } catch (err) {
+                        console.log(`revelar relay clássico - ${err?.message || err}`)
+                    }
+
+                    const okRelay = await retransmitirViewOnceSemDownload(c, id_chat, citacao, mensagem)
+                    if (!okRelay) {
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            'Não consegui baixar essa mídia. Ela pode ter expirado ou já ter sido vista.',
+                            'Não consegui revelar essa mensagem.\n' +
+                            '1) Peça pra *reenviar* a visualização única\n' +
+                            '2) O bot deve *receber* a mídia (se só chega stub, apague a pasta *sessao* e escaneie o QR de novo)\n' +
+                            '3) Ou use *' + prefixo + 'revelar* respondendo *sem abrir*',
                             mensagem
-                        )
-                    }
-                    const legenda = citacao.legenda || ''
-                    if (tipoCit === tiposMensagem.imagem) {
-                        await socket.responderArquivoBuffer(c, tiposMensagem.imagem, id_chat, buffer, legenda, mensagem)
-                    } else if (tipoCit === tiposMensagem.video) {
-                        await socket.responderArquivoBuffer(
-                            c,
-                            tiposMensagem.video,
-                            id_chat,
-                            buffer,
-                            legenda,
-                            mensagem,
-                            citacao.mimetype || 'video/mp4'
-                        )
-                    } else {
-                        await socket.responderArquivoBuffer(
-                            c,
-                            tiposMensagem.audio,
-                            id_chat,
-                            buffer,
-                            '',
-                            mensagem,
-                            citacao.mimetype || 'audio/ogg; codecs=opus',
-                            { ptt: true }
                         )
                     }
                 } catch(err){
