@@ -42,7 +42,26 @@ let sockAtual = null
 let reconectando = false
 let tentativasReconexao = 0
 let botInfoCache = null
-let recvCount = 0
+
+/** Evita processar a mesma msg 2x (ev.process + ev.on). */
+const msgsVistas = new Map()
+function marcarMsgVista(m) {
+    const ids = (m?.messages || []).map((x) => x?.key?.id).filter(Boolean)
+    if (!ids.length) return false
+    let todasJaVistas = true
+    const agora = Date.now()
+    for (const id of ids) {
+        if (!msgsVistas.has(id)) todasJaVistas = false
+        msgsVistas.set(id, agora)
+    }
+    if (msgsVistas.size > 3000) {
+        const lim = agora - 10 * 60 * 1000
+        for (const [k, t] of msgsVistas) {
+            if (t < lim) msgsVistas.delete(k)
+        }
+    }
+    return todasJaVistas
+}
 
 function encerrarSocketAtual() {
     if (!sockAtual) return
@@ -120,9 +139,32 @@ async function connectToWhatsApp() {
         console.error('[cache msgs]', e?.message || e)
     })
 
+    const encaminharUpsert = (m) => {
+        if (!m) return
+        if (marcarMsgVista(m)) return
+        if (!inicializacaoCompleta) {
+            eventosEsperando.push({ evento: 'messages.upsert', dados: m })
+            return
+        }
+        const sock = c
+        // Não await — libera o buffer do Baileys imediatamente (crítico no Linux)
+        setImmediate(() => {
+            if (sockAtual !== sock) return
+            const bi = botInfoCache
+            if (!bi) {
+                console.error('[msg] sem botInfo — mensagem ignorada')
+                return
+            }
+            eventosSocket.receberMensagem(sock, m, bi).catch((err) => {
+                console.error('[messages.upsert]', err?.message || err)
+            })
+        })
+    }
+
     /**
-     * Baileys 7: ev.process é o caminho oficial do buffer de eventos.
-     * Mensagens NÃO são awaited aqui (senão o buffer trava no Linux).
+     * Baileys 7: ev.process é o caminho oficial do buffer.
+     * Também ouvimos ev.on('messages.upsert') — no Linux o fan-out individual
+     * às vezes entrega notify que o process já consolidou de forma estranha.
      */
     c.ev.process(async (events) => {
         if (sockAtual !== c) return
@@ -166,7 +208,6 @@ async function connectToWhatsApp() {
                 })
                 await eventosSocket.realizarEventosEspera(c, eventosEsperando, botInfo)
                 eventosEsperando = []
-                console.log('[recv] pronto — enviando/recebendo mensagens')
             } else if (connection === 'close') {
                 const botInfo = (await refreshBotInfo(bot)) || {}
                 necessarioReconectar = await eventosSocket.conexaoEncerrada(update, botInfo)
@@ -192,34 +233,7 @@ async function connectToWhatsApp() {
         }
 
         if (events['messages.upsert']) {
-            const m = events['messages.upsert']
-            recvCount++
-            if (recvCount === 1) {
-                const n = m?.messages?.length || 0
-                console.log(`[recv] socket OK (1º lote: ${n} msg, type=${m?.type})`)
-            }
-            // Comandos em tempo real
-            if (m?.type === 'notify' && recvCount <= 3) {
-                console.log(`[recv] notify x${m?.messages?.length || 0}`)
-            }
-            if (!inicializacaoCompleta) {
-                eventosEsperando.push({ evento: 'messages.upsert', dados: m })
-            } else {
-                const info = botInfoCache
-                const sock = c
-                // Não await — libera o buffer do Baileys imediatamente
-                setImmediate(() => {
-                    if (sockAtual !== sock) return
-                    const bi = info || botInfoCache
-                    if (!bi) {
-                        console.error('[recv] sem botInfo — mensagem ignorada')
-                        return
-                    }
-                    eventosSocket.receberMensagem(sock, m, bi).catch((err) => {
-                        console.error('[messages.upsert]', err?.message || err)
-                    })
-                })
-            }
+            encaminharUpsert(events['messages.upsert'])
         }
 
         if (events['group-participants.update']) {
@@ -258,6 +272,12 @@ async function connectToWhatsApp() {
                 }
             }
         }
+    })
+
+    // Backup: fan-out individual (mesmo payload que o process, deduplicado)
+    c.ev.on('messages.upsert', (m) => {
+        if (sockAtual !== c) return
+        encaminharUpsert(m)
     })
 }
 

@@ -4,7 +4,7 @@ import {criarTexto, consoleErro, corTexto, verificarEnv, criarArquivosNecessario
 import {comandosInfo} from '../comandos/comandos.js'
 import fs from "fs-extra"
 import * as socket from './socket.js'
-import {converterMensagem, tiposPermitidosMensagens, obterTipoConteudo}  from './mensagem.js'
+import {converterMensagem, tiposPermitidosMensagens, obterTipoConteudo, extrairTextoMensagem}  from './mensagem.js'
 import {checagemMensagem} from '../lib/checagemMensagem.js'
 import {chamadaComando} from '../lib/chamadaComando.js'
 import {BotControle} from '../controles/BotControle.js'
@@ -12,6 +12,8 @@ import {GrupoControle} from '../controles/GrupoControle.js'
 import {MensagemControle} from '../controles/MensagemControle.js'
 import { carregarEnv } from '../lib/env.js'
 
+/** Histórico append antigo (segundos). Comandos recentes no Linux chegam como append. */
+const MSG_MAX_IDADE_APPEND_S = 300
 
 export const conexaoEncerrada = async(conexao, botInfo)=>{
     const comandos_info = comandosInfo(botInfo)
@@ -71,6 +73,19 @@ function timestampMsgSeg(rawWa) {
     return t > 1e12 ? Math.floor(t / 1000) : t
 }
 
+/** Resolve LID → PN quando o Baileys tiver o mapeamento (dono/comandos no Linux). */
+async function resolverJidPn(c, jid) {
+    if (!jid || !String(jid).endsWith('@lid')) return jid
+    try {
+        const map = c?.signalRepository?.lidMapping
+        if (map?.getPNForLID) {
+            const pn = await map.getPNForLID(jid)
+            if (pn) return pn
+        }
+    } catch { /* */ }
+    return jid
+}
+
 /** Processa uma única WAMessage (notify ou append recente). */
 async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
     if (!rawWa) return
@@ -91,11 +106,22 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
         return
     }
 
-    // Histórico (append) no connect traz dezenas/centenas de msgs e trava o bot.
-    // Só processa append se for quase em tempo real (< 12s) — senão ignore.
+    // Append antigo = histórico. Notify nunca filtra por idade.
+    // No Linux, comandos ao vivo frequentemente chegam como append.
     if (tipoUpsert === 'append') {
-        const idade = Math.floor(Date.now() / 1000) - timestampMsgSeg(rawWa)
-        if (idade > 12) return
+        const idade = Math.abs(Math.floor(Date.now() / 1000) - timestampMsgSeg(rawWa))
+        if (idade > MSG_MAX_IDADE_APPEND_S) {
+            const prefixo = botInfo?.prefixo || '!'
+            const preview = (() => {
+                try {
+                    const n = normalizeMessageContent(rawWa.message) || rawWa.message
+                    return String(extrairTextoMensagem(n) || '').trim()
+                } catch { return '' }
+            })()
+            // Só reprocessa histórico velho se for comando (ex.: !menu atrasado)
+            if (!preview.startsWith(prefixo)) return
+            if (idade > 900) return
+        }
     }
 
     // Normaliza wrappers (ephemeral / documentWithCaption / etc.)
@@ -126,6 +152,24 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
     const grupos = new GrupoControle()
     const mensagemBaileys = await converterMensagem(rawWa, botInfo)
 
+    // LID → PN no remetente/chat privado (Linux Baileys 7)
+    try {
+        mensagemBaileys.remetente = await resolverJidPn(c, mensagemBaileys.remetente)
+        if (!mensagemBaileys.mensagem_grupo) {
+            mensagemBaileys.id_chat = await resolverJidPn(c, mensagemBaileys.id_chat)
+        }
+        if (!mensagemBaileys.mensagem_dono) {
+            const { UsuarioControle } = await import('../controles/UsuarioControle.js')
+            mensagemBaileys.mensagem_dono = await new UsuarioControle().ehDono(
+                mensagemBaileys.remetente,
+                rawWa.key.participantPn,
+                rawWa.key.participantAlt,
+                rawWa.key.participant,
+                rawWa.key.remoteJid
+            )
+        }
+    } catch { /* */ }
+
     // SHH primeiro: apaga antes de histórico/filtros (qualquer tipo de mídia)
     if(!await grupos.filtroShh(c, mensagemBaileys, botInfo)) return
     // Histórico — guarda msgs de grupo (comandos + midia); áudios podem ser transcritos
@@ -142,18 +186,15 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
 
 export const receberMensagem = async (c, mensagem, botInfo)=>{
     try{
-        // Baileys 7: notify = tempo real; append = histórico/offline.
+        // Baileys 7: notify = tempo real; append = offline/histórico (no Linux também traz comandos).
         const tipoUpsert = mensagem?.type
         if (tipoUpsert && tipoUpsert !== 'notify' && tipoUpsert !== 'append') return
 
         const lista = Array.isArray(mensagem?.messages) ? mensagem.messages : []
         if (!lista.length) return
 
-        // Lote enorme de histórico: não percorre item a item
-        if (tipoUpsert === 'append' && lista.length > 20) {
-            return
-        }
-
+        // NÃO descartar o lote inteiro: no Linux o 1º upsert (e às vezes os seguintes)
+        // vem como append com dezenas/centenas de msgs — o comando do usuário pode estar dentro.
         for (const rawWa of lista) {
             try {
                 await processarUmaMensagem(c, rawWa, botInfo, tipoUpsert)
