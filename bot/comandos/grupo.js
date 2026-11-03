@@ -6,6 +6,7 @@ import {tiposMensagem} from '../baileys/mensagem.js'
 import {downloadMediaMessage} from '@whiskeysockets/baileys'
 import {comandosInfo} from '../comandos/comandos.js'
 import { handlersMencoes } from './grupo/mencoes.js'
+import { mensagemErroStatusGrupo } from '../lib/statusGrupo.js'
 
 
 export const grupo = async(c, mensagemBaileys, botInfo) => {
@@ -52,11 +53,11 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                         const { MensagemControle } = await import('../controles/MensagemControle.js')
                         await new MensagemControle().armazenarMensagem(enviada)
                     } catch { /* publicação já enviada; cache de retry é secundário */ }
-                    await socket.responderTexto(c, id_chat, '✅ Enviei a mensagem para o status deste grupo.', mensagem)
+                    await socket.responderTexto(c, id_chat, '📤 Solicitação de status enviada ao WhatsApp. Confira se apareceu no status deste grupo.', mensagem)
                 } catch (err) {
                     consoleErro(err, 'STATUS GRUPO')
                     const validacao = /^(Esse recurso|Responda|Escolha|O bot ainda|Não consegui baixar|A mensagem respondida|Por enquanto|Atualize as dependências)/.test(err.message || '')
-                    await socket.responderTexto(c, id_chat, validacao ? err.message : 'Não consegui publicar no status do grupo. Verifique se o recurso está disponível para o grupo e tente novamente.', mensagem)
+                    await socket.responderTexto(c, id_chat, mensagemErroStatusGrupo(err) || (validacao ? err.message : 'Não consegui publicar no status do grupo. Confira o erro no terminal do bot. [SG_INTERNO]'), mensagem)
                 }
                 break
             }
