@@ -112,7 +112,10 @@ export async function publicarStatusGrupo(sock, mensagem, {
         throw new Error('Atualize as dependências do bot: esta versão do Baileys não reconhece status de grupo.')
     }
     try {
-        await sock.relayMessage(jid, gerada.message, { messageId: gerada.key.id })
+        await sock.relayMessage(jid, gerada.message, {
+            messageId: gerada.key.id,
+            additionalNodes: [{ tag: 'meta', attrs: { is_group_status: 'true' } }]
+        })
     } catch (err) {
         throw falhaEtapa('envio', err)
     }

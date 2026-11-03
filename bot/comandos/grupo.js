@@ -53,7 +53,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                         const { MensagemControle } = await import('../controles/MensagemControle.js')
                         await new MensagemControle().armazenarMensagem(enviada)
                     } catch { /* publicação já enviada; cache de retry é secundário */ }
-                    await socket.responderTexto(c, id_chat, '✅ Enviei a mensagem para o status deste grupo.', mensagem)
+                    await socket.responderTexto(c, id_chat, '📤 Solicitação de status enviada ao WhatsApp. Confira se apareceu no status deste grupo.', mensagem)
                 } catch (err) {
                     consoleErro(err, 'STATUS GRUPO')
                     const validacao = /^(Esse recurso|Responda|Escolha|O bot ainda|Não consegui baixar|A mensagem respondida|Por enquanto|Atualize as dependências)/.test(err.message || '')
