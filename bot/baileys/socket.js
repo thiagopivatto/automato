@@ -1,8 +1,10 @@
 import {getContentType } from '@whiskeysockets/baileys'
 import {tiposMensagem} from './mensagem.js'
-import {delayAleatorio, listaContemJid} from '../lib/util.js'
+import {delayAleatorio, listaContemJid, mencaoNumero, sanitizarTextoMencoes} from '../lib/util.js'
 import api from '@victorsouzaleal/lbot-api-comandos'
 import { MensagemControle } from '../controles/MensagemControle.js'
+
+const textoLimpo = (t) => sanitizarTextoMencoes(t)
 
 /** Guarda envios do bot p/ getMessage (retries do Baileys/Signal). */
 async function guardarEnvio(msg) {
@@ -151,7 +153,7 @@ export const obterContatosBloqueados = async (c) => {
 // Envio de mensagens
 export const enviarTexto = async(c, id_chat, texto)=>{
     await atualizarPresenca(c, id_chat, "composing")
-    const enviada = await c.sendMessage(id_chat, { text: String(texto ?? ''), linkPreview: null })
+    const enviada = await c.sendMessage(id_chat, { text: textoLimpo(texto), linkPreview: null })
     await guardarEnvio(enviada)
     return enviada
 }
@@ -173,22 +175,22 @@ export const enviarEnquete = async(c, id_chat, nomeEnquete, valoresEnquete)=>{
 
 export const enviarLinkComPrevia = async(c, id_chat, texto) =>{
     await atualizarPresenca(c, id_chat, "composing")
-    return await c.sendMessage(id_chat, {text: texto})
+    return await c.sendMessage(id_chat, {text: textoLimpo(texto)})
 }
 
 export const enviarTextoComMencoes = async(c, id_chat, texto, mencionados)=>{ 
     await atualizarPresenca(c, id_chat, "composing")
-    return await c.sendMessage(id_chat, {text : texto , mentions: mencionados})
+    return await c.sendMessage(id_chat, {text : textoLimpo(texto) , mentions: mencionados})
 }
 
 export const retransmitirMensagemMarcando = async(c, id_chat, mensagem, mencionados)=>{
     let tipoMensagem = getContentType(mensagem.message)
-    const tags = (mencionados || []).map(j => `@${String(j).split('@')[0]}`).join(' ')
+    const tags = (mencionados || []).map(j => `@${mencaoNumero(j)}`).filter(Boolean).join(' ')
     if(tipoMensagem == "conversation"){
         let textoMensagem = mensagem.message[tipoMensagem]
         mensagem.message = {
             extendedTextMessage : {
-                text: `${textoMensagem}\n\n${tags}`,
+                text: textoLimpo(`${textoMensagem}\n\n${tags}`),
                 contextInfo : {
                     mentionedJid: mencionados,
                     isForwarded: true
@@ -197,7 +199,7 @@ export const retransmitirMensagemMarcando = async(c, id_chat, mensagem, menciona
         }
     } else if (tipoMensagem == "extendedTextMessage") {
         const textoAtual = mensagem.message.extendedTextMessage?.text || ''
-        mensagem.message.extendedTextMessage.text = `${textoAtual}\n\n${tags}`
+        mensagem.message.extendedTextMessage.text = textoLimpo(`${textoAtual}\n\n${tags}`)
         mensagem.message.extendedTextMessage.contextInfo = {
             ...(mensagem.message.extendedTextMessage.contextInfo || {}),
             mentionedJid: mencionados,
@@ -227,7 +229,7 @@ export const responderTexto = async(c, id_chat, texto, mensagemCitacao)=>{
     await atualizarPresenca(c, id_chat, "composing")
     const enviada = await c.sendMessage(
         id_chat,
-        { text: String(texto ?? ''), linkPreview: null },
+        { text: textoLimpo(texto), linkPreview: null },
         { quoted: mensagemCitacao }
     )
     await guardarEnvio(enviada)
@@ -294,7 +296,7 @@ export const responderVozBuffer = async(c, id_chat, buffer, mensagemCitacao = nu
 
 export const responderComMencoes = async(c, id_chat, texto, mencionados, mensagemCitacao)=>{ 
     await atualizarPresenca(c, id_chat, "composing")
-    return await c.sendMessage(id_chat, {text: texto , mentions: mencionados}, {quoted: mensagemCitacao})
+    return await c.sendMessage(id_chat, {text: textoLimpo(texto) , mentions: mencionados}, {quoted: mensagemCitacao})
 }
 
 

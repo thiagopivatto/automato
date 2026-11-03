@@ -1,7 +1,7 @@
 import { Grupo } from '../modelos/Grupo.js'
 import { comandosInfo, verificarComandoExiste } from '../comandos/comandos.js'
 import * as socket from '../baileys/socket.js'
-import { consoleErro, criarTexto, listaContemJid, aliasesParticipanteMeta } from '../lib/util.js'
+import {consoleErro, criarTexto, listaContemJid, aliasesParticipanteMeta, mencaoNumero} from '../lib/util.js'
 import moment from "moment-timezone"
 import { tiposMensagem } from '../baileys/mensagem.js'
 import { UsuarioControle } from './UsuarioControle.js'
@@ -331,7 +331,7 @@ export class GrupoControle {
             const comandos_info = comandosInfo(botInfo)
             if (grupoInfo.bemvindo.status) {
                 let msg_customizada = (grupoInfo.bemvindo.msg != "") ? grupoInfo.bemvindo.msg + "\n\n" : ""
-                let mensagem_bemvindo = criarTexto(comandos_info.grupo.bv.msgs.mensagem, evento.participants[0].replace("@s.whatsapp.net", ""), grupoInfo.nome, msg_customizada)
+                let mensagem_bemvindo = criarTexto(comandos_info.grupo.bv.msgs.mensagem, mencaoNumero(evento.participants[0]), grupoInfo.nome, msg_customizada)
                 await socket.enviarTextoComMencoes(c, evento.id, mensagem_bemvindo, [evento.participants[0]])
             }
         } catch (err) {
@@ -507,7 +507,7 @@ export class GrupoControle {
             await socket.enviarTextoComMencoes(
                 c,
                 id_chat,
-                criarTexto(comandos_info.grupo.alink.msgs.detectou, remetente.replace("@s.whatsapp.net", "").replace("@lid", "")),
+                criarTexto(comandos_info.grupo.alink.msgs.detectou, mencaoNumero(remetente)),
                 [remetente]
             )
             await socket.deletarMensagem(c, mensagem)
@@ -578,7 +578,7 @@ export class GrupoControle {
     //                 for (ddi of grupoInfo.antifake.ddi_liberados) {
     //                     if (participante.startsWith(ddi)) return true
     //                 }
-    //                 await socket.enviarTextoComMencoes(c, evento.id, criarTexto(comandos_info.outros.resposta_ban, participante.replace("@s.whatsapp.net", ""), comandos_info.grupo.afake.msgs.motivo, botInfo.nome), [participante])
+    //                 await socket.enviarTextoComMencoes(c, evento.id, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(participante), comandos_info.grupo.afake.msgs.motivo, botInfo.nome), [participante])
     //                 await socket.removerParticipante(c, evento.id, participante)
     //                 return false
     //             }
@@ -654,7 +654,7 @@ export class GrupoControle {
                 if (flood) {
                     if (!admins.includes(remetente)) {
                         await socket.removerParticipante(c, id_grupo, remetente)
-                        await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, remetente.replace("@s.whatsapp.net", ""), comandos_info.grupo.aflood.msgs.motivo, botInfo.nome_bot), [remetente])
+                        await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(remetente), comandos_info.grupo.aflood.msgs.motivo, botInfo.nome_bot), [remetente])
                         return false
                     }
                 }
@@ -692,7 +692,7 @@ export class GrupoControle {
                     }
                     for (let usuario of usuarios_listados) {
                         await socket.removerParticipante(c, grupo.id, usuario)
-                        await socket.enviarTextoComMencoes(c, grupo.id, criarTexto(comandos_info.outros.resposta_ban, usuario.replace("@s.whatsapp.net", ""), comandos_info.grupo.listanegra.msgs.motivo, botInfo.nome_bot), [usuario])
+                        await socket.enviarTextoComMencoes(c, grupo.id, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(usuario), comandos_info.grupo.listanegra.msgs.motivo, botInfo.nome_bot), [usuario])
                     }
                 }
             }
@@ -710,7 +710,7 @@ export class GrupoControle {
                 let lista_negra = await this.obterListaNegra(evento.id)
                 if (lista_negra.includes(evento.participants[0])) {
                     await socket.removerParticipante(c, evento.id, evento.participants[0])
-                    await socket.enviarTextoComMencoes(c, evento.id, criarTexto(comandos_info.outros.resposta_ban, evento.participants[0].replace("@s.whatsapp.net", ""), comandos_info.grupo.listanegra.msgs.motivo, botInfo.nome_bot), [evento.participants[0]])
+                    await socket.enviarTextoComMencoes(c, evento.id, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(evento.participants[0]), comandos_info.grupo.listanegra.msgs.motivo, botInfo.nome_bot), [evento.participants[0]])
                     return false
                 }
             }

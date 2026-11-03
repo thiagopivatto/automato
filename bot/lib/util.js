@@ -27,10 +27,20 @@ export const criarTexto = (texto, ...params)=>{
   return texto
 }
 
-/** Extrai o ID usável em @menção (suporta @s.whatsapp.net e @lid). */
+/** Extrai o ID usável em @menção (PN ou LID — nunca inclui @lid / @s.whatsapp.net). */
 export const mencaoNumero = (jid)=>{
   if(!jid) return ''
-  return String(jid).split('@')[0]
+  return String(jid).split('@')[0].split(':')[0]
+}
+
+/**
+ * Remove sobras de JID no texto (@123@lid → @123; "@lid" solto some).
+ * WhatsApp marca @123 e deixava "@lid" literal na mensagem.
+ */
+export const sanitizarTextoMencoes = (texto)=>{
+  return String(texto ?? '')
+    .replace(/@([^\s@]+)@(?:s\.whatsapp\.net|lid|hosted|g\.us)\b/gi, '@$1')
+    .replace(/@(?:s\.whatsapp\.net|lid|hosted)\b/gi, '')
 }
 
 /** Verifica se algum JID está na lista (suporta @lid e @s.whatsapp.net). */

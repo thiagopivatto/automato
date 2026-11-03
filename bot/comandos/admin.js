@@ -1,7 +1,7 @@
 //REQUERINDO MODULOS
 import * as menu from '../lib/menu.js'
 import moment from "moment-timezone"
-import {criarTexto, erroComandoMsg, timestampParaData, consoleErro, versaoAtual} from '../lib/util.js'
+import {criarTexto, erroComandoMsg, timestampParaData, consoleErro, versaoAtual, mencaoNumero} from '../lib/util.js'
 import * as socket from '../baileys/socket.js'
 import {BotControle} from '../controles/BotControle.js'
 import {GrupoControle} from '../controles/GrupoControle.js'
@@ -77,7 +77,7 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                         comandosBloqueados.push(prefixo+comandoBloqueado)
                     }
                     resposta += (infoBot.bloqueio_cmds.length != 0) ? criarTexto(comandos_info.admin.infobot.msgs.resposta_variavel.bloqueiocmds.on, comandosBloqueados.toString()) : comandos_info.admin.infobot.msgs.resposta_variavel.bloqueiocmds.off
-                    resposta += criarTexto(comandos_info.admin.infobot.msgs.resposta_inferior, usuariosBloqueados.length, infoBot.cmds_executados, numero_dono.replace("@s.whatsapp.net", ""))
+                    resposta += criarTexto(comandos_info.admin.infobot.msgs.resposta_inferior, usuariosBloqueados.length, infoBot.cmds_executados, mencaoNumero(numero_dono))
                     await socket.obterFotoPerfil(c, numero_bot).then(async (fotoBot)=>{
                         await socket.responderArquivoUrl(c, tiposMensagem.imagem, id_chat, fotoBot, resposta, mensagem)
                     }).catch(async ()=>{
@@ -133,7 +133,7 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                 try{
                     if(usuariosBloqueados.length == 0) return await socket.responderTexto(c, id_chat, comandos_info.admin.listablock.msgs.lista_vazia, mensagem)
                     let resposta = criarTexto(comandos_info.admin.listablock.msgs.resposta_titulo, usuariosBloqueados.length)
-                    for (let i of usuariosBloqueados) resposta += criarTexto(comandos_info.admin.listablock.msgs.resposta_itens, i.replace(/@s.whatsapp.net/g,''))
+                    for (let i of usuariosBloqueados) resposta += criarTexto(comandos_info.admin.listablock.msgs.resposta_itens, mencaoNumero(i))
                     await socket.responderTexto(c, id_chat, resposta, mensagem)
                 } catch(err){
                     throw err
@@ -185,13 +185,13 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                     }
                     for (let usuario of listaBloqueio){
                         if(numero_dono == usuario){
-                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.bloquear.msgs.erro_donoerro_dono, usuario.replace(/@s.whatsapp.net/g, '')), mensagem)
+                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.bloquear.msgs.erro_donoerro_dono, mencaoNumero(usuario)), mensagem)
                         } else {
                             if(usuariosBloqueados.includes(usuario)) {
-                                await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.bloquear.msgs.ja_bloqueado, usuario.replace(/@s.whatsapp.net/g, '')), mensagem)
+                                await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.bloquear.msgs.ja_bloqueado, mencaoNumero(usuario)), mensagem)
                             } else {
                                 await socket.bloquearContato(c, usuario)
-                                await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.bloquear.msgs.sucesso, usuario.replace(/@s.whatsapp.net/g, '')), mensagem)
+                                await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.bloquear.msgs.sucesso, mencaoNumero(usuario)), mensagem)
                             }
                         }
                     }
@@ -214,10 +214,10 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                     }
                     for (let usuario of listaDesbloqueio){
                         if(!usuariosBloqueados.includes(usuario)) {
-                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.desbloquear.msgs.ja_desbloqueado, usuario.replace(/@s.whatsapp.net/g,'')), mensagem)
+                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.desbloquear.msgs.ja_desbloqueado, mencaoNumero(usuario)), mensagem)
                         } else {
                             await socket.desbloquearContato(c, usuario)
-                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.desbloquear.msgs.sucesso, usuario.replace(/@s.whatsapp.net/g,'')), mensagem)
+                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.desbloquear.msgs.sucesso, mencaoNumero(usuario)), mensagem)
                         }
                     }
                 } catch(err){
@@ -430,7 +430,7 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                     listaUsuarios = await usuarios.obterUsuariosTipo(tipoUsuario)
                     if(!listaUsuarios.length) return await socket.responderTexto(c, id_chat, comandos_info.admin.usuarios.msgs.nao_encontrado, mensagem)
                     respostaTitulo = criarTexto(comandos_info.admin.usuarios.msgs.resposta.titulo, tipoUsuario , listaUsuarios.length)
-                    for (let usuario of listaUsuarios) respostaItens += criarTexto(comandos_info.admin.usuarios.msgs.resposta.item, usuario.nome, usuario.id_usuario.replace("@s.whatsapp.net", ""), usuario.comandos_total)
+                    for (let usuario of listaUsuarios) respostaItens += criarTexto(comandos_info.admin.usuarios.msgs.resposta.item, usuario.nome, mencaoNumero(usuario.id_usuario), usuario.comandos_total)
                     const respostaFinal = respostaTitulo + respostaItens
                     await socket.responderTexto(c, id_chat, respostaFinal, mensagem)
                 } catch(err){
@@ -532,7 +532,7 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                     let maxComandosDia = botInfo.limite_diario.limite_tipos[dadosUsuario.tipo].comandos ?? "Sem limite"
                     let tipoUsuario = botInfo.limite_diario.limite_tipos[dadosUsuario.tipo].titulo 
                     let nomeUsuario =  dadosUsuario.nome || "Ainda não obtido"
-                    let resposta = criarTexto(comandos_info.admin.verdados.msgs.resposta_superior, nomeUsuario, tipoUsuario, dadosUsuario.id_usuario.replace("@s.whatsapp.net",""))
+                    let resposta = criarTexto(comandos_info.admin.verdados.msgs.resposta_superior, nomeUsuario, tipoUsuario, mencaoNumero(dadosUsuario.id_usuario))
                     if(botInfo.limite_diario.status) resposta += criarTexto(comandos_info.admin.verdados.msgs.resposta_variavel.limite_diario.on, dadosUsuario.comandos_dia, maxComandosDia, maxComandosDia)
                     resposta += criarTexto(comandos_info.admin.verdados.msgs.resposta_inferior, dadosUsuario.comandos_total)
                     await socket.responderTexto(c, id_chat, resposta, mensagem)

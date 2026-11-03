@@ -1,5 +1,5 @@
 //REQUERINDO MODULOS
-import { criarTexto} from './util.js'
+import {criarTexto, mencaoNumero} from './util.js'
 import * as socket from '../baileys/socket.js'
 import {BotControle} from '../controles/BotControle.js'
 import {GrupoControle} from '../controles/GrupoControle.js'
@@ -127,7 +127,7 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
                     if(!ultrapassou) {
                         await usuarios.adicionarContagemDiariaComandos(remetente) 
                     } else {
-                        await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.limitediario.msgs.resposta_excedeu_limite, nome_usuario, numero_dono.replace("@s.whatsapp.net", "")), mensagem)
+                        await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.limitediario.msgs.resposta_excedeu_limite, nome_usuario, mencaoNumero(numero_dono)), mensagem)
                         return false
                     }   
                 } else {

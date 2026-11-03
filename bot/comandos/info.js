@@ -1,6 +1,6 @@
 //REQUERINDO MÓDULOS
 import * as menu from '../lib/menu.js'
-import {criarTexto, erroComandoMsg, timestampParaData, consoleErro, versaoAtual} from '../lib/util.js'
+import {criarTexto, erroComandoMsg, timestampParaData, consoleErro, versaoAtual, mencaoNumero} from '../lib/util.js'
 import * as socket from '../baileys/socket.js'
 import {GrupoControle} from '../controles/GrupoControle.js'
 import {UsuarioControle} from '../controles/UsuarioControle.js'
@@ -38,7 +38,7 @@ export const info = async(c, mensagemBaileys, botInfo) => {
                     let version = versaoAtual()
                     let infoBot = botInfo
                     let botInicializacaoData = timestampParaData(infoBot.iniciado)
-                    let resposta = criarTexto(comandos_info.info.info.msgs.resposta, nome_adm?.trim(), nome_bot?.trim(), botInicializacaoData, infoBot.cmds_executados, numero_dono.replace("@s.whatsapp.net", ""), version)
+                    let resposta = criarTexto(comandos_info.info.info.msgs.resposta, nome_adm?.trim(), nome_bot?.trim(), botInicializacaoData, infoBot.cmds_executados, mencaoNumero(numero_dono), version)
                     await socket.obterFotoPerfil(c, numero_bot).then( async (botFotoURL)=>{
                         await socket.responderArquivoUrl(c, tiposMensagem.imagem, id_chat, botFotoURL, resposta, mensagem)
                     }).catch(async()=>{
@@ -54,7 +54,7 @@ export const info = async(c, mensagemBaileys, botInfo) => {
                 try{
                     if(!args.length) return socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) ,mensagem)
                     if(!numero_dono) return socket.responderTexto(c, id_chat, comandos_info.info.reportar.msgs.erro, mensagem)
-                    let usuarioMensagem = texto_recebido, resposta = criarTexto(comandos_info.info.reportar.msgs.resposta, nome_usuario, remetente.replace("@s.whatsapp.net",""), usuarioMensagem)
+                    let usuarioMensagem = texto_recebido, resposta = criarTexto(comandos_info.info.reportar.msgs.resposta, nome_usuario, mencaoNumero(remetente), usuarioMensagem)
                     await socket.enviarTexto(c,numero_dono, resposta)
                     await socket.responderTexto(c, id_chat, comandos_info.info.reportar.msgs.sucesso, mensagem)
                 } catch(err){

@@ -197,7 +197,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     let lista_negra_grupo = await grupos.obterListaNegra(id_grupo), resposta_listanegra = comandos_info.grupo.listanegra.msgs.resposta_titulo
                     if(lista_negra_grupo.length == 0) return await socket.responderTexto(c, id_chat, comandos_info.grupo.listanegra.msgs.lista_vazia, mensagem)
                     for(let usuario_lista of lista_negra_grupo){
-                        resposta_listanegra += criarTexto(comandos_info.grupo.listanegra.msgs.resposta_itens, usuario_lista.replace(/@s.whatsapp.net/g, ''))
+                        resposta_listanegra += criarTexto(comandos_info.grupo.listanegra.msgs.resposta_itens, mencaoNumero(usuario_lista))
                     }
                     resposta_listanegra += `╠\n╚═〘 ${nome_bot?.trim()}®〙`
                     await socket.enviarTexto(c, id_chat, resposta_listanegra)
@@ -515,7 +515,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                         let inativosResposta = criarTexto(comandos_info.grupo.imarcar.msgs.resposta_titulo, qtdMensagem, qtdInativos)
                         inativosResposta += `═════════════════\n╠\n`
                         for(let usuario of usuariosInativos){
-                            inativosResposta += criarTexto(comandos_info.grupo.imarcar.msgs.resposta_itens, usuario.id_usuario.replace(/@s.whatsapp.net/g, ''), usuario.msg)
+                            inativosResposta += criarTexto(comandos_info.grupo.imarcar.msgs.resposta_itens, mencaoNumero(usuario.id_usuario), usuario.msg)
                             mencionarUsuarios.push(usuario.id_usuario)
                         }
                         inativosResposta += `╠\n╚═〘 ${nome_bot?.trim()}® 〙`
@@ -578,7 +578,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                             default:
                                 medalha = ''
                         }
-                        respostaTop += criarTexto(comandos_info.grupo.topativos.msgs.resposta_itens, medalha, i+1, usuariosAtivos[i].id_usuario.replace(/@s.whatsapp.net/g, ''), usuariosAtivos[i].msg)
+                        respostaTop += criarTexto(comandos_info.grupo.topativos.msgs.resposta_itens, medalha, i+1, mencaoNumero(usuariosAtivos[i].id_usuario), usuariosAtivos[i].msg)
                         usuariosMencionados.push(usuariosAtivos[i].id_usuario)   
                     }
                     respostaTop += `╠\n╚═〘 ${nome_bot?.trim()}® 〙`
@@ -669,7 +669,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     let respostaMarcar = criarTexto(comandos_info.grupo.adms.msgs.resposta_titulo, admins.length)
                     if(usuarioTexto.length > 0) respostaMarcar += criarTexto(comandos_info.grupo.adms.msgs.mensagem, usuarioTexto)
                     for (let adm of admins) {
-                        respostaMarcar += criarTexto(comandos_info.grupo.adms.msgs.resposta_itens, adm.replace(/@s.whatsapp.net/g, ''))
+                        respostaMarcar += criarTexto(comandos_info.grupo.adms.msgs.resposta_itens, mencaoNumero(adm))
                     }
                     let mensagemAlvo = mensagem_citada ? citacao.mensagem : mensagem
                     await socket.responderComMencoes(c, id_chat, respostaMarcar, admins, mensagemAlvo)
@@ -680,7 +680,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
 
             case "dono":
                 try{
-                    if(dono) await socket.responderComMencoes(c, id_chat, criarTexto(comandos_info.grupo.dono.msgs.resposta, dono.replace("@s.whatsapp.net", "")), [dono], mensagem)
+                    if(dono) await socket.responderComMencoes(c, id_chat, criarTexto(comandos_info.grupo.dono.msgs.resposta, mencaoNumero(dono)), [dono], mensagem)
                     else await socket.responderTexto(c, id_chat, comandos_info.grupo.dono.msgs.sem_dono, mensagem)
                 } catch(err){
                     throw err
@@ -733,10 +733,10 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     for(let numero of usuarioNumeros){
                         let numeroCompleto = numero.trim().replace(/\W+/g,"")+"@s.whatsapp.net"
                         await socket.adicionarParticipante(c, id_chat, numeroCompleto).then(async (res)=>{
-                            if (res.status != 200) await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.add_erro, numeroCompleto.replace("@s.whatsapp.net", "")), mensagem)
+                            if (res.status != 200) await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.add_erro, mencaoNumero(numeroCompleto)), mensagem)
                         })
                         .catch(async ()=>{
-                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.numero_invalido, numeroCompleto.replace("@s.whatsapp.net", "")), mensagem)
+                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.numero_invalido, mencaoNumero(numeroCompleto)), mensagem)
                         })
                     }
                 } catch(err){
@@ -758,7 +758,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                             if(!admins.includes(usuario)){
                                 await socket.removerParticipante(c, id_grupo, usuario).then(async ()=>{
                                     if(usuariosSelecionados.length === 1) {
-                                        await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, usuario.replace("@s.whatsapp.net", ""), comandos_info.grupo.ban.msgs.motivo, nome_usuario))
+                                        await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(usuario), comandos_info.grupo.ban.msgs.motivo, nome_usuario))
                                     }
                                 })
                             } else {
@@ -1012,9 +1012,9 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     for(let usuario of usuariosSelecionados){
                         if(!admins.includes(usuario)) {
                             await socket.promoverParticipante(c, id_grupo, usuario)
-                            respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.sucesso_usuario, usuario.replace("@s.whatsapp.net", ""))
+                            respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.sucesso_usuario, mencaoNumero(usuario))
                         } else {
-                            respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.erro_usuario, usuario.replace("@s.whatsapp.net", ""))
+                            respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.erro_usuario, mencaoNumero(usuario))
                         }
                     }
                     if(!usuariosSelecionados.length) return await socket.responderTexto(c, id_chat, comandos_info.grupo.promover.msgs.erro_bot, mensagem)
@@ -1036,9 +1036,9 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     for(let usuario of usuariosSelecionados){
                         if(admins.includes(usuario)) {
                             await socket.rebaixarParticipante(c, id_grupo, usuario)
-                            respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.sucesso_usuario, usuario.replace("@s.whatsapp.net", ""))
+                            respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.sucesso_usuario, mencaoNumero(usuario))
                         } else {
-                            respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.erro_usuario, usuario.replace("@s.whatsapp.net", ""))
+                            respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.erro_usuario, mencaoNumero(usuario))
                         }
                     }
                     if(!usuariosSelecionados.length) return await socket.responderTexto(c, id_chat, comandos_info.grupo.rebaixar.msgs.erro_bot, mensagem)
