@@ -353,13 +353,28 @@ export const obterAdminsGrupoPorMetadata = async(grupoMetadata)=>{
     return [...new Set(admins)]
 }
 
-export const obterTodosGrupos = async(c)=>{ 
-    let grupos = await c.groupFetchAllParticipating()
-    let gruposInfo = []
-    for (let [key, value] of Object.entries(grupos)) {
-        gruposInfo.push(value)
+export const obterTodosGrupos = async(c)=>{
+    const maxTentativas = 4
+    let ultimoErro
+    for (let i = 0; i < maxTentativas; i++) {
+        try {
+            if (i > 0) {
+                // rate-overlimit do WA: espera progressiva antes de tentar de novo
+                await new Promise((r) => setTimeout(r, 2500 * (2 ** (i - 1))))
+            } else {
+                // dá um respiro logo após o connect (evita 429 no boot)
+                await new Promise((r) => setTimeout(r, 1200))
+            }
+            const grupos = await c.groupFetchAllParticipating()
+            return Object.values(grupos || {})
+        } catch (err) {
+            ultimoErro = err
+            const msg = String(err?.message || err || '')
+            const rate = /rate-overlimit|429/i.test(msg) || err?.data === 429
+            if (!rate || i === maxTentativas - 1) throw err
+        }
     }
-    return gruposInfo
+    throw ultimoErro
 }
 
 export const removerParticipante = async(c, id_grupo, participante)=>{

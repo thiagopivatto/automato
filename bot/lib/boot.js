@@ -8,7 +8,7 @@ import { versaoAtual } from './util.js'
 import { raizProjeto } from './caminhos.js'
 
 /** Muda a cada correção relevante — confira no Linux se bate com o Windows. */
-export const BUILD_ID = '20261103-cmdfix'
+export const BUILD_ID = '20261103-groups'
 
 const W = 54
 
@@ -112,7 +112,10 @@ export function bootPronto() {
     const baileys = String(_meta.baileys || '?')
     const raiz = _meta.raiz || raizProjeto
     const cwd = _meta.cwd || process.cwd()
-    const mesmaPasta = path.resolve(cwd) === path.resolve(raiz)
+    // Windows UNC: Pivatto_NAS vs pivatto_nas — compara em minúsculas
+    const mesmaPasta =
+        path.resolve(cwd).replace(/\\/g, '/').toLowerCase() ===
+        path.resolve(raiz).replace(/\\/g, '/').toLowerCase()
 
     secao('Ambiente')
     row('Horário', agora)

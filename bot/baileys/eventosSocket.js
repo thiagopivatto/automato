@@ -257,10 +257,9 @@ export const atualizacaoParticipantesGrupo = async (c, evento, botInfo)=>{
 }
 
 export const atualizacaoDadosGrupos = async (c, botInfo)=>{
+    const { registrarBootGrupos, bootPronto } = await import('../lib/boot.js')
     try{
-        //Obtendo dados dos grupos
         const dadosGrupos = await socket.obterTodosGrupos(c)
-        //Se não houver grupos retorne
         if(dadosGrupos.length){
             const grupos = new GrupoControle()
             await grupos.registrarGruposAoIniciar(dadosGrupos)
@@ -268,24 +267,25 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
             await grupos.verificarListaNegraGeral(c, dadosGrupos, botInfo)
             await grupos.atualizarContagemGrupos(dadosGrupos)
         }
-
-        try {
-            const { registrarBootGrupos, bootPronto } = await import('../lib/boot.js')
-            registrarBootGrupos(dadosGrupos?.length || 0)
-            bootPronto()
-        } catch {
-            console.log(corTexto('Online', false))
-        }
+        registrarBootGrupos(dadosGrupos?.length || 0)
+        bootPronto()
         return true
     } catch(err){
-        consoleErro(err, "GROUPS.UPDATE")
-        // Mesmo com falha nos grupos, liberar o processamento de mensagens/comandos
-        try {
-            const { bootPronto } = await import('../lib/boot.js')
-            bootPronto()
-        } catch {
-            console.log(corTexto('Online', false))
+        const msg = String(err?.message || err || '')
+        const rate = /rate-overlimit|429/i.test(msg) || err?.data === 429
+        if (rate) {
+            console.log(corTexto('  Grupos: rate-limit do WhatsApp — usando cache local', '#eab308'))
+        } else {
+            consoleErro(err, "GROUPS.UPDATE")
         }
+        // Fallback: conta grupos já salvos no NeDB (não zera o boot)
+        try {
+            const salvos = await new GrupoControle().obterTodosGruposInfo()
+            registrarBootGrupos(Array.isArray(salvos) ? salvos.length : 0)
+        } catch {
+            registrarBootGrupos(0)
+        }
+        try { bootPronto() } catch { console.log(corTexto('Online', false)) }
         return true
     }
 }
