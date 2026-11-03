@@ -7,22 +7,9 @@ import { comandosInfo } from '../comandos/comandos.js'
 
 /**
  * Comandos de IA / conteúdo gerado.
- * - ChatGPT-42 RapidAPI (texto/chat): RAPIDAPI_KEY
- * - Gemini / OpenRouter (backup texto)
- * - Flux RapidAPI (criaimg)
+ * - Gemini + OpenRouter/Rapid backup
  * - SimSimi / Perplexity / Grok / JSearch via RapidAPI
  */
-const enviarImagemIA = async (c, id_chat, resultado, legenda, mensagem) => {
-    if (Buffer.isBuffer(resultado)) {
-        await socket.responderArquivoBuffer(c, tiposMensagem.imagem, id_chat, resultado, legenda, mensagem)
-    } else if (typeof resultado === 'string' && resultado.startsWith('data:image')) {
-        const b64 = resultado.replace(/^data:image\/\w+;base64,/, '')
-        await socket.responderArquivoBuffer(c, tiposMensagem.imagem, id_chat, Buffer.from(b64, 'base64'), legenda, mensagem)
-    } else {
-        await socket.responderArquivoUrl(c, tiposMensagem.imagem, id_chat, resultado, legenda, mensagem)
-    }
-}
-
 export const ia = async (c, mensagemBaileys, botInfo) => {
     const comandos_info = comandosInfo(botInfo)
     const { prefixo } = botInfo
@@ -195,65 +182,6 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                 }
                 break
 
-                break
-
-            case 'criaimg':
-                try {
-                    if (!textoEntrada) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    await socket.responderTexto(c, id_chat, '🖼️ Gerando imagem (Pollinations)…', mensagem)
-                    const { resultado } = await api.IA.obterImagemIA(textoEntrada)
-                    await enviarImagemIA(c, id_chat, resultado, textoEntrada.slice(0, 80), mensagem)
-                } catch (err) {
-                    if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
-                }
-                break
-
-            case 'criavideo':
-                try {
-                    if (!textoEntrada) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    await socket.responderTexto(c, id_chat, '🎬 Gerando vídeo (2 cenas)… pode levar ~1 min', mensagem)
-                    const { resultado } = await api.IA.obterVideoIA(textoEntrada)
-                    if (Buffer.isBuffer(resultado)) {
-                        await socket.responderArquivoBuffer(c, tiposMensagem.video, id_chat, resultado, '', mensagem, 'video/mp4')
-                    } else {
-                        await socket.responderArquivoUrl(c, tiposMensagem.video, id_chat, resultado, '', mensagem, 'video/mp4')
-                    }
-                } catch (err) {
-                    if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
-                }
-                break
-
-            case 'i2i':
-                try {
-                    const tipoImg = mensagem_citada ? citacao.tipo : tipo
-                    if (tipoImg != tiposMensagem.imagem) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `Envie/responda uma *imagem* com *${prefixo}i2i* prompt\nEx: *${prefixo}i2i* estilo anime, fundo neon`,
-                            mensagem
-                        )
-                    }
-                    if (!textoEntrada) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `Informe o prompt: *${prefixo}i2i* descrição do que mudar`,
-                            mensagem
-                        )
-                    }
-                    await socket.responderTexto(c, id_chat, '🖼️ Image-to-image em andamento…', mensagem)
-                    const buffer = await bufferMidiaCitada()
-                    const { resultado } = await api.IA.imagemParaImagemIA(buffer, textoEntrada)
-                    await enviarImagemIA(c, id_chat, resultado, textoEntrada.slice(0, 80), mensagem)
-                } catch (err) {
-                    if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
-                }
-                break
-
             case 'upscale':
                 try {
                     const tipoImg = mensagem_citada ? citacao.tipo : tipo
@@ -281,32 +209,34 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                 }
                 break
 
-            case 'vocalsonly':
+            case 'resumoportema':
                 try {
-                    const tipoAud = mensagem_citada ? citacao.tipo : tipo
-                    if (tipoAud != tiposMensagem.audio && tipoAud != tiposMensagem.video) {
-                        return await socket.responderTexto(c, id_chat, `Responda um *áudio/vídeo* com *${prefixo}vocalsonly*`, mensagem)
+                    if (!mensagem_grupo) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `O comando *${prefixo}resumoportema* só funciona em *grupos*.`,
+                            mensagem
+                        )
                     }
-                    await socket.responderTexto(c, id_chat, '🎙️ Isolando vocais (UVR)…', mensagem)
-                    const buffer = await bufferMidiaCitada()
-                    const { resultado } = await api.IA.isolarVocais(buffer)
-                    await socket.responderArquivoBuffer(c, tiposMensagem.audio, id_chat, resultado, '', mensagem, 'audio/mpeg')
-                } catch (err) {
-                    if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
-                }
-                break
-
-            case 'instrumentalonly':
-                try {
-                    const tipoAud = mensagem_citada ? citacao.tipo : tipo
-                    if (tipoAud != tiposMensagem.audio && tipoAud != tiposMensagem.video) {
-                        return await socket.responderTexto(c, id_chat, `Responda um *áudio/vídeo* com *${prefixo}instrumentalonly*`, mensagem)
+                    const idGrupo = grupo?.id_grupo || id_chat
+                    const {
+                        carregarJanelaResumoPorTema,
+                        gerarResumoPorTemaDaJanela
+                    } = await import('../servicos/resumoPorTema.js')
+                    const janela = await carregarJanelaResumoPorTema(idGrupo, 1000)
+                    if (janela.vazio) {
+                        return await socket.responderTexto(c, id_chat, janela.avisoVazio, mensagem)
                     }
-                    await socket.responderTexto(c, id_chat, '🎸 Isolando instrumental (UVR)…', mensagem)
-                    const buffer = await bufferMidiaCitada()
-                    const { resultado } = await api.IA.isolarInstrumental(buffer)
-                    await socket.responderArquivoBuffer(c, tiposMensagem.audio, id_chat, resultado, '', mensagem, 'audio/mpeg')
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        `📚 Analisando *${janela.msgs.length}* mensagens (textos + áudios). Montando o resumo por temas…`,
+                        mensagem
+                    )
+                    const { resultado } = await gerarResumoPorTemaDaJanela(janela, grupo?.nome || 'o grupo')
+                    // Uma única mensagem (WhatsApp aguenta o texto formatado)
+                    await socket.responderTexto(c, id_chat, resultado, mensagem)
                 } catch (err) {
                     if (!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
@@ -318,27 +248,100 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     if (!mensagem_grupo) {
                         return await socket.responderTexto(c, id_chat, `O comando *${prefixo}resumodogrupo* só funciona em *grupos*.`, mensagem)
                     }
-                    const { historicoGrupo } = await import('../controles/HistoricoGrupoControle.js')
-                    const msgs = await historicoGrupo.obterUltimas(id_chat, 300)
-                    if (!msgs?.length) {
+                    const idGrupo = grupo?.id_grupo || id_chat
+                    const {
+                        carregarJanelaResumo,
+                        gerarResumoDaJanela,
+                        persistirAposResumo
+                    } = await import('../servicos/resumoGrupo.js')
+                    const janela = await carregarJanelaResumo(idGrupo, prefixo)
+                    if (janela.vazio) {
+                        return await socket.responderTexto(c, id_chat, janela.avisoVazio, mensagem)
+                    }
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        'Tô analisando a bagunça do grupo. Já volto com a nota de voz.',
+                        mensagem
+                    )
+                    let personalidadeGrupo = ''
+                    try {
+                        const { GrupoControle } = await import('../controles/GrupoControle.js')
+                        personalidadeGrupo = (await new GrupoControle().obterPersonalidadeResumo(idGrupo)) || ''
+                    } catch { /* ignore */ }
+                    const { gerado, limiteSuperior, periodoInicio, periodoFim } = await gerarResumoDaJanela(
+                        janela,
+                        grupo?.nome || 'o grupo',
+                        personalidadeGrupo
+                    )
+
+                    if (gerado.entrega === 'audio' && gerado.resultado) {
+                        await socket.responderVozBuffer(
+                            c,
+                            id_chat,
+                            gerado.resultado,
+                            mensagem,
+                            gerado.mimetype || 'audio/ogg; codecs=opus'
+                        )
+                    } else if (gerado.textoFallback || gerado.roteiro) {
+                        await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `📝 *Resumo do grupo*\n\n${gerado.textoFallback || gerado.roteiro}`,
+                            mensagem
+                        )
+                    } else {
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            'Ainda não há mensagens guardadas deste grupo. Deixe o bot online enquanto o pessoal conversa e tente de novo.',
+                            'Não consegui montar o resumo agora. Tenta de novo daqui a pouco.',
                             mensagem
                         )
                     }
-                    const nomeGrupo = grupo?.nome || 'o grupo'
-                    const { resultado, mimetype } = await api.IA.gerarResumoGrupoAudio({
-                        mensagens: msgs,
-                        nomeGrupo
-                    })
-                    await socket.responderVozBuffer(
+
+                    try {
+                        await persistirAposResumo(idGrupo, limiteSuperior, gerado, { periodoInicio, periodoFim })
+                    } catch (erroMarco) {
+                        consoleErro(erroMarco, 'RESUMO GRUPO')
+                    }
+                } catch (err) {
+                    if (!err.erro) throw err
+                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
+                }
+                break
+
+            case 'personalidaderesumo':
+            case 'resumopersona':
+                try {
+                    if (!mensagem_grupo) {
+                        return await socket.responderTexto(c, id_chat, `Só funciona em *grupos*.`, mensagem)
+                    }
+                    if (!grupo?.usuario_admin && !mensagemBaileys.mensagem_dono) {
+                        return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                    }
+                    const idGrupo = grupo?.id_grupo || id_chat
+                    const { GrupoControle } = await import('../controles/GrupoControle.js')
+                    const gruposCtrl = new GrupoControle()
+                    const texto = String(texto_recebido || '').trim()
+                    if (!texto || /^reset|padrao|padrão|limpar$/i.test(texto)) {
+                        await gruposCtrl.definirPersonalidadeResumo(idGrupo, '')
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            'Personalidade do *resumodogrupo* neste grupo voltou ao padrão (agressivo/egocêntrico).',
+                            mensagem
+                        )
+                    }
+                    if (/^ver|atual|mostrar$/i.test(texto)) {
+                        const atual = (await gruposCtrl.obterPersonalidadeResumo(idGrupo)) || '(padrão do bot)'
+                        return await socket.responderTexto(c, id_chat, `🎭 Personalidade atual deste grupo:\n${atual}`, mensagem)
+                    }
+                    await gruposCtrl.definirPersonalidadeResumo(idGrupo, texto)
+                    await socket.responderTexto(
                         c,
                         id_chat,
-                        resultado,
-                        mensagem,
-                        mimetype || 'audio/ogg; codecs=opus'
+                        `✅ Personalidade do *resumodogrupo* salva *só neste grupo*.\nPróximos resumos usam:\n${texto.slice(0, 400)}`,
+                        mensagem
                     )
                 } catch (err) {
                     if (!err.erro) throw err

@@ -1,5 +1,5 @@
 // REQUERINDO MODULOS
-import { criarTexto, primeiraLetraMaiuscula, erroComandoMsg, consoleErro, mencaoNumero, sortearMembros } from '../lib/util.js'
+import { criarTexto, primeiraLetraMaiuscula, erroComandoMsg, consoleErro, mencaoNumero, sortearMembros, participantesSemBot } from '../lib/util.js'
 import path from 'node:path'
 import fs from 'fs-extra'
 import api from '@victorsouzaleal/lbot-api-comandos'
@@ -10,12 +10,14 @@ import { UsuarioControle } from '../controles/UsuarioControle.js'
 import axios from 'axios'
 import translate from '@vitalets/google-translate-api'
 import { obterVerdadeOuDesafio } from '../lib/verdadeOuDesafio.js'
+import { handlersSorteios } from './diversao/sorteios.js'
 
 export const diversao = async (c, mensagemBaileys, botInfo) => {
     // Atribuição de valores
     const comandos_info = comandosInfo(botInfo)
     const numero_dono = await new UsuarioControle().obterIdDono()
-    const { prefixo, numero_bot } = botInfo
+    const { prefixo, numero_bot, lid_bot } = botInfo
+    const botsJid = [numero_bot, lid_bot].filter(Boolean)
     await socket.atualizarFlagsAdminGrupo(c, mensagemBaileys, botInfo)
     const {
         comando,
@@ -187,15 +189,10 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                     if (!mensagem_grupo) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
                     if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
                     if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    const idParticipantesAtuais = [...(grupo.participantes || [])]
-                    if (dono == numero_bot) {
-                        const idxBot = idParticipantesAtuais.indexOf(numero_bot)
-                        if (idxBot !== -1) idParticipantesAtuais.splice(idxBot, 1)
-                    } else {
-                        const idxDono = idParticipantesAtuais.indexOf(dono)
-                        if (idxDono !== -1) idParticipantesAtuais.splice(idxDono, 1)
-                        const idxBot = idParticipantesAtuais.indexOf(numero_bot)
-                        if (idxBot !== -1) idParticipantesAtuais.splice(idxBot, 1)
+                    const { participantesSemBot } = await import('../lib/util.js')
+                    let idParticipantesAtuais = participantesSemBot(grupo.participantes, ...botsJid)
+                    if (dono && dono != numero_bot) {
+                        idParticipantesAtuais = participantesSemBot(idParticipantesAtuais, dono)
                     }
                     if (idParticipantesAtuais.length == 0) return await socket.responderTexto(c, id_chat, comandos_info.diversao.roletarussa.msgs.sem_membros, mensagem)
                     const [participanteEscolhido] = sortearMembros(idParticipantesAtuais, 1)
@@ -210,12 +207,9 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
 
             case 'casal':
                 try {
-                    if (!mensagem_grupo) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
-                    const idParticipantesAtuais = [...(grupo.participantes || [])]
-                    if (idParticipantesAtuais.length < 2) return await socket.responderTexto(c, id_chat, comandos_info.diversao.casal.msgs.minimo, mensagem)
-                    const [pessoaEscolhida1, pessoaEscolhida2] = sortearMembros(idParticipantesAtuais, 2)
-                    let respostaTexto = criarTexto(comandos_info.diversao.casal.msgs.resposta, mencaoNumero(pessoaEscolhida1), mencaoNumero(pessoaEscolhida2))
-                    await socket.enviarTextoComMencoes(c, id_chat, respostaTexto, [pessoaEscolhida1, pessoaEscolhida2])
+                    await handlersSorteios.casal({
+                        c, id_chat, grupo, numero_bot: botsJid, comandos_info, mensagem, mensagem_grupo
+                    })
                 } catch (err) {
                     throw err
                 }
@@ -264,74 +258,23 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
             // NOVOS COMANDOS
 
             case 'trisal':
-                try {
-                    if (!mensagem_grupo) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
-                    const idParticipantesAtuais = [...(grupo.participantes || [])]
-                    const msgMinimo = comandos_info.diversao.trisal?.msgs?.minimo || comandos_info.diversao.trisal?.minimo || 'Precisa de pelo menos 3 membros.'
-                    if (idParticipantesAtuais.length < 3) return await socket.responderTexto(c, id_chat, msgMinimo, mensagem)
-                    const [pessoaEscolhida1, pessoaEscolhida2, pessoaEscolhida3] = sortearMembros(idParticipantesAtuais, 3)
-                    const respostaTexto = criarTexto(comandos_info.diversao.trisal.msgs.resposta, mencaoNumero(pessoaEscolhida1), mencaoNumero(pessoaEscolhida2), mencaoNumero(pessoaEscolhida3))
-                    await socket.enviarTextoComMencoes(c, id_chat, respostaTexto, [pessoaEscolhida1, pessoaEscolhida2, pessoaEscolhida3])
-                } catch (err) {
-                    throw err
-                }
-                break
-
             case 'top':
-                try {
-                    if (!mensagem_grupo) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
-                    if (args.length === 1) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-
-                    let qtdUsuarios = parseInt(args[0])
-                    let temaRanking = texto_recebido.slice(1 + args[0].length).trim()
-                    const idParticipantesAtuais = [...(grupo.participantes || [])]
-
-                    if (isNaN(qtdUsuarios)) return await socket.responderTexto(c, id_chat, comandos_info.diversao.top.msgs.erro_qtd, mensagem)
-                    if (qtdUsuarios > 200) return await socket.responderTexto(c, id_chat, comandos_info.diversao.top.msgs.limite_qtd, mensagem)
-                    if (qtdUsuarios > idParticipantesAtuais.length) return await socket.responderTexto(c, id_chat, comandos_info.diversao.top.msgs.erro_qtd, mensagem)
-
-                    let respostaTexto = criarTexto(comandos_info.diversao.top.msgs.resposta_titulo, qtdUsuarios, temaRanking)
-                    const mencionarMembros = sortearMembros(idParticipantesAtuais, qtdUsuarios)
-
-                    for (let i = 0; i < mencionarMembros.length; i++) {
-                        let medalha = ""
-                        switch (i + 1) {
-                            case 1:
-                                medalha = '🥇'
-                                break
-                            case 2:
-                                medalha = '🥈'
-                                break
-                            case 3:
-                                medalha = '🥉'
-                                break
-                            default:
-                                medalha = ''
-                        }
-                        respostaTexto += criarTexto(comandos_info.diversao.top.msgs.resposta_itens, medalha, i + 1, mencaoNumero(mencionarMembros[i]))
-                    }
-                    await socket.enviarTextoComMencoes(c, id_chat, respostaTexto, mencionarMembros)
-                } catch (err) {
-                    throw err
-                }
-                break
-
             case 'sortear':
                 try {
-                    if (!mensagem_grupo) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
-                    const idParticipantesAtuais = [...(grupo.participantes || [])].filter(
-                        (j) => j && j !== numero_bot
-                    )
-                    if (idParticipantesAtuais.length == 0) {
-                        return await socket.responderTexto(c, id_chat, 'Não há membros para sortear.', mensagem)
-                    }
-                    const [sorteado] = sortearMembros(idParticipantesAtuais, 1)
-                    await socket.enviarTextoComMencoes(
+                    await handlersSorteios[comandoSemPrefixo]({
                         c,
                         id_chat,
-                        `🎲 *Sorteio*\nO membro sorteado foi: @${mencaoNumero(sorteado)}`,
-                        [sorteado]
-                    )
+                        grupo,
+                        numero_bot: botsJid,
+                        comandos_info,
+                        mensagem,
+                        mensagem_grupo,
+                        args,
+                        texto_recebido,
+                        comando,
+                        botInfo,
+                        erroComandoMsg
+                    })
                 } catch (err) {
                     throw err
                 }
@@ -469,7 +412,7 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                     const { membrosDoGrupo, sortearNomes, listaNomesTexto, PROMPTS } = await import('../lib/dramaGrupo.js')
                     const { aplicarMencoes } = await import('../lib/mencoes.js')
                     const participantes = grupo?.participantes || []
-                    const membros = await membrosDoGrupo(id_chat, participantes, numero_bot)
+                    const membros = await membrosDoGrupo(id_chat, participantes, ...botsJid)
                     if (membros.length < 1) {
                         return await socket.responderTexto(c, id_chat, 'Preciso de membros no grupo pra isso.', mensagem)
                     }

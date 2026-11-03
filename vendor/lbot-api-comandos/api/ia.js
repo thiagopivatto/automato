@@ -26,10 +26,7 @@ import {
 } from '../lib/elevenlabs.js'
 import { separarUvr5, concatenarMp3, cortarAudioMp3, subtrairVocaisDoOriginal, misturarStemsMp3 } from '../lib/uvr5.js'
 import { gerarImagemMultiFonte } from '../lib/imagens-ia.js'
-import { gerarImagemPreferencial, gerarVideoPollinations, pollinationsKey, imagemParaImagemPollinations } from '../lib/imagens-preferencial.js'
 import { detectarGpu, separarDemucsLocal, torchTemCuda } from '../lib/gpu.js'
-import { textoParaVozRobusto } from '../lib/tts-robusto.js'
-
 const torchTemCudaHint = () => {
     try {
         return torchTemCuda()
@@ -54,7 +51,23 @@ const avisoSemChave =
     'Nenhuma chave de IA configurada (RAPIDAPI_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY no .env).'
 
 const SYSTEM_CHAT =
-    'Você é um assistente útil no WhatsApp. Responda em português do Brasil, de forma clara, objetiva e amigável.'
+    'Você é um membro do WhatsApp, chamado Ultron, falando de forma natural, como uma pessoa real (PT-BR). ' +
+    'Tem opinião própria: concorda, discorda, ironiza, recomenda — sem soar robótico nem “como assistente de IA”. ' +
+    'Nunca diga que é Gemini, GPT, Perplexity ou qualquer modelo. ' +
+    'Quando receber [PESQUISA NA WEB], use esses fatos como base, limpe citações/markdown e reescreva em tom de conversa; ' +
+    'mantenha o que for atual e acrescente opinião quando couber. ' +
+    'Respostas diretas; curtas no bate-papo, mais longas se a pergunta pedir detalhe. ' +
+    'Use o histórico do grupo quando existir.'
+
+function limparBrutoPesquisa(texto) {
+    return String(texto || '')
+        .replace(/\[\d+\]/g, '')
+        .replace(/^\s*Sources?:.*$/gim, '')
+        .replace(/^\s*Citations?:.*$/gim, '')
+        .replace(/^🔎 \*Pesquisa[^*]*\*:\s*.+\n*/m, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+}
 
 const SYSTEM_SIMI =
     'Você é SimSimi, um chatbot divertido, informal e sem filtro. Responda em português do Brasil, de forma curta e engraçada. Pode usar linguagem adulta se o usuário pedir. Não censure.'
@@ -62,7 +75,7 @@ const SYSTEM_SIMI =
 const contextoChat = new Map()
 const contextoSimi = new Map()
 
-const MAX_CTX_CHAT = 20
+const MAX_CTX_CHAT = 28
 const MAX_CTX_SIMI = 10
 
 /** Contexto separado por grupo (@g.us) ou por usuário no PV. */
@@ -179,7 +192,7 @@ const extrairTextoGemini = (data) => {
     return parts.map((p) => p.text || '').join('').trim()
 }
 
-const completarOpenRouter = async (messages) => {
+const completarOpenRouter = async (messages, { temperature = 0.7, timeout = TIMEOUT_PADRAO } = {}) => {
     const key = process.env.OPENROUTER_API_KEY?.trim()
     if (!key) return null
     const model = process.env.OPENROUTER_MODEL?.trim() || 'openrouter/auto'
@@ -188,11 +201,11 @@ const completarOpenRouter = async (messages) => {
         {
             model,
             messages,
-            temperature: 0.7,
+            temperature,
             max_tokens: 8192
         },
         {
-            timeout: TIMEOUT_PADRAO,
+            timeout,
             headers: {
                 Authorization: `Bearer ${key}`,
                 'Content-Type': 'application/json',
@@ -205,10 +218,16 @@ const completarOpenRouter = async (messages) => {
     return texto || null
 }
 
-const completarGemini = async (messages) => {
-    const key = process.env.GEMINI_API_KEY
-    if (!key) return null
+const MODELOS_TEXTO_GEMINI = [
+    'gemini-3.5-flash',
+    'gemini-3.6-flash',
+    'gemini-flash-lite-latest',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-latest',
+    'gemini-3.7-flash'
+]
 
+const montarBodyGemini = (messages, { temperature = 0.7, usarWeb = false, maxOutputTokens = 8192 } = {}) => {
     let system = ''
     const contents = []
     for (const m of messages) {
@@ -221,24 +240,28 @@ const completarGemini = async (messages) => {
             parts: [{ text: m.content }]
         })
     }
-
-    const body = { contents, generationConfig: { temperature: 0.7, maxOutputTokens: 8192 } }
+    const body = { contents, generationConfig: { temperature, maxOutputTokens } }
     if (system) body.systemInstruction = { parts: [{ text: system }] }
+    if (usarWeb) body.tools = [{ google_search: {} }]
+    return body
+}
 
-    const modelos = [
-        'gemini-flash-latest',
-        'gemini-2.0-flash-lite',
-        'gemini-2.0-flash',
-        'gemini-2.0-flash-001'
-    ]
+const completarGemini = async (
+    messages,
+    { temperature = 0.7, timeout = TIMEOUT_PADRAO, usarWeb = false, maxOutputTokens = 8192 } = {}
+) => {
+    const key = process.env.GEMINI_API_KEY?.trim()
+    if (!key) return null
+
+    const body = montarBodyGemini(messages, { temperature, usarWeb, maxOutputTokens })
     let ultimoErro = null
-    for (const model of modelos) {
+    for (const model of MODELOS_TEXTO_GEMINI) {
         try {
             const { data } = await axios.post(
                 `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
                 body,
                 {
-                    timeout: TIMEOUT_PADRAO,
+                    timeout,
                     params: { key },
                     headers: { 'Content-Type': 'application/json' }
                 }
@@ -247,23 +270,98 @@ const completarGemini = async (messages) => {
             if (texto) return texto
         } catch (err) {
             ultimoErro = err
+            const status = err?.response?.status
+            if (status === 400 || status === 401 || status === 403) {
+                // google_search pode falhar em alguns modelos — tenta sem web
+                if (usarWeb) {
+                    try {
+                        return await completarGemini(messages, {
+                            temperature,
+                            timeout,
+                            usarWeb: false,
+                            maxOutputTokens
+                        })
+                    } catch (e2) {
+                        throw e2
+                    }
+                }
+                throw err
+            }
         }
     }
     if (ultimoErro) throw ultimoErro
     return null
 }
 
-const completarRapidChat = async (messages) => {
-    if (!rapidKey()) return null
-    return await chatGpt42(messages)
+/** Busca rápida (DuckDuckGo Instant Answer). */
+const pesquisarDuckDuckGo = async (query) => {
+    const q = String(query || '').trim().slice(0, 180)
+    if (!q) return ''
+    try {
+        const { data } = await axios.get('https://api.duckduckgo.com/', {
+            params: { q, format: 'json', no_html: 1, skip_disambig: 1 },
+            timeout: 12000,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        })
+        const partes = []
+        if (data?.AbstractText) partes.push(data.AbstractText)
+        if (data?.Answer) partes.push(String(data.Answer))
+        for (const t of data?.RelatedTopics || []) {
+            if (t?.Text) partes.push(t.Text)
+            if (partes.length >= 6) break
+        }
+        return partes.join('\n').slice(0, 2200)
+    } catch {
+        return ''
+    }
 }
 
-const completarMensagens = async (messages) => {
-    // Gemini primeiro (mais rápido/estável); RapidAPI ChatGPT-42 e OpenRouter como backup.
+/** Perplexity (RapidAPI) — pesquisa com dados atualizados. */
+const pesquisarPerplexityBruto = async (query) => {
+    try {
+        if (!rapidKey()) return ''
+        const out = await perplexityPesquisa(query)
+        return String(out || '').trim().slice(0, 4500)
+    } catch (err) {
+        console.log(`API chat Perplexity - ${msgErro(err)}`)
+        return ''
+    }
+}
+
+/**
+ * Agrega fontes em tempo real para o !chat:
+ * Perplexity (atual) → DuckDuckGo → (Gemini Google Search no generate).
+ */
+const pesquisarWebSimples = async (query) => {
+    const q = String(query || '').trim()
+    if (!q) return ''
+    const partes = []
+    const px = await pesquisarPerplexityBruto(q)
+    if (px) partes.push(`[Perplexity]\n${px}`)
+    const ddg = await pesquisarDuckDuckGo(q)
+    if (ddg) partes.push(`[DuckDuckGo]\n${ddg}`)
+    return partes.join('\n\n').slice(0, 6500)
+}
+
+const completarRapidChat = async (messages) => {
+    if (!rapidKey()) return null
+    try {
+        return await chatGpt42(messages)
+    } catch (err) {
+        const status = err?.response?.status || err?.status
+        const msg = String(err?.erro || err?.message || '')
+        // Conta Rapid sem assinatura do ChatGPT-42 — segue para o próximo provedor
+        if (status === 403 || /not subscribed|não inscrito|assine a api/i.test(msg)) return null
+        throw err
+    }
+}
+
+const completarMensagens = async (messages, opcoes = {}) => {
+    // Gemini primeiro (gratuito); RapidAPI e OpenRouter como backup.
     const provedores = [
-        () => completarGemini(messages),
+        () => completarGemini(messages, opcoes),
         () => completarRapidChat(messages),
-        () => completarOpenRouter(messages)
+        () => completarOpenRouter(messages, { ...opcoes, temperature: opcoes.temperature ?? 0.8 })
     ]
 
     let ultimoErro = null
@@ -273,21 +371,26 @@ const completarMensagens = async (messages) => {
             if (texto) return texto
         } catch (err) {
             ultimoErro = err
+            console.log(`API IA provedor falhou - ${msgErro(err)}`)
         }
     }
     if (!temChaveIa()) {
         throw new Error(avisoSemChave)
     }
+    const status = ultimoErro?.response?.status
+    if (status === 402) {
+        throw new Error('OpenRouter sem crédito (402). Gemini/Rapid também falharam — confira as chaves e o saldo.')
+    }
     throw ultimoErro || new Error('Nenhum provedor de IA respondeu')
 }
 
 /** Geração de texto única (sem histórico longo). */
-export const gerarTextoIA = async (prompt, system) => {
+export const gerarTextoIA = async (prompt, system, opcoes = {}) => {
     try {
         const messages = []
         if (system) messages.push({ role: 'system', content: system })
         messages.push({ role: 'user', content: String(prompt) })
-        const resultado = await completarMensagens(messages)
+        const resultado = await completarMensagens(messages, opcoes)
         if (!resultado) throw new Error('resposta vazia')
         return { resultado }
     } catch (err) {
@@ -300,16 +403,60 @@ export const gerarTextoIA = async (prompt, system) => {
     }
 }
 
-/** Chat com contexto separado por chat/grupo (últimas 20 mensagens). */
-export const obterRespostaIA = async (texto, id_usuario, id_chat = null) => {
+/**
+ * Chat natural com memória.
+ * Antes responde, pesquisa na web com a mesma lógica do !pesquisa (Perplexity)
+ * e trata o resultado no tom do chat.
+ * opcoes: { historicoGrupo, nomeGrupo, nomeUsuario, usarPesquisa }
+ */
+export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes = {}) => {
     const key = chaveContextoChat(id_chat || id_usuario, id_usuario)
     const hist = obterHistorico(contextoChat, key, MAX_CTX_CHAT)
-    adicionarAoHistorico(contextoChat, key, 'user', texto, MAX_CTX_CHAT)
+    const pergunta = String(texto || '').trim()
+    adicionarAoHistorico(contextoChat, key, 'user', pergunta, MAX_CTX_CHAT)
 
     try {
-        const messages = montarMensagens(hist, SYSTEM_CHAT)
-        const resultado = await completarMensagens(messages)
+        let pesquisaBruta = ''
+        if (opcoes.usarPesquisa !== false) {
+            try {
+                // Mesma fonte do !pesquisa
+                pesquisaBruta = limparBrutoPesquisa(await perplexityPesquisa(pergunta))
+            } catch (err) {
+                console.log(`API chat pesquisa prévia - ${msgErro(err)}`)
+                try {
+                    const web = await pesquisarWebSimples(pergunta)
+                    pesquisaBruta = limparBrutoPesquisa(String(web || '').replace(/^\[Perplexity\]\s*/m, ''))
+                } catch { /* segue sem web */ }
+            }
+        }
+
+        let system = SYSTEM_CHAT
+        if (opcoes.nomeUsuario) system += ` Quem fala com você agora se chama ${opcoes.nomeUsuario}.`
+        if (opcoes.historicoGrupo) {
+            system +=
+                `\n\n[HISTÓRICO RECENTE DO GRUPO${opcoes.nomeGrupo ? ` "${opcoes.nomeGrupo}"` : ''}]\n` +
+                String(opcoes.historicoGrupo).slice(0, 3000)
+        }
+        if (pesquisaBruta) {
+            system +=
+                `\n\n[PESQUISA NA WEB — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]\n` +
+                pesquisaBruta.slice(0, 4500) +
+                '\n\nReescreva isso em conversa natural (não copie cru; sem “Sources”).'
+        }
+
+        const messages = montarMensagens(hist, system)
+        let resultado = await completarMensagens(messages, {
+            temperature: 0.82,
+            timeout: TIMEOUT_PADRAO,
+            usarWeb: false,
+            maxOutputTokens: 2048
+        })
+
+        if (!resultado && pesquisaBruta) {
+            resultado = pesquisaBruta.slice(0, 2500)
+        }
         if (!resultado) throw new Error('resposta vazia')
+
         adicionarAoHistorico(contextoChat, key, 'assistant', resultado, MAX_CTX_CHAT)
         return { resultado }
     } catch (err) {
@@ -318,7 +465,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null) => {
         throw {
             erro: !temChaveIa()
                 ? avisoSemChave
-                : 'Houve um erro no servidor de IA. Tente novamente ou verifique as chaves no .env.'
+                : 'Houve um erro no servidor de IA. Tente novamente ou verifique RAPIDAPI_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY no .env.'
         }
     }
 }
@@ -406,20 +553,79 @@ export const obterRespostaSimi = async (texto, id_usuario = 'simi') => {
     }
 }
 
-/** Imagem via Flux HF → Pollinations (retry) → Flux Rapid → Gemini → DeepAI. */
+/** Gera imagem via Gemini (modelos de imagem gratuitos). */
+async function gerarImagemGemini(prompt) {
+    const key = process.env.GEMINI_API_KEY?.trim()
+    if (!key) return null
+    const modelos = [
+        'gemini-2.5-flash-image',
+        'gemini-3.1-flash-image',
+        'gemini-3-pro-image-preview',
+        'gemini-2.5-flash-image-preview'
+    ]
+    const body = {
+        contents: [{ role: 'user', parts: [{ text: String(prompt).slice(0, 1200) }] }],
+        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
+    }
+    let ultimoErro = null
+    for (const model of modelos) {
+        try {
+            const { data } = await axios.post(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+                body,
+                {
+                    timeout: 90000,
+                    params: { key },
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            )
+            const parts = data?.candidates?.[0]?.content?.parts || []
+            for (const p of parts) {
+                const inline = p.inlineData || p.inline_data
+                if (inline?.data) {
+                    return Buffer.from(inline.data, 'base64')
+                }
+            }
+        } catch (err) {
+            ultimoErro = err
+            const status = err?.response?.status
+            if (status === 401 || status === 403) throw err
+        }
+    }
+    if (ultimoErro) throw ultimoErro
+    return null
+}
+
+/** Melhora o prompt para manter fidelidade à cena pedida. */
+async function enriquecerPromptImagem(prompt) {
+    try {
+        const { resultado } = await gerarTextoIA(
+            `Reescreva este pedido de imagem em UM prompt técnico em inglês, fiel ao que a pessoa pediu, ` +
+                `com sujeito, ação, ambiente, estilo e iluminação. Sem aspas, sem explicação.\nPedido: ${prompt}`,
+            'Você só devolve o prompt final, curto e preciso.',
+            { temperature: 0.4, timeout: 25000 }
+        )
+        return String(resultado || prompt).replace(/^["']|["']$/g, '').trim().slice(0, 900) || prompt
+    } catch {
+        return prompt
+    }
+}
+
+/** Imagem: Gemini → Flux HF → Flux Rapid → DeepAI (sem Pollinations). */
 export const obterImagemIA = async (texto) => {
-    const prompt = String(texto || '').trim()
-    if (!prompt) throw { erro: 'Informe o prompt da imagem.' }
+    const promptUser = String(texto || '').trim()
+    if (!promptUser) throw { erro: 'Informe o prompt da imagem.' }
+    const prompt = await enriquecerPromptImagem(promptUser)
 
     try {
-        const buf = await gerarImagemPreferencial(prompt, { model: 'flux', width: 1024, height: 1024 })
+        const buf = await gerarImagemGemini(prompt)
         if (buf?.length > 500) return { resultado: buf }
     } catch (err) {
-        console.log(`API obterImagemIA preferencial - ${msgErro(err)}`)
+        console.log(`API obterImagemIA Gemini - ${msgErro(err)}`)
     }
 
     try {
-        const buf = await gerarImagemMultiFonte(prompt)
+        const buf = await gerarImagemMultiFonte(prompt, { width: 1024, height: 1024 })
         if (buf?.length > 500) return { resultado: buf }
     } catch (err) {
         console.log(`API obterImagemIA multi - ${msgErro(err)}`)
@@ -444,9 +650,7 @@ export const obterImagemIA = async (texto) => {
     }
 
     throw {
-        erro: pollinationsKey()
-            ? 'Não foi possível gerar a imagem. Verifique saldo Pollinations ou tente outro prompt.'
-            : 'Configure POLLINATIONS_API_KEY no .env (ou tente novamente).'
+        erro: 'Não foi possível gerar a imagem agora. Tente outro prompt ou verifique GEMINI_API_KEY / RAPIDAPI_KEY no .env.'
     }
 }
 
@@ -921,15 +1125,43 @@ async function imagemParaVideoPan(bufferImagem) {
     return imagensParaVideoSlideshow([bufferImagem], 8)
 }
 
-/** Vídeo por IA — slideshow curto (2 frames) com delay p/ evitar 429. */
+/** Vídeo coerente: storyboard → 3 frames alinhados → slideshow. */
 export const obterVideoIA = async (prompt) => {
     const p = String(prompt || '').trim()
     if (!p) throw { erro: 'Informe o prompt do vídeo.' }
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+    let cenas = []
+    try {
+        const { resultado } = await gerarTextoIA(
+            `Crie um storyboard de EXATAMENTE 3 cenas para um vídeo curto sobre: "${p}".\n` +
+                `Devolva só 3 linhas numeradas. Cada linha = prompt de imagem em inglês, ` +
+                `mesmo sujeito/estilo, ângulos diferentes em sequência narrativa (abertura → meio → fechamento).`,
+            'Só devolva as 3 linhas. Sem markdown.',
+            { temperature: 0.45, timeout: 30000 }
+        )
+        cenas = String(resultado || '')
+            .split('\n')
+            .map((l) => l.replace(/^\d+[\).\-\:]\s*/, '').trim())
+            .filter(Boolean)
+            .slice(0, 3)
+    } catch {
+        cenas = []
+    }
+    if (cenas.length < 2) {
+        cenas = [
+            `${p}, opening shot, cinematic, consistent character and style`,
+            `${p}, mid action, same subject and style, different angle`,
+            `${p}, closing shot, same subject and style, emotional beat`
+        ]
+    }
+
     const gerarFrame = async (textoFrame, tentativa = 0) => {
         try {
+            // Evita re-enriquecer cada frame (já veio do storyboard)
+            const buf = await gerarImagemGemini(textoFrame)
+            if (buf?.length > 500) return buf
             const { resultado } = await obterImagemIA(textoFrame)
             if (Buffer.isBuffer(resultado) && resultado.length > 500) return resultado
         } catch (err) {
@@ -938,9 +1170,7 @@ export const obterVideoIA = async (prompt) => {
                 await sleep(2500 * (tentativa + 1))
                 return gerarFrame(textoFrame, tentativa + 1)
             }
-            // tenta multi-fonte direto (pula Pollinations se estiver em rate limit)
             try {
-                const { gerarImagemMultiFonte } = await import('../lib/imagens-ia.js')
                 const buf = await gerarImagemMultiFonte(textoFrame, { width: 720, height: 720 })
                 if (buf?.length > 500) return buf
             } catch { /* ignore */ }
@@ -950,22 +1180,18 @@ export const obterVideoIA = async (prompt) => {
     }
 
     try {
-        const angulos = [
-            `${p}, cinematic still, dramatic lighting, 4k`,
-            `${p}, wide shot, atmospheric, film still`
-        ]
         const frames = []
-        for (let i = 0; i < angulos.length; i++) {
-            if (i > 0) await sleep(2000)
+        for (let i = 0; i < cenas.length; i++) {
+            if (i > 0) await sleep(1800)
             try {
-                const f = await gerarFrame(angulos[i])
+                const f = await gerarFrame(cenas[i])
                 if (f) frames.push(f)
             } catch (e) {
                 console.log(`API obterVideoIA frame ${i} - ${msgErro(e)}`)
             }
         }
         if (frames.length >= 2) {
-            return { resultado: await imagensParaVideoSlideshow(frames.slice(0, 2), 3.5) }
+            return { resultado: await imagensParaVideoSlideshow(frames.slice(0, 3), 2.8) }
         }
         if (frames.length === 1) {
             return { resultado: await imagemParaVideoPan(frames[0]) }
@@ -987,27 +1213,13 @@ export const obterVideoIA = async (prompt) => {
     }
 
     throw {
-        erro: 'Não foi possível gerar o vídeo (limite de requisições ou falha nas imagens). Aguarde um pouco e tente novamente.'
+        erro: 'Não foi possível gerar o vídeo agora. Aguarde um pouco e tente novamente.'
     }
 }
 
-/** Image-to-image (I22) via Pollinations kontext. */
-export const imagemParaImagemIA = async (bufferImagem, prompt) => {
-    const p = String(prompt || 'melhorar esta imagem, alta qualidade, detalhes').trim()
-    if (!bufferImagem?.length) throw { erro: 'Envie/responda uma imagem.' }
-    if (!pollinationsKey()) throw { erro: 'Configure POLLINATIONS_API_KEY no .env.' }
-    try {
-        const buf = await imagemParaImagemPollinations(bufferImagem, p)
-        if (buf?.length > 500) return { resultado: buf }
-        throw new Error('imagem vazia')
-    } catch (err) {
-        console.log(`API imagemParaImagemIA - ${msgErro(err)}`)
-        throw {
-            erro: /Saldo insuficiente/i.test(String(err?.message || ''))
-                ? 'Saldo insuficiente na Pollinations (Pollen).'
-                : `Falha no image-to-image: ${msgErro(err)}`
-        }
-    }
+/** Image-to-image legado — removido do menu; mantido só por compatibilidade de export. */
+export const imagemParaImagemIA = async () => {
+    throw { erro: 'Este recurso foi desativado.' }
 }
 
 /** Upscale de imagem — RapidAPI + ffmpeg 2x. */
@@ -1220,72 +1432,62 @@ export const isolarInstrumental = async (buffer) => {
     throw { erro: 'Não foi possível isolar o instrumental via UVR. Envie um trecho de até ~1–1,5 min.' }
 }
 
+export { gerarResumoGrupoAudio } from './resumo-grupo.js'
+
 /**
- * Resumo do grupo em áudio (máx. ~3 min) — sarcástico, baseado só no histórico real.
- * TTS: ElevenLabs → Rapid/Google se cota/erro.
+ * Resumo do histórico do grupo separado por temas (texto formatado).
+ * mensagens: [{ nome_usuario, texto, timestamp, tipo }]
  */
-export const gerarResumoGrupoAudio = async ({ mensagens, nomeGrupo }) => {
-    const lista = (mensagens || []).slice(-300)
-    if (!lista.length) {
+export const gerarResumoPorTema = async ({ mensagens = [], nomeGrupo = 'o grupo' } = {}) => {
+    try {
+        const linhas = (mensagens || [])
+            .filter((m) => m?.texto)
+            .map((m) => {
+                const quem = String(m.nome_usuario || 'Alguém').slice(0, 40)
+                const txt = String(m.texto).replace(/\s+/g, ' ').trim().slice(0, 280)
+                return `${quem}: ${txt}`
+            })
+        if (!linhas.length) throw new Error('sem mensagens')
+
+        // Cabe no prompt: amostra das mais recentes se passar do limite
+        let bloco = linhas.join('\n')
+        if (bloco.length > 28000) {
+            bloco = linhas.slice(-Math.floor(linhas.length * 0.7)).join('\n').slice(-28000)
+        }
+
+        const system =
+            'Você organiza conversas de grupo de WhatsApp em um RESUMO POR TEMAS, em português do Brasil. ' +
+            'Formato obrigatório (WhatsApp markdown):\n' +
+            `*📖 RESUMO POR TEMAS — ${String(nomeGrupo).slice(0, 60)}*\n` +
+            '_baseado nas últimas mensagens (inclui áudios transcritos)_\n\n' +
+            'Para cada tema use:\n' +
+            '*🔹 Nome do tema*\n' +
+            'texto corrido citando participantes pelo nome (ex: João, Maria). ' +
+            'Separe temas com linha em branco. Temas típicos: futebol, cinema, trabalho, fofoca, ' +
+            'conversas aleatórias, planos, brincadeiras, etc — invente só se o conteúdo pedir. ' +
+            'Seja rico, legível e fiel ao que foi dito. Não invente fatos que não estejam no histórico. ' +
+            'Não diga que é IA.'
+
+        const { resultado } = await gerarTextoIA(
+            `Histórico do grupo (${linhas.length} msgs):\n\n${bloco}\n\nMonte o resumo por temas agora.`,
+            system,
+            { temperature: 0.55, timeout: TIMEOUT_LONGO, maxOutputTokens: 4096 }
+        )
+        if (!resultado) throw new Error('vazio')
+        return { resultado: String(resultado).trim().slice(0, 12000) }
+    } catch (err) {
+        console.log(`API gerarResumoPorTema - ${msgErro(err)}`)
         throw {
-            erro:
-                'Ainda não há mensagens salvas deste grupo. O bot precisa estar online enquanto o pessoal conversa (ele guarda as mensagens automaticamente, inclusive comandos).'
+            erro: !temChaveIa()
+                ? avisoSemChave
+                : 'Não consegui montar o resumo por temas agora. Tente de novo.'
         }
     }
-
-    const linhas = lista
-        .map((m, i) => {
-            const nome = String(m.nome_usuario || 'Alguém').trim() || 'Alguém'
-            const texto = String(m.texto || '').replace(/\s+/g, ' ').trim()
-            if (!texto) return null
-            return `${i + 1}. ${nome}: ${texto}`
-        })
-        .filter(Boolean)
-        .join('\n')
-        .slice(0, 24000)
-
-    if (!linhas) {
-        throw { erro: 'As mensagens salvas não têm texto para resumir.' }
-    }
-
-    const system =
-        'Você é narrador de podcast sarcástico e engraçado de grupo de WhatsApp. ' +
-        'Fale em português do Brasil. Use SEMPRE os nomes reais/apelidos exatamente como aparecem nas mensagens. ' +
-        'REGRAS OBRIGATÓRIAS: ' +
-        '1) NÃO invente nada — só o que está nas mensagens. ' +
-        '2) Sem enrolação: diga o que foi feito/dito, por quem, para quem. ' +
-        '3) Tom sarcástico e afiado, mas fiel aos fatos. ' +
-        '4) Roteiro FALADO contínuo (sem marcadores de palco), 300 a 450 palavras (~2–3 min). ' +
-        '5) Se a conversa for rasa, ironize isso com base no que realmente foi dito — ainda sem inventar eventos.'
-
-    const userPrompt =
-        `Grupo: ${nomeGrupo || 'WhatsApp'}\n` +
-        `Total de mensagens analisadas: ${lista.length}\n\n` +
-        `TRANSCRIÇÃO REAL (não invente fora disso):\n${linhas}\n\n` +
-        `Escreva agora o resumo falado sarcástico, fiel à transcrição (300–450 palavras).`
-
-    const { resultado: roteiro } = await gerarTextoIA(userPrompt, system)
-    if (!roteiro || roteiro.length < 120) {
-        throw { erro: 'Não foi possível gerar o roteiro do resumo.' }
-    }
-
-    let texto = roteiro.trim()
-    const palavras = texto.split(/\s+/)
-    if (palavras.length > 480) texto = palavras.slice(0, 480).join(' ')
-
-    const { resultado: audio, fonte: ttsFonte, mimetype, ptt } = await textoParaVozRobusto(texto, {
-        idioma: 'pt',
-        maxPalavras: 480
-    })
-    return { resultado: audio, roteiro: texto, totalMsgs: lista.length, ttsFonte, mimetype, ptt }
 }
+export { gerarAudioNarrado, OPCOES_TTS_ULTRON } from './tts-narrado.js'
 
 /** Gera texto engraçado sobre membros do grupo. */
 export const gerarTextoGrupoIA = async (prompt, system) => {
     return gerarTextoIA(prompt, system)
 }
 
-/** Texto longo → áudio (jornal / cancelado / etc). */
-export const gerarAudioNarrado = async (texto, { maxPalavras = 750 } = {}) => {
-    return textoParaVozRobusto(texto, { idioma: 'pt', maxPalavras })
-}

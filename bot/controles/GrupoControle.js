@@ -1,7 +1,7 @@
 import { Grupo } from '../modelos/Grupo.js'
 import { comandosInfo, verificarComandoExiste } from '../comandos/comandos.js'
 import * as socket from '../baileys/socket.js'
-import { consoleErro, criarTexto } from '../lib/util.js'
+import { consoleErro, criarTexto, listaContemJid, aliasesParticipanteMeta } from '../lib/util.js'
 import moment from "moment-timezone"
 import { tiposMensagem } from '../baileys/mensagem.js'
 import { UsuarioControle } from './UsuarioControle.js'
@@ -53,6 +53,7 @@ export class GrupoControle {
         dadosGrupo.bemvindo = { status: false, msg: '' }
         //dadosGrupo.antifake = { status: false, ddi_liberados: [] }
         dadosGrupo.antilink = false
+        dadosGrupo.shh = []
         dadosGrupo.antiflood = { status: false, max: 10, intervalo: 10, msgs: [] }
         dadosGrupo.autosticker = false
         dadosGrupo.autosimi = false
@@ -344,6 +345,127 @@ export class GrupoControle {
         await this.grupo.alterarAntiLink(id_grupo, status)
     }
 
+    /** Lista de silenciados ainda válidos (remove expirados). */
+    async obterShhAtivos(id_grupo) {
+        const agora = Date.now()
+        const lista = await this.grupo.obterShhLista(id_grupo)
+        const ativos = (lista || []).filter((e) => {
+            if (!e) return false
+            const temId = e.id || (Array.isArray(e.ids) && e.ids.length)
+            if (!temId) return false
+            return e.ate == null || Number(e.ate) > agora
+        })
+        if (ativos.length !== (lista || []).length) {
+            await this.grupo.definirShhLista(id_grupo, ativos)
+        }
+        return ativos
+    }
+
+    /** Resolve LID+PN do alvo via metadados ao vivo do grupo. */
+    async resolverAliasesShh(c, id_grupo, ...jids) {
+        const cands = jids.flat().filter(Boolean)
+        if (!cands.length) return []
+        try {
+            const meta = await c.groupMetadata(id_grupo)
+            return aliasesParticipanteMeta(meta?.participants || [], ...cands)
+        } catch {
+            return [...new Set(cands)]
+        }
+    }
+
+    async silenciarMembro(id_grupo, id_usuario, minutos = null, aliases = null) {
+        const ativos = await this.obterShhAtivos(id_grupo)
+        const idsAlvo = Array.isArray(aliases) && aliases.length ? aliases : [id_usuario]
+        const limpos = ativos.filter((e) => {
+            const ids = e.ids || [e.id]
+            return !listaContemJid(ids, ...idsAlvo)
+        })
+        const ate =
+            minutos == null || minutos <= 0
+                ? null
+                : Date.now() + Math.floor(Number(minutos)) * 60 * 1000
+        limpos.push({ id: idsAlvo[0], ids: [...new Set(idsAlvo.filter(Boolean))], ate })
+        await this.grupo.definirShhLista(id_grupo, limpos)
+        return { ate, ids: idsAlvo }
+    }
+
+    async dessilenciarMembro(id_grupo, id_usuario, aliases = null) {
+        const ativos = await this.obterShhAtivos(id_grupo)
+        const idsAlvo = Array.isArray(aliases) && aliases.length ? aliases : [id_usuario]
+        const antes = ativos.length
+        const limpos = ativos.filter((e) => {
+            const ids = e.ids || [e.id]
+            return !listaContemJid(ids, ...idsAlvo)
+        })
+        await this.grupo.definirShhLista(id_grupo, limpos)
+        return antes !== limpos.length
+    }
+
+    async filtroShh(c, mensagemBaileys, botInfo) {
+        try {
+            const { remetente, mensagem_grupo, mensagem, grupo, mensagem_bot } = mensagemBaileys
+            if (!mensagem_grupo || !grupo || mensagem_bot) return true
+            const id_grupo = grupo.id_grupo || mensagemBaileys.id_chat
+            if (!id_grupo) return true
+
+            const ativos = await this.obterShhAtivos(id_grupo)
+            if (!ativos.length) return true
+
+            // Confere admin do bot ao vivo (DB pode estar com LID desatualizado)
+            const botJids = [
+                botInfo?.numero_bot,
+                botInfo?.lid_bot,
+                c.user?.id?.replace(/:[0-9]+/ism, ''),
+                c.user?.lid ? String(c.user.lid).replace(/:[0-9]+/ism, '') : null
+            ].filter(Boolean)
+
+            let participants = []
+            let botEhAdmin = !!grupo.bot_admin
+            let dono = grupo.dono
+            try {
+                const meta = await c.groupMetadata(id_grupo)
+                participants = meta?.participants || []
+                const admins = []
+                for (const p of participants) {
+                    if (!p?.admin) continue
+                    if (p.id) admins.push(p.id)
+                    if (p.phoneNumber && p.phoneNumber !== p.id) admins.push(p.phoneNumber)
+                }
+                botEhAdmin = listaContemJid(admins, ...botJids)
+                if (meta?.owner) dono = meta.owner
+            } catch { /* usa flags do DB */ }
+
+            if (!botEhAdmin) return true
+
+            const key = mensagem?.key || {}
+            const candidatosRemetente = [
+                remetente,
+                key.participant,
+                key.participantPn,
+                key.participantAlt,
+                key.participantLid
+            ].filter(Boolean)
+
+            // Expande aliases do remetente (LID ↔ PN)
+            const aliasesRemetente = aliasesParticipanteMeta(participants, ...candidatosRemetente)
+
+            // Dono do grupo nunca é silenciado
+            if (dono && listaContemJid([dono, ...aliasesParticipanteMeta(participants, dono)], ...aliasesRemetente)) {
+                return true
+            }
+
+            const idsSilenciados = ativos.flatMap((e) => (Array.isArray(e.ids) && e.ids.length ? e.ids : [e.id]))
+            if (!listaContemJid(idsSilenciados, ...aliasesRemetente)) return true
+
+            await socket.deletarMensagem(c, mensagem)
+            return false
+        } catch (err) {
+            err.message = `filtroShh - ${err.message}`
+            consoleErro(err, 'SHH')
+            return true
+        }
+    }
+
     async filtroAntiLink(c, mensagemBaileys, botInfo) {
         try {
             const comandos_info = comandosInfo(botInfo)
@@ -387,6 +509,14 @@ export class GrupoControle {
     async alterarAutoMsg(id_grupo, status = true) {
         await this.grupo.alterarAutoMsg(id_grupo, status)
         if (status) await this.grupo.atualizarUltimaMsgHumana(id_grupo, Date.now())
+    }
+
+    async definirPersonalidadeResumo(id_grupo, texto) {
+        await this.grupo.definirPersonalidadeResumo(id_grupo, texto)
+    }
+
+    async obterPersonalidadeResumo(id_grupo) {
+        return await this.grupo.obterPersonalidadeResumo(id_grupo)
     }
 
     async atualizarUltimaMsgHumana(id_grupo) {

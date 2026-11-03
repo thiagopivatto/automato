@@ -2,8 +2,8 @@
  * Smoke tests das APIs locais (sem WhatsApp).
  * Uso: node scripts/smoke-apis.js
  */
-import dotenv from 'dotenv'
-dotenv.config()
+import { carregarEnv } from '../bot/lib/env.js'
+carregarEnv()
 
 const results = []
 const ok = (name, detail = '') => results.push({ name, pass: true, detail })

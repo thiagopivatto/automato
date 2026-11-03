@@ -1,6 +1,7 @@
 //REQUERINDO MODULOS
-import dotenv from 'dotenv'
-dotenv.config()
+import { fileURLToPath } from 'url'
+import path from 'path'
+import { chdir } from 'process'
 import {makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason} from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
 import * as eventosSocket from './bot/baileys/eventosSocket.js'
@@ -10,6 +11,13 @@ import configSocket from './bot/baileys/configSocket.js'
 import moment from "moment-timezone"
 import NodeCache from 'node-cache'
 import qrcode from 'qrcode-terminal'
+import { carregarEnv } from './bot/lib/env.js'
+
+// UNC/CMD no Windows pode iniciar o processo em C:\Windows; fixa a raiz do projeto
+const raizProjeto = path.dirname(fileURLToPath(import.meta.url))
+chdir(raizProjeto)
+carregarEnv(raizProjeto)
+
 moment.tz.setDefault('America/Sao_Paulo')
 
 

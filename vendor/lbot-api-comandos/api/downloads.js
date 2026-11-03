@@ -12,14 +12,30 @@ import {TwitterDL} from 'twitter-downloader'
 import axios from 'axios'
 
 const COBALT_INSTANCES = [
+    process.env.COBALT_API_URL?.trim(),
+    'https://api.cobalt.tools/',
+    'https://cobalt.api.timelessnesses.me/',
     'https://co.eepy.today/',
+    'https://cobalt-backend.canine.tools/',
     'https://cobalt-api.kwiatekmirek.workers.dev/',
-    'https://api.cobalt.tools/'
-]
+    'https://cobalt-api.kwiatekmiki.com/',
+    'https://api.cobalt.best/',
+    'https://co.wuk.sh/'
+].filter(Boolean)
 
-const COBALT_HEADERS = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json'
+function cobaltHeaders() {
+    const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 UltronBot'
+    }
+    const key = process.env.COBALT_API_KEY?.trim()
+    if (key) {
+        headers.Authorization = key.toLowerCase().startsWith('api-key') || key.toLowerCase().startsWith('bearer')
+            ? key
+            : `Api-Key ${key}`
+    }
+    return headers
 }
 
 const AXIOS_DOWNLOAD_OPTS = {
@@ -56,7 +72,7 @@ async function cobaltSolicitar(url, {downloadMode = 'auto', audioFormat} = {}) {
         const endpoint = base.endsWith('/') ? base : `${base}/`
         try {
             const {data} = await axios.post(endpoint, body, {
-                headers: COBALT_HEADERS,
+                headers: cobaltHeaders(),
                 timeout: 45000,
                 validateStatus: (status) => status < 500
             })
@@ -74,18 +90,44 @@ async function cobaltSolicitar(url, {downloadMode = 'auto', audioFormat} = {}) {
 
 function cobaltExtrairUrls(resposta) {
     const status = resposta?.status
+    const urls = []
     if (['redirect', 'tunnel', 'stream'].includes(status) && resposta.url) {
-        return [{url: resposta.url, tipo: normalizarTipoMidia(resposta.type)}]
+        urls.push({url: resposta.url, tipo: normalizarTipoMidia(resposta.type)})
+    }
+    if (resposta?.tunnel && !urls.length) {
+        urls.push({url: resposta.tunnel, tipo: normalizarTipoMidia(resposta.type)})
     }
     if (status === 'picker' && Array.isArray(resposta.picker)) {
-        return resposta.picker
-            .filter((item) => item?.url)
-            .map((item) => ({
-                url: item.url,
-                tipo: normalizarTipoMidia(item.type)
-            }))
+        for (const item of resposta.picker) {
+            if (item?.url) urls.push({ url: item.url, tipo: normalizarTipoMidia(item.type) })
+        }
     }
-    throw new Error('Resposta Cobalt sem URL utilizável.')
+    if (!urls.length && resposta?.url) {
+        urls.push({ url: resposta.url, tipo: normalizarTipoMidia(resposta.type) })
+    }
+    if (!urls.length) throw new Error('Resposta Cobalt sem URL utilizável.')
+    return urls
+}
+
+/** Segue redirects curtos (vm.tiktok, t.co, fb.watch). */
+async function resolverRedirectUrl(url) {
+    const link = String(url || '').trim()
+    if (!link || !/^https?:\/\//i.test(link)) return link
+    if (!/vm\.tiktok\.com|vt\.tiktok\.com|t\.co\/|fb\.watch|facebook\.com\/share/i.test(link)) {
+        return link
+    }
+    try {
+        const { request } = await axios.get(link, {
+            timeout: 15000,
+            maxRedirects: 5,
+            validateStatus: () => true,
+            headers: { 'User-Agent': 'Mozilla/5.0' }
+        })
+        const finalUrl = request?.res?.responseUrl || request?.responseURL
+        return finalUrl || link
+    } catch {
+        return link
+    }
 }
 
 async function cobaltBaixarBuffer(url, opts) {
@@ -110,7 +152,9 @@ function obterBinYtDlp() {
 function runYtDlp(args, {timeoutMs = 180000} = {}) {
     return new Promise((resolve, reject) => {
         const bin = obterBinYtDlp()
-        const child = spawn(bin, args, {windowsHide: true})
+        // YouTube exige JS runtime (node) para resolver challenges e listar formatos
+        const finalArgs = ['--js-runtimes', 'node', ...args]
+        const child = spawn(bin, finalArgs, {windowsHide: true})
         let stdout = Buffer.alloc(0)
         let stderr = ''
         const timer = setTimeout(() => {
@@ -141,28 +185,82 @@ function runYtDlp(args, {timeoutMs = 180000} = {}) {
 }
 
 let _ytDlpOk = null
+let _ytDlpCheckedAt = 0
+const YTDLP_CACHE_TTL_MS = 60_000
+
 async function ytDlpDisponivel() {
-    if (_ytDlpOk !== null) return _ytDlpOk
+    const agora = Date.now()
+    // Cache positivo permanente; negativo só por 60s (binário pode ser instalado depois)
+    if (_ytDlpOk === true) return true
+    if (_ytDlpOk === false && agora - _ytDlpCheckedAt < YTDLP_CACHE_TTL_MS) return false
     try {
         await runYtDlp(['--version'], {timeoutMs: 15000})
         _ytDlpOk = true
     } catch {
         _ytDlpOk = false
+        _ytDlpCheckedAt = agora
     }
     return _ytDlpOk
 }
 
-const YT_EXTRACTOR_ARGS = 'youtube:player_client=android,web'
+async function buscarVideoIdYtDlp(query) {
+    const { stdout } = await runYtDlp(
+        ['--no-playlist', '--no-warnings', '--print', '%(id)s', `ytsearch1:${String(query).trim()}`],
+        { timeoutMs: 45000 }
+    )
+    const id = stdout.toString('utf8').trim().split(/\r?\n/).find(Boolean)
+    return id && /^[\w-]{6,}$/.test(id) ? id : null
+}
+
+/** Extrai a primeira URL http(s) de um texto (cola suja / com legenda). */
+export function extrairUrlDeTexto(texto) {
+    const bruto = String(texto || '').trim()
+    if (!bruto) return ''
+    const m = bruto.match(/https?:\/\/[^\s<>"']+/i)
+    if (!m) return ''
+    return m[0].replace(/[),.;!?]+$/g, '')
+}
 
 async function obterVideoIdYT(texto) {
-    if (ytdl.validateURL(texto)) return ytdl.getVideoID(texto)
-    const pesquisa = await YouTube.searchOne(texto)
-    if (!pesquisa?.id) return null
-    return pesquisa.id
+    const bruto = String(texto || '').trim()
+    if (!bruto) return null
+    const urlEmbed = extrairUrlDeTexto(bruto)
+    const candidato = urlEmbed || bruto
+
+    if (ytdl.validateURL(candidato)) {
+        try { return ytdl.getVideoID(candidato) } catch { /* */ }
+    }
+    const m = candidato.match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([\w-]{6,})/i)
+    if (m?.[1]) return m[1]
+
+    // Se parece URL de outro site, não busca como query
+    if (/^https?:\/\//i.test(candidato) && !/youtu(\.be|be\.com)/i.test(candidato)) {
+        return null
+    }
+
+    const query = urlEmbed && /youtu(\.be|be\.com)/i.test(urlEmbed) ? urlEmbed : bruto
+
+    if (await ytDlpDisponivel()) {
+        try {
+            const id = await buscarVideoIdYtDlp(query)
+            if (id) return id
+        } catch (err) {
+            console.log(`API obterVideoIdYT yt-dlp search - ${msgErro(err)}`)
+        }
+    }
+
+    try {
+        const pesquisa = await YouTube.searchOne(query)
+        if (pesquisa?.id) return pesquisa.id
+    } catch (err) {
+        console.log(`API obterVideoIdYT youtube-sr - ${msgErro(err)}`)
+    }
+    return null
 }
 
 function urlYoutube(texto, videoId) {
-    if (ytdl.validateURL(texto)) return texto
+    const url = extrairUrlDeTexto(texto) || String(texto || '').trim()
+    if (ytdl.validateURL(url)) return url
     return `https://www.youtube.com/watch?v=${videoId}`
 }
 
@@ -211,7 +309,7 @@ async function obterInfoYtDlp(watchUrl) {
         '--no-playlist',
         '-j',
         '--no-warnings',
-        '--extractor-args', YT_EXTRACTOR_ARGS,
+        ...argsCookiesYtDlp({ permitirBrowser: false }),
         watchUrl
     ], {timeoutMs: 60000})
     const info = JSON.parse(stdout.toString('utf8').trim().split('\n')[0])
@@ -224,22 +322,92 @@ async function obterInfoYtDlp(watchUrl) {
     }
 }
 
-async function baixarComYtDlp(watchUrl, {audioOnly = false} = {}) {
+/**
+ * Cookies:
+ * - arquivo (YTDLP_COOKIES) é seguro
+ * - browser cookies quebram no Windows se o Chrome estiver aberto → só sob demanda (Instagram)
+ */
+function argsCookiesYtDlp({ permitirBrowser = false } = {}) {
+    const args = []
+    const cookiesFile = process.env.YTDLP_COOKIES?.trim() || process.env.INSTAGRAM_COOKIES?.trim()
+    if (cookiesFile && fs.existsSync(cookiesFile)) {
+        args.push('--cookies', cookiesFile)
+        return args
+    }
+    if (permitirBrowser) {
+        const browser = process.env.YTDLP_BROWSER_COOKIES?.trim()
+        if (browser) args.push('--cookies-from-browser', browser)
+    }
+    return args
+}
+
+function ehErroCookies(err) {
+    return /cookie database|Could not copy|Failed to decrypt|browser cookies/i.test(msgErro(err))
+}
+
+const FORMATOS_VIDEO = [
+    'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[ext=mp4]/best[height<=720]/best',
+    'best[height<=720]/best',
+    'best'
+]
+const FORMATOS_AUDIO = [
+    'bestaudio[ext=m4a]/140/bestaudio/best',
+    'bestaudio/best'
+]
+
+async function baixarComYtDlp(watchUrl, { audioOnly = false, permitirBrowser = false } = {}) {
     const ext = audioOnly ? 'mp3' : 'mp4'
-    const saida = obterCaminhoTemporario(ext)
-    const template = saida.replace(new RegExp(`\\.${ext}$`), '')
+    // null = sem extractor-args (melhor com --js-runtimes node)
+    const clientes = [null, 'youtube:player_client=web', 'youtube:player_client=android,web']
+    const formatos = audioOnly ? FORMATOS_AUDIO : FORMATOS_VIDEO
+    let ultimoErro = null
+    // YouTube: NÃO usa cookies do browser (falha comum no Windows). Só arquivo, se existir.
+    const modosCookie = [false]
+    if (permitirBrowser) modosCookie.push(true)
+
+    for (const usarBrowser of modosCookie) {
+        for (const extractorArgs of clientes) {
+            for (const formato of formatos) {
+                const saida = obterCaminhoTemporario(ext)
+                const template = saida.replace(new RegExp(`\\.${ext}$`), '')
+                try {
+                    return await baixarComYtDlpUmaVez(watchUrl, {
+                        audioOnly,
+                        template,
+                        ext,
+                        extractorArgs,
+                        formato,
+                        cookiesArgs: argsCookiesYtDlp({ permitirBrowser: usarBrowser })
+                    })
+                } catch (err) {
+                    ultimoErro = err
+                    console.log(
+                        `yt-dlp falhou (${extractorArgs || 'default'}, fmt=${formato.slice(0, 40)}, browserCookie=${usarBrowser}) - ${msgErro(err)}`
+                    )
+                    if (ehErroCookies(err) && usarBrowser) break
+                }
+            }
+            if (ehErroCookies(ultimoErro) && usarBrowser) break
+        }
+    }
+    throw ultimoErro || new Error('yt-dlp falhou')
+}
+
+async function baixarComYtDlpUmaVez(watchUrl, { audioOnly, template, ext, extractorArgs, formato, cookiesArgs = [] }) {
     const args = [
         '--no-playlist',
         '--no-warnings',
-        '--extractor-args', YT_EXTRACTOR_ARGS,
         '-o', `${template}.%(ext)s`,
-        '--retries', '3'
+        '--retries', '5',
+        '--fragment-retries', '5',
+        '--force-ipv4',
+        ...cookiesArgs
     ]
+    if (extractorArgs) args.push('--extractor-args', extractorArgs)
     if (audioOnly) {
-        // android costuma expor format 18 (mp4 a+v) — extrai áudio depois se preciso
-        args.push('-f', 'bestaudio/18/b', '-x', '--audio-format', 'mp3', '--audio-quality', '0')
+        args.push('-f', formato || FORMATOS_AUDIO[0], '-x', '--audio-format', 'mp3', '--audio-quality', '0')
     } else {
-        args.push('-f', '18/b/bv*+ba', '--merge-output-format', 'mp4')
+        args.push('-f', formato || FORMATOS_VIDEO[0], '--merge-output-format', 'mp4')
     }
     args.push(watchUrl)
 
@@ -348,23 +516,69 @@ async function baixarMidiaInstagramScraper(url) {
 
 export const obterMidiaTwitter = async (url) => {
     try {
+        let link = extrairUrlDeTexto(url) || String(url || '').trim()
+        if (!link) throw { erro: 'Envie um link do Twitter/X.' }
+        link = await resolverRedirectUrl(link)
+
+        if (await ytDlpDisponivel()) {
+            try {
+                const outTpl = obterCaminhoTemporario('mp4').replace(/\.mp4$/i, '.%(ext)s')
+                const tmpBase = outTpl.replace('.%(ext)s', '')
+                await runYtDlp(
+                    [
+                        '-f', 'bestvideo[height<=720]+bestaudio/best[ext=mp4]/best',
+                        '--merge-output-format', 'mp4',
+                        '--no-playlist', '--no-warnings', '-o', outTpl,
+                        ...argsCookiesYtDlp({ permitirBrowser: false }),
+                        link
+                    ],
+                    { timeoutMs: 120000 }
+                )
+                const dir = path.dirname(tmpBase)
+                const baseName = path.basename(tmpBase)
+                const arquivos = (await fs.readdir(dir)).filter((f) => f.startsWith(baseName))
+                const midias = []
+                for (const arq of arquivos) {
+                    const full = path.join(dir, arq)
+                    const buffer = await fs.readFile(full)
+                    try { await fs.unlink(full) } catch {}
+                    if (buffer?.length > 1000) {
+                        midias.push({
+                            tipo: /\.(jpe?g|png|webp)$/i.test(arq) ? 'imagem' : 'video',
+                            buffer,
+                            url: null
+                        })
+                    }
+                }
+                if (midias.length) return { resultado: { texto: '', midias } }
+            } catch (e) {
+                console.log(`API obterMidiaTwitter yt-dlp - ${msgErro(e)}`)
+            }
+        }
+
         try {
-            const resposta = await cobaltSolicitar(url, {downloadMode: 'auto'})
+            const resposta = await cobaltSolicitar(link, {downloadMode: 'auto'})
             const itens = cobaltExtrairUrls(resposta)
             if (itens.length) {
+                const midias = []
+                for (const item of itens) {
+                    try {
+                        const buffer = await baixarBufferDeUrl(item.url)
+                        midias.push({ tipo: item.tipo, url: item.url, buffer })
+                    } catch {
+                        midias.push({ tipo: item.tipo, url: item.url })
+                    }
+                }
                 return {
                     resultado: {
                         texto: resposta.text || resposta.description || '',
-                        midias: itens.map((item) => ({
-                            tipo: item.tipo,
-                            url: item.url
-                        }))
+                        midias
                     }
                 }
             }
         } catch {}
 
-        const resultado = await baixarMidiaTwitterScraper(url)
+        const resultado = await baixarMidiaTwitterScraper(link)
         return {resultado}
     } catch (err) {
         console.log(`API obterMidiaTwitter - ${msgErro(err)}`)
@@ -375,7 +589,8 @@ export const obterMidiaTwitter = async (url) => {
 
 export const obterMidiaTiktok = async (url) => {
     try {
-        const link = String(url || '').trim()
+        let link = extrairUrlDeTexto(url) || String(url || '').trim()
+        link = await resolverRedirectUrl(link)
         if (!/tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com/i.test(link)) {
             throw { erro: 'Envie um link válido do TikTok.' }
         }
@@ -461,25 +676,46 @@ export const obterMidiaTiktok = async (url) => {
 
 export const obterMidiaFacebook = async (url) => {
     try {
-        for (const mode of ['auto', 'video']) {
+        let link = extrairUrlDeTexto(url) || String(url || '').trim()
+        if (!link) throw { erro: 'Envie um link do Facebook.' }
+        link = await resolverRedirectUrl(link)
+
+        if (await ytDlpDisponivel()) {
             try {
-                const itens = await cobaltObterUrls(url, {downloadMode: mode})
-                const video = itens.find((item) => item.tipo === 'video') || itens[0]
-                if (video?.url) {
+                const buffer = await baixarComYtDlp(link, { audioOnly: false })
+                if (buffer?.length > 1000) {
                     return {
                         resultado: {
                             title: 'Vídeo do Facebook',
                             duration_ms: 0,
-                            sd: video.url,
-                            hd: itens.length > 1 ? itens[1].url : undefined
+                            sd: null,
+                            buffer
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log(`API obterMidiaFacebook yt-dlp - ${msgErro(e)}`)
+            }
+        }
+
+        for (const mode of ['auto', 'video']) {
+            try {
+                const { buffer, itens } = await cobaltBaixarBuffer(link, { downloadMode: mode })
+                if (buffer?.length > 1000) {
+                    return {
+                        resultado: {
+                            title: 'Vídeo do Facebook',
+                            duration_ms: 0,
+                            sd: itens?.[0]?.url || null,
+                            buffer
                         }
                     }
                 }
             } catch {}
         }
 
-        const resultado = await baixarMidiaFacebookScraper(url)
-        return {resultado}
+        const resultado = await baixarMidiaFacebookScraper(link)
+        return { resultado }
     } catch (err) {
         console.log(`API obterMidiaFacebook - ${msgErro(err)}`)
         if (err?.erro) throw err
@@ -553,14 +789,22 @@ export const obterYTMP4 = async (texto) => {
             }
         }
 
+        let ultimoCobalt = null
         for (const mode of ['auto', 'video']) {
             try {
                 const {buffer} = await cobaltBaixarBuffer(watchUrl, {downloadMode: mode})
                 if (buffer?.length) return {resultado: buffer}
-            } catch {}
+            } catch (e) {
+                ultimoCobalt = e
+            }
         }
 
-        throw {erro: mensagemErroYoutube('yt-dlp') || 'Erro no servidor ao obter o vídeo do YouTube. Instale o yt-dlp.'}
+        throw {
+            erro:
+                mensagemErroYoutube(ultimoCobalt) ||
+                msgErro(ultimoCobalt) ||
+                'Erro ao obter o vídeo do YouTube. Confira o link e se o yt-dlp está instalado.'
+        }
     } catch (err) {
         console.log(`API obterYTMP4 - ${msgErro(err)}`)
         if (err?.erro) throw err

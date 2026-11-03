@@ -1,17 +1,19 @@
 //REQUERINDO MODULOS
-import {criarTexto, erroComandoMsg, consoleErro} from '../lib/util.js'
+import {criarTexto, erroComandoMsg, consoleErro, participantesSemBot, listaContemJid, mencaoNumero} from '../lib/util.js'
 import {GrupoControle} from '../controles/GrupoControle.js'
 import * as socket from '../baileys/socket.js'
 import {tiposMensagem} from '../baileys/mensagem.js'
 import {downloadMediaMessage} from '@whiskeysockets/baileys'
 import {comandosInfo} from '../comandos/comandos.js'
+import { handlersMencoes } from './grupo/mencoes.js'
 
 
 export const grupo = async(c, mensagemBaileys, botInfo) => {
     //Atribuição de valores
     const grupos = new GrupoControle()
     const comandos_info = comandosInfo(botInfo)
-    const {prefixo, nome_bot, numero_bot} = botInfo
+    const {prefixo, nome_bot, numero_bot, lid_bot} = botInfo
+    const botsJid = [numero_bot, lid_bot].filter(Boolean)
     // Corrige bot_admin/usuario_admin com metadados ao vivo (LID vs PN)
     await socket.atualizarFlagsAdminGrupo(c, mensagemBaileys, botInfo)
     const { 
@@ -315,6 +317,82 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     throw err
                 }
                 break
+
+            case 'shh':
+                try{
+                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+
+                    let alvo = null
+                    if (mencionados?.length) alvo = mencionados[0]
+                    else if (mensagem_citada && citacao?.remetente) alvo = citacao.remetente
+                    if (!alvo) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+
+                    const aliases = await grupos.resolverAliasesShh(
+                        c,
+                        id_grupo,
+                        alvo,
+                        ...(mencionados || []),
+                        citacao?.remetente
+                    )
+
+                    if (listaContemJid(botsJid, ...aliases)) {
+                        return await socket.responderTexto(c, id_chat, comandos_info.grupo.shh.msgs.erro_bot, mensagem)
+                    }
+                    if (dono && listaContemJid([dono], ...aliases)) {
+                        return await socket.responderTexto(c, id_chat, comandos_info.grupo.shh.msgs.erro_dono, mensagem)
+                    }
+
+                    const tokens = (args || []).filter((a) => {
+                        const t = String(a || '').trim()
+                        if (!t) return false
+                        if (t.startsWith('@')) return false
+                        if (listaContemJid(aliases, t) || listaContemJid(aliases, `${t.replace(/\D/g, '')}@s.whatsapp.net`)) return false
+                        return true
+                    })
+                    const acao = String(tokens[0] || '').toLowerCase()
+
+                    if (acao === 'off' || acao === 'desligar' || acao === 'cancelar') {
+                        const removeu = await grupos.dessilenciarMembro(id_grupo, alvo, aliases)
+                        const msg = removeu
+                            ? criarTexto(comandos_info.grupo.shh.msgs.off, mencaoNumero(alvo))
+                            : criarTexto(comandos_info.grupo.shh.msgs.nao_silenciado, mencaoNumero(alvo))
+                        return await socket.enviarTextoComMencoes(c, id_chat, msg, [alvo])
+                    }
+
+                    let minutos = null
+                    if (acao) {
+                        if (!/^\d+$/.test(acao)) {
+                            return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                        }
+                        const n = parseInt(acao, 10)
+                        if (!Number.isFinite(n) || n < 1) {
+                            return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                        }
+                        minutos = n
+                    }
+
+                    const { ate } = await grupos.silenciarMembro(id_grupo, alvo, minutos, aliases)
+                    const tag = mencaoNumero(alvo)
+                    if (ate == null) {
+                        await socket.enviarTextoComMencoes(
+                            c,
+                            id_chat,
+                            criarTexto(comandos_info.grupo.shh.msgs.ligado_eterno, tag),
+                            [alvo]
+                        )
+                    } else {
+                        await socket.enviarTextoComMencoes(
+                            c,
+                            id_chat,
+                            criarTexto(comandos_info.grupo.shh.msgs.ligado_tempo, tag, String(minutos)),
+                            [alvo]
+                        )
+                    }
+                } catch(err){
+                    throw err
+                }
+                break
                     
             case 'contador':
                 try{
@@ -357,7 +435,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                 break
 
                         
-            case "!alterarcont":
+            case 'alterarcont':
                 if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
                 if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
                 if(args.length == 1)  return client.reply(from, erroComandoMsg(command), id)
@@ -557,54 +635,23 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                 break
 
             case 'mt':
-                try{
-                    //if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    let usuarioTexto = texto_recebido
-                    let respostaMarcar = usuarioTexto.length > 0 ? criarTexto(comandos_info.grupo.mt.msgs.resposta_motivo, participantes.length, usuarioTexto) : criarTexto(comandos_info.grupo.mt.msgs.resposta, participantes.length)
-                    await socket.enviarTextoComMencoes(c, id_chat, respostaMarcar, participantes)
-                } catch(err){
-                    throw err
-                }
-                break
-                
             case 'mm':
-                try{
-                    //if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    let membrosMarcados = []
-                    let usuarioTexto = texto_recebido
-                    for(let membro of participantes){
-                        if(!admins.includes(membro)) {
-                            membrosMarcados.push(membro)
-                        }
-                    }
-                    if(membrosMarcados.length == 0) return await socket.responderTexto(c, id_chat, comandos_info.grupo.mm.msgs.sem_membros, mensagem)
-                    let respostaMarcar = usuarioTexto.length > 0 ? criarTexto(comandos_info.grupo.mm.msgs.resposta_motivo, membrosMarcados.length, usuarioTexto) : criarTexto(comandos_info.grupo.mm.msgs.resposta, membrosMarcados.length)
-                    await socket.enviarTextoComMencoes(c, id_chat, respostaMarcar, membrosMarcados)
-                } catch(err){
-                    throw err
-                }
-                break
-
             case 'rt':
             case 'mta':
                 try {
-                    // Marca todos anonimamente (igual ao mta). rt também aceita mensagem citada como texto.
-                    let respostaMarcar = '*ATENÇÃO!*'
-                    if (comandoSemPrefixo === 'rt' && mensagem_citada) {
-                        respostaMarcar = citacao?.corpo || citacao?.legenda || texto_recebido.trim() || '*ATENÇÃO!*'
-                    } else if (texto_recebido.trim().length > 0) {
-                        respostaMarcar = texto_recebido.trim()
-                    }
-                    // Prefere @s.whatsapp.net quando houver duplicata LID/PN
-                    const porNumero = new Map()
-                    for (const jid of (participantes || [])) {
-                        const num = String(jid).split('@')[0]
-                        const atual = porNumero.get(num)
-                        if (!atual || String(jid).endsWith('@s.whatsapp.net')) porNumero.set(num, jid)
-                    }
-                    const mencoes = [...porNumero.values()]
-                    // Anônimo: mentions no payload, sem @números no texto visível
-                    await socket.enviarTextoComMencoes(c, id_chat, respostaMarcar, mencoes)
+                    await handlersMencoes[comandoSemPrefixo]({
+                        c,
+                        id_chat,
+                        participantes,
+                        numero_bot: botsJid,
+                        admins,
+                        texto_recebido,
+                        comandos_info,
+                        mensagem,
+                        comandoSemPrefixo,
+                        mensagem_citada,
+                        citacao
+                    })
                 } catch (err) {
                     throw err
                 }

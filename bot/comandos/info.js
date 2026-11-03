@@ -121,7 +121,8 @@ export const info = async(c, mensagemBaileys, botInfo) => {
                 }
                 break
             
-            case `menu`:
+            case 'menu':
+            case 'comandos':
                 try{
                     let dadosUsuario = await usuarios.obterDadosUsuario(remetente)
                     let maxComandosDia = botInfo.limite_diario.limite_tipos[dadosUsuario.tipo].comandos || "Sem limite"
@@ -135,37 +136,10 @@ export const info = async(c, mensagemBaileys, botInfo) => {
                     } else {
                         dadosResposta = criarTexto(comandos_info.info.menu.msgs.resposta_comum, nomeUsuario, tipoUsuario, totalComandos)
                     }
-                    dadosResposta += `═════════════════\n`
 
-                    if(!args.length){
-                        let menuResposta = menu.menuPrincipal(botInfo)
-                        await socket.enviarTexto(c, id_chat, dadosResposta+menuResposta)
-                    } else {
-                        let usuarioOpcao = texto_recebido
-                        let menuResposta = menu.menuPrincipal(botInfo)
-                        switch(usuarioOpcao){
-                            case "0":
-                                menuResposta = menu.menuInfoSuporte(botInfo)
-                                break
-                            case "1":
-                                menuResposta = menu.menuFigurinhas(botInfo)
-                                break
-                            case "2":
-                                menuResposta = menu.menuUtilidades(botInfo)
-                                break
-                            case "3":
-                                menuResposta = menu.menuDownload(botInfo)
-                                break
-                            case "4":
-                                if(mensagem_grupo) menuResposta = menu.menuGrupo(usuario_admin, botInfo)
-                                else return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.grupo, mensagem)
-                                break
-                            case "5":
-                                menuResposta = menu.menuDiversao(mensagem_grupo, botInfo)
-                                break
-                        }
-                        await socket.enviarTexto(c, id_chat, dadosResposta+menuResposta)
-                    }
+                    const catalogo = menu.menuCompleto(botInfo)
+                    // Uma única mensagem (WhatsApp aguenta o catálogo completo)
+                    await socket.enviarTexto(c, id_chat, `${dadosResposta.trim()}\n\n${catalogo}`)
                 } catch(err){
                     throw err
                 }

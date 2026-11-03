@@ -17,7 +17,7 @@ Bot online (`npm start`). Prefixo: `!`
 | 3 | `!curiosidade` | fato do banco local |
 | 4 | `!vod 1` | verdade/desafio nível 1 |
 | 5 | `!voz oi tudo bem` | nota de voz (opus) |
-| 6 | `!resumodogrupo` | só áudio (grupo com histórico) |
+| 6 | `!resumodogrupo` | nota de voz 3–5 min; roast + memória; repetir só msgs novas |
 | 7 | `!automsg` | toggle (admin) |
 | 8 | `!fofoca` | texto com menções |
 | 9 | `!play` música curta | áudio |
@@ -26,9 +26,12 @@ Bot online (`npm start`). Prefixo: `!`
 ## Automatizado
 
 ```bash
-npm test
-npm run docs:comandos
+npm run sync:vendor   # após editar vendor/
+npm test              # smoke + contrato meta↔handler↔menu
+npm run docs          # regenera COMANDOS.md + LISTA_COMANDOS.txt
 npm run gerar:conteudo
 ```
+
+Comandos marcados no smoke (`OBRIGATORIOS` em `scripts/test-smoke.js`) são a suíte mínima; o restante fica no checklist manual acima.
 
 Bancos: [CONTEUDO.md](CONTEUDO.md)

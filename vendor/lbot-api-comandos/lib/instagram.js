@@ -9,15 +9,19 @@ import instagramGetUrl from 'instagram-url-direct'
  * Extrai shortcode de URL do Instagram.
  */
 function extrairShortcode(url) {
-    const m = String(url).match(/\/(p|reel|reels|tv|stories)\/([^/?#]+)/i)
-    return m?.[2] || null
+    const m = String(url).match(/\/(?:p|reel|reels|tv|stories|share\/reel|share\/p)\/([^/?#]+)/i)
+    return m?.[1] || null
 }
 
 function normalizarLinkIg(url) {
     let link = String(url || '').trim()
+    const m = link.match(/https?:\/\/[^\s<>"']*instagram\.com[^\s<>"']*/i)
+    if (m) link = m[0].replace(/[),.;!?]+$/g, '')
     link = link
         .replace(/^http:\/\//i, 'https://')
         .replace(/instagram\.com\/reels\//i, 'instagram.com/reel/')
+        .replace(/instagram\.com\/share\/reel\//i, 'instagram.com/reel/')
+        .replace(/instagram\.com\/share\/p\//i, 'instagram.com/p/')
         .replace(/\/\/(www\.)?instagram\.com/i, '//www.instagram.com')
     // remove query/hash mas mantém path
     try {
@@ -93,34 +97,44 @@ async function viaYtDlp(link) {
         '--extractor-args', 'instagram:app_id=936619743392459',
         '-o', outTpl
     ]
-    if (cookies && fs.existsSync(cookies)) {
-        args.push('--cookies', cookies)
-    } else if (process.env.YTDLP_BROWSER_COOKIES?.trim()) {
-        args.push('--cookies-from-browser', process.env.YTDLP_BROWSER_COOKIES.trim())
+    const cookieModes = []
+    if (cookies && fs.existsSync(cookies)) cookieModes.push(['--cookies', cookies])
+    else if (process.env.YTDLP_BROWSER_COOKIES?.trim()) {
+        cookieModes.push(['--cookies-from-browser', process.env.YTDLP_BROWSER_COOKIES.trim()])
+        cookieModes.push([]) // fallback se Chrome DB falhar no Windows
     } else {
-        // tenta Chrome logado (Windows) — ignora erro se falhar
-        args.push('--cookies-from-browser', 'chrome')
+        cookieModes.push([])
     }
-    args.push(link)
 
-    await new Promise((resolve, reject) => {
-        const child = spawn(bin, args, { windowsHide: true })
-        let stderr = ''
-        const timer = setTimeout(() => {
-            try { child.kill() } catch {}
-            reject(new Error('yt-dlp timeout'))
-        }, 120000)
-        child.stderr.on('data', (c) => { stderr += c.toString() })
-        child.on('error', (err) => {
-            clearTimeout(timer)
-            reject(err)
-        })
-        child.on('close', (code) => {
-            clearTimeout(timer)
-            if (code === 0) resolve()
-            else reject(new Error(stderr.trim() || `yt-dlp ${code}`))
-        })
-    })
+    let lastErr = null
+    let ok = false
+    for (const cookieArgs of cookieModes) {
+        try {
+            await new Promise((resolve, reject) => {
+                const child = spawn(bin, [...args, ...cookieArgs, link], { windowsHide: true })
+                let stderr = ''
+                const timer = setTimeout(() => {
+                    try { child.kill() } catch {}
+                    reject(new Error('yt-dlp timeout'))
+                }, 120000)
+                child.stderr.on('data', (c) => { stderr += c.toString() })
+                child.on('error', (err) => {
+                    clearTimeout(timer)
+                    reject(err)
+                })
+                child.on('close', (code) => {
+                    clearTimeout(timer)
+                    if (code === 0) resolve()
+                    else reject(new Error(stderr.trim() || `yt-dlp ${code}`))
+                })
+            })
+            ok = true
+            break
+        } catch (err) {
+            lastErr = err
+        }
+    }
+    if (!ok) throw lastErr || new Error('yt-dlp Instagram falhou')
 
     const dir = path.dirname(tmpBase)
     const baseName = path.basename(tmpBase)
@@ -270,10 +284,21 @@ async function viaAjaxDownloaders(link) {
 async function viaCobalt(link) {
     const bases = [
         process.env.COBALT_API_URL?.trim(),
+        'https://api.cobalt.tools',
         'https://cobalt-api.kwiatekmiki.com',
         'https://api.cobalt.best',
         'https://co.wuk.sh'
     ].filter(Boolean)
+
+    const key = process.env.COBALT_API_KEY?.trim()
+    const headers = {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 UltronBot'
+    }
+    if (key) {
+        headers.Authorization = /^(api-key|bearer)\s/i.test(key) ? key : `Api-Key ${key}`
+    }
 
     for (const base of bases) {
         try {
@@ -282,11 +307,7 @@ async function viaCobalt(link) {
                 { url: link, downloadMode: 'auto', videoQuality: '720' },
                 {
                     timeout: 45000,
-                    headers: {
-                        Accept: 'application/json',
-                        'Content-Type': 'application/json',
-                        'User-Agent': 'Mozilla/5.0 UltronBot'
-                    },
+                    headers,
                     validateStatus: () => true
                 }
             )

@@ -10,7 +10,7 @@ import {chamadaComando} from '../lib/chamadaComando.js'
 import {BotControle} from '../controles/BotControle.js'
 import {GrupoControle} from '../controles/GrupoControle.js'
 import {MensagemControle} from '../controles/MensagemControle.js'
-import dotenv from 'dotenv'
+import { carregarEnv } from '../lib/env.js'
 
 
 export const conexaoEncerrada = async(conexao, botInfo)=>{
@@ -41,7 +41,7 @@ export const conexaoAberta = async(c, botInfo)=>{
         const { bootBanner, registrarBootAutoMsg, registrarBootConteudo } = await import('../lib/boot.js')
         bootBanner()
         await criarArquivosNecessarios()
-        dotenv.config()
+        carregarEnv()
         await new BotControle().inicializarBot(c, botInfo)
         await verificarEnv()
         await verificarNumeroDono()
@@ -75,7 +75,9 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
             case "notify":
                 const grupos = new GrupoControle()
                 const mensagemBaileys = await converterMensagem(mensagem, botInfo)
-                // Histórico ANTES de filtros/tipos — guarda TODAS as msgs de grupo (comandos + midia)
+                // SHH primeiro: apaga antes de histórico/filtros (qualquer tipo de mídia)
+                if(!await grupos.filtroShh(c, mensagemBaileys, botInfo)) return
+                // Histórico — guarda msgs de grupo (comandos + midia); áudios podem ser transcritos
                 try {
                     const { registrarHistoricoGrupo } = await import('../controles/HistoricoGrupoControle.js')
                     await registrarHistoricoGrupo(mensagemBaileys)

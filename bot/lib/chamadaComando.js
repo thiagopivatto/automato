@@ -37,6 +37,30 @@ const enfileirar = (c, id_chat, mensagem, comando, botInfo, tarefa, prioridade =
     })
 }
 
+/** Executa o handler do comando imediatamente (sem nova fila) — usado pelo !chat. */
+export const executarComandoDireto = async (c, mensagemBaileys, botInfo) => {
+    const { comando, args, mensagem_grupo, id_chat, mensagem, nome_usuario, grupo } = mensagemBaileys
+    const { nome: nome_grupo } = { ...grupo }
+    const t = moment.now()
+    const msgGuia = args?.length && args[0] === 'guia'
+
+    const rodar = async (cat, handler, cor) => {
+        if (msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando(cat, comando, botInfo), mensagem)
+        await handler(c, mensagemBaileys, botInfo)
+        consoleComando(mensagem_grupo, cat.toUpperCase(), comando, cor, t, nome_usuario, nome_grupo)
+    }
+
+    if (verificarComandoExiste(botInfo, comando, 'utilidades')) await rodar('utilidades', utilidadesComandos, '#de9a07')
+    else if (verificarComandoExiste(botInfo, comando, 'ia')) await rodar('ia', iaComandos, '#7c4dff')
+    else if (verificarComandoExiste(botInfo, comando, 'figurinhas')) await rodar('figurinhas', figurinhasComandos, '#ae45d1')
+    else if (verificarComandoExiste(botInfo, comando, 'downloads')) await rodar('downloads', downloadsComandos, '#2195cf')
+    else if (verificarComandoExiste(botInfo, comando, 'grupo')) await rodar('grupo', grupoComandos, '#e0e031')
+    else if (verificarComandoExiste(botInfo, comando, 'diversao')) await rodar('diversao', diversaoComandos, '#22e3dd')
+    else if (verificarComandoExiste(botInfo, comando, 'admin')) await rodar('admin', adminComandos, '#d1d1d1')
+    else if (verificarComandoExiste(botInfo, comando, 'info')) await rodar('info', infoComandos, '#8ac46e')
+    else throw { erro: `Não encontrei o comando ${comando} para executar.` }
+}
+
 export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
     try {
         //Atribuição de valores

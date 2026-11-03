@@ -598,24 +598,10 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
 
             case 'estado':
                 try{
-                    if(!args.length) return await socket.responderTexto(c, id_chat,erroComandoMsg(comando, botInfo),mensagem)
-                    let usuarioTexto = texto_recebido.toLowerCase()
-                    switch(usuarioTexto){
-                        case 'online':
-                            await socket.alterarStatusPerfil(c, "< 🟢 Online />")
-                            await socket.responderTexto(c, id_chat, comandos_info.admin.estado.msgs.sucesso,mensagem)
-                            break
-                        case 'offline':
-                            await socket.alterarStatusPerfil(c, "< 🔴 Offline />")
-                            await socket.responderTexto(c, id_chat, comandos_info.admin.estado.msgs.sucesso,mensagem)
-                            break    
-                        case 'manutencao':
-                            await socket.alterarStatusPerfil(c, "< 🟡 Manutenção />")
-                            await socket.responderTexto(c, id_chat, comandos_info.admin.estado.msgs.sucesso,mensagem)
-                            break
-                        default:
-                            await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    }
+                    const { alterarEstado } = await import('./admin/estado.js')
+                    await alterarEstado({
+                        c, id_chat, args, texto_recebido, comandos_info, mensagem, comando, botInfo
+                    })
                 } catch(err){
                     throw err
                 }

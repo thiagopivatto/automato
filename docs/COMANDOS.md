@@ -97,22 +97,6 @@ Ex: Responda um *STICKER* com *!snome* pack, autor - Renomeia o nome do pack e d
 
 ## Utilidades
 
-### `!animes`
-
-**Como usar / exemplos:**
-
-Ex: *!animes* - Exibe os ultimos lançamentos de episódios de anime.
-
----
-
-### `!mangas`
-
-**Como usar / exemplos:**
-
-Ex: *!mangas* - Exibe os ultimos lançamentos de capitulos de mangá.
-
----
-
 ### `!encurtar`
 
 **Como usar / exemplos:**
@@ -147,13 +131,15 @@ Ex: *!series* - Exibe as tendências atuais de séries.
 
 ### `!chat`
 
+**Descrição:** Conversa natural com memória e contexto do grupo
+
 **Como usar / exemplos:**
 
-Ex: *!chat* olá, tudo bem?
-Conversa com IA *com memória* (últimas mensagens do seu chat).
-
-*Recomendado:* configure *GEMINI_API_KEY* ou *OPENROUTER_API_KEY* no .env (grátis).
-Sem chave, tenta Pollinations (pode falhar com limite 429).
+Ex: *!chat* e aí, o que achou da conversa?
+Conversa como pessoa real, com memória do chat.
+Em *grupo*, usa o histórico recente (como o resumo) para responder no contexto.
+Pode buscar informações atuais na internet quando precisar.
+Requer *GEMINI_API_KEY* (grátis) no .env.
 
 ---
 
@@ -249,14 +235,6 @@ Usa *ElevenLabs* (ELEVENLABS_API_KEY) com fallbacks.
 **Como usar / exemplos:**
 
 Ex: *!letra* nome-musica - Exibe a letra da música que você digitou.
-
----
-
-### `!noticias`
-
-**Como usar / exemplos:**
-
-Ex: *!noticias* - Exibe as notícias atuais.
 
 ---
 
@@ -429,32 +407,6 @@ Ex: *!resuma* texto longo...
 
 ---
 
-### `!criaimg`
-
-**Como usar / exemplos:**
-
-Ex: *!criaimg* prompt - Cria imagem via Pollinations AI.
-Requer *POLLINATIONS_API_KEY* no .env.
-
----
-
-### `!criavideo`
-
-**Como usar / exemplos:**
-
-Ex: *!criavideo* prompt - Cria vídeo em slideshow com imagens IA (sem vídeo Pollinations).
-
----
-
-### `!i2i`
-
-**Como usar / exemplos:**
-
-Ex: Envie/responda uma imagem com *!i2i* prompt - Image-to-image (Pollinations kontext).
-Ex: *!i2i* estilo anime, luz neon
-
----
-
 ### `!upscale`
 
 **Como usar / exemplos:**
@@ -471,30 +423,15 @@ Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
 
 ---
 
-### `!vocalsonly`
-
-**Como usar / exemplos:**
-
-Ex: Responda um áudio com *!vocalsonly* - Isola vocais via UVR.
-
----
-
-### `!instrumentalonly`
-
-**Como usar / exemplos:**
-
-Ex: Responda um áudio com *!instrumentalonly* - Isola instrumental via UVR.
-
----
-
 ### `!resumodogrupo`
 
-**Descrição:** Resumo sarcástico das últimas msgs em áudio (~3min)
+**Descrição:** Narrador sarcástico do grupo em áudio (3–5 min)
 
 **Como usar / exemplos:**
 
-Ex: *!resumodogrupo* - Resume as últimas mensagens em *nota de voz* (~3 min).
-TTS: ElevenLabs → Edge → OpenAI se a cota acabar.
+Ex: *!resumodogrupo* - Nota de voz de *3 a 5 min* com roast e leitura do grupo.
+Na próxima vez, só entra o que foi dito *depois* deste pedido (anti-repetição).
+Áudio: ElevenLabs com fallback automático silencioso.
 *Requisitos:* grupo; bot coletando mensagens.
 
 ---
@@ -789,14 +726,14 @@ Ex: *!autosimi* - Liga/desliga respostas automáticas do Simi (sem comando). *Ap
 
 ### `!automsg`
 
-**Descrição:** Ativa/desativa mensagens automáticas inteligentes do bot no grupo
+**Descrição:** Interações humanas esporádicas no grupo
 
 **Como usar / exemplos:**
 
 Ex: *!automsg* ativar — Liga interações automáticas (ligado por padrão).
 Ex: *!automsg* desativar — Desliga.
 Ex: *!automsg* — Alterna o estado.
-*Apenas admins.* Sem spam na madrugada.
+Comenta o papo como pessoa real, com intervalos longos. *Apenas admins.* Sem madrugada.
 
 ---
 
@@ -1675,13 +1612,12 @@ Testes
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure `.env` (`ELEVENLABS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `RAPIDAPI_KEY`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: `yt-dlp` recomendado no PATH (ou `YTDLP_PATH`).
-- `!resumodogrupo`: só áudio (nota de voz); histórico enquanto o bot está online (~7 dias).
+- `!resumodogrupo`: nota de voz de 3 a 5 min; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
 - Bancos locais (≥2000 itens): `conteudo/` — veja docs/CONTEUDO.md
-- `!automsg`: ligado por padrão; só admins ligam/desligam.
+- `!automsg`: ligado por padrão; só admins ligam/desligam; interações humanas com intervalo longo.
 - `!verdadeoudesafio` / `!vod`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.
-- `!chat`: contexto separado por **grupo** (ou por usuário no PV), em memória (reinicia com o processo).
-- `!vocalsonly` / `!instrumentalonly`: áudios longos são cortados (~70s) para responder mais rápido.
+- `!chat`: memória + histórico do grupo + busca na web quando necessário (Gemini gratuito).
 
 ---
 
-*Gerado a partir de `bot/comandos/comandos.js` — 172 comandos.*
+*Gerado a partir de `bot/comandos/comandos.js` — 164 comandos.*

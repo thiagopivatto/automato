@@ -2,8 +2,8 @@
  * Testes de integração (APIs locais, sem WhatsApp).
  * Uso: node scripts/test-integracao.js
  */
-import dotenv from 'dotenv'
-dotenv.config()
+import { carregarEnv } from '../bot/lib/env.js'
+carregarEnv()
 
 const results = []
 const ok = (name, detail = '') => results.push({ name, pass: true, detail })
@@ -96,12 +96,12 @@ async function run() {
         fail('uvr-exports', e.message)
     }
 
-    // i2i export
+    // chat export
     try {
-        if (typeof api.IA.imagemParaImagemIA === 'function') ok('i2i-export')
-        else fail('i2i-export')
+        if (typeof api.IA.obterRespostaIA === 'function') ok('chat-export')
+        else fail('chat-export')
     } catch (e) {
-        fail('i2i-export', e.message)
+        fail('chat-export', e.message)
     }
 
     console.log('\n=== INTEGRAÇÃO ===')

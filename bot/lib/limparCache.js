@@ -58,7 +58,7 @@ export async function limparCacheBot() {
         detalhes.push(`mensagens.db: ${e.message}`)
     }
 
-    // 4) Histórico usado só no resumodogrupo
+    // 4) Histórico + memória do resumodogrupo
     try {
         const hist = new HistoricoGrupo()
         const n = await hist.contarTodas()
@@ -66,6 +66,15 @@ export async function limparCacheBot() {
         detalhes.push(`historico_grupo: ${n} regs`)
     } catch (e) {
         detalhes.push(`historico: ${e.message}`)
+    }
+    try {
+        const { MemoriaResumoGrupo } = await import('../modelos/MemoriaResumoGrupo.js')
+        const mem = new MemoriaResumoGrupo()
+        const n = await mem.contarTodas()
+        await mem.limparTudo()
+        detalhes.push(`memoria_resumo: ${n} regs`)
+    } catch (e) {
+        detalhes.push(`memoria_resumo: ${e.message}`)
     }
 
     // 5) Arquivos órfãos *.tmp / *.part no root de dados (não dbs protegidos)

@@ -88,6 +88,16 @@ export class Grupo{
         await db.grupos.updateAsync({id_grupo}, {$set:{antilink: status}})
     }
 
+    /** Silêncio temporário por membro: [{ id, ate|null }] */
+    async definirShhLista(id_grupo, lista){
+        await db.grupos.updateAsync({id_grupo}, {$set:{shh: Array.isArray(lista) ? lista : []}})
+    }
+
+    async obterShhLista(id_grupo){
+        const g = await db.grupos.findOneAsync({id_grupo})
+        return Array.isArray(g?.shh) ? g.shh : []
+    }
+
     async alterarAutoSticker(id_grupo, status){
         await db.grupos.updateAsync({id_grupo}, {$set:{autosticker: status}})
     }
@@ -98,6 +108,22 @@ export class Grupo{
 
     async alterarAutoMsg(id_grupo, status){
         await db.grupos.updateAsync({id_grupo}, {$set:{automsg: !!status}})
+    }
+
+    /** Personalidade do !resumodogrupo só deste grupo (texto livre). */
+    async definirPersonalidadeResumo(id_grupo, texto){
+        const limpo = String(texto || '').trim().slice(0, 1200)
+        await db.grupos.updateAsync(
+            { id_grupo },
+            limpo
+                ? { $set: { personalidade_resumo: limpo } }
+                : { $unset: { personalidade_resumo: true } }
+        )
+    }
+
+    async obterPersonalidadeResumo(id_grupo){
+        const g = await db.grupos.findOneAsync({ id_grupo })
+        return g?.personalidade_resumo || ''
     }
 
     async atualizarUltimaMsgHumana(id_grupo, ts = Date.now()){

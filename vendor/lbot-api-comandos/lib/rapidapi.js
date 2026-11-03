@@ -10,9 +10,16 @@ export const rapidKey = () =>
     process.env.X_RAPIDAPI_KEY?.trim() ||
     ''
 
-export const rapidHeaders = (host, contentType = 'application/json') => {
+/** Chave dedicada ao Perplexity2 (fallback: RAPIDAPI_KEY). */
+export const perplexityRapidKey = () =>
+    process.env.PERPLEXITY_RAPIDAPI_KEY?.trim() ||
+    process.env.RAPIDAPI_KEY?.trim() ||
+    process.env.X_RAPIDAPI_KEY?.trim() ||
+    ''
+
+export const rapidHeaders = (host, contentType = 'application/json', keyOverride = '') => {
     const h = {
-        'x-rapidapi-key': rapidKey(),
+        'x-rapidapi-key': keyOverride || rapidKey(),
         'x-rapidapi-host': host
     }
     if (contentType) h['Content-Type'] = contentType
@@ -41,18 +48,44 @@ export const erroRapid = (err, apiNome) => {
     return { erro: String(msg || `Falha na API ${apiNome}`).slice(0, 300) }
 }
 
-const extrairTexto = (data) =>
-    String(
-        data?.result ||
-            data?.response ||
-            data?.message ||
-            data?.answer ||
-            data?.output ||
-            data?.content ||
-            data?.choices?.[0]?.message?.content ||
-            data?.choices?.[0]?.text ||
-            (typeof data === 'string' ? data : '')
-    ).trim()
+const extrairTexto = (data) => {
+    if (data == null) return ''
+    if (typeof data === 'string') return data.trim()
+
+    // Perplexity2 RapidAPI (formato Gemini grounding): choices.content.parts[].text
+    const partsPx = data?.choices?.content?.parts
+    if (Array.isArray(partsPx)) {
+        const txt = partsPx.map((p) => p?.text).filter(Boolean).join('\n').trim()
+        if (txt) return txt
+    }
+
+    const candidatos = [
+        data.result,
+        data.response,
+        data.message,
+        data.answer,
+        data.output,
+        data.content,
+        data.text,
+        data.data?.result,
+        data.data?.response,
+        data.data?.answer,
+        data.data?.content,
+        data.choices?.[0]?.message?.content,
+        data.choices?.[0]?.text,
+        data.candidates?.[0]?.content?.parts?.[0]?.text,
+        data.output_text
+    ]
+    for (const c of candidatos) {
+        if (typeof c === 'string' && c.trim()) return c.trim()
+        if (c && typeof c === 'object' && typeof c.text === 'string' && c.text.trim()) return c.text.trim()
+    }
+    try {
+        const vals = Object.values(data).filter((v) => typeof v === 'string' && v.length > 40)
+        if (vals.length === 1) return vals[0].trim()
+    } catch { /* */ }
+    return ''
+}
 
 const baixarUrl = async (url) => {
     const { data } = await axios.get(url, {
@@ -117,18 +150,49 @@ export const chatGpt42 = async (messages, systemPrompt = '') => {
     }
 }
 
+/**
+ * Perplexity2 (RapidAPI Hub) — pesquisa com web em tempo real.
+ * Host: perplexity2.p.rapidapi.com
+ */
 export const perplexityPesquisa = async (query) => {
-    exigirRapidKey()
+    const key = perplexityRapidKey()
+    if (!key) {
+        throw { erro: 'Configure PERPLEXITY_RAPIDAPI_KEY ou RAPIDAPI_KEY no .env (RapidAPI Hub → Perplexity2).' }
+    }
     try {
-        const { data } = await axios.post(
+        const { data, status } = await axios.post(
             'https://perplexity2.p.rapidapi.com/',
             { content: String(query) },
-            { headers: rapidHeaders('perplexity2.p.rapidapi.com'), timeout: TIMEOUT }
+            {
+                headers: rapidHeaders('perplexity2.p.rapidapi.com', 'application/json', key),
+                timeout: TIMEOUT_LONGO,
+                validateStatus: () => true
+            }
         )
+        if (status === 401 || status === 403) {
+            throw {
+                response: { status, data },
+                message: data?.message || `HTTP ${status}`
+            }
+        }
+        if (status >= 400) {
+            throw {
+                response: { status, data },
+                message: data?.message || `HTTP ${status}`
+            }
+        }
         const out = extrairTexto(data)
-        if (!out) throw new Error('Perplexity sem resposta')
+        if (!out) {
+            // Alguns planos devolvem JSON aninhado — serializa útil
+            const raw = typeof data === 'string' ? data : JSON.stringify(data)
+            if (raw && raw.length > 20 && raw !== '{}' && raw !== 'null') {
+                console.log(`API Perplexity formato inesperado: ${raw.slice(0, 200)}`)
+            }
+            throw new Error('Perplexity sem resposta útil')
+        }
         return out
     } catch (err) {
+        if (err?.erro) throw err
         throw erroRapid(err, 'Perplexity2')
     }
 }

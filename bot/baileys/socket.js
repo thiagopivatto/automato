@@ -5,7 +5,7 @@ import api from '@victorsouzaleal/lbot-api-comandos'
 
 // Gerais
 export const deletarMensagem = async(c, mensagem, mensagemCitada = false)=>{
-    let mensagemDeletada 
+    let mensagemDeletada
     if(mensagemCitada){
         mensagemDeletada = {
             remoteJid: mensagem.key.remoteJid,
@@ -14,9 +14,24 @@ export const deletarMensagem = async(c, mensagem, mensagemCitada = false)=>{
             participant: mensagem.message.extendedTextMessage.contextInfo.participant
         }
     } else{
-        mensagemDeletada = mensagem.key
+        const key = mensagem.key || {}
+        mensagemDeletada = {
+            remoteJid: key.remoteJid,
+            fromMe: !!key.fromMe,
+            id: key.id,
+            participant:
+                key.participant ||
+                key.participantPn ||
+                key.participantAlt ||
+                key.participantLid ||
+                undefined
+        }
+        // Em grupos o participant é obrigatório para apagar msg de terceiros
+        if (!mensagemDeletada.participant && String(key.remoteJid || '').includes('@g.us')) {
+            mensagemDeletada.participant = key.participantPn || key.participantAlt || key.participant
+        }
     }
-    return await c.sendMessage(mensagem.key.remoteJid, {delete: mensagemDeletada})
+    return await c.sendMessage(mensagem.key.remoteJid, { delete: mensagemDeletada })
 }
 
 export const lerMensagem = async(c, id_chat, remetente, id_mensagem) =>{

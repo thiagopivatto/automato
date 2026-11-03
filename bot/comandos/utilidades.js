@@ -22,6 +22,9 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
         mensagem,
         id_chat,
         mensagem_citada,
+        mensagem_grupo,
+        grupo,
+        nome_usuario,
         midia,
         citacao
     } = mensagemBaileys
@@ -31,36 +34,6 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
     //Comandos de utilidades
     try{
         switch(comandoSemPrefixo){ 
-            case 'animes':
-                try{
-                    const {resultado} = await api.Gerais.obterAnimesLancamento()
-                    let respostaTitulo = comandos_info.utilidades.animes.msgs.resposta_titulo, respostaItens = ''
-                    resultado.forEach((anime)=>{
-                        respostaItens += criarTexto(comandos_info.utilidades.animes.msgs.resposta_item, anime.nome, anime.episodio, anime.link)
-                    })
-                    const respostaFinal = respostaTitulo + respostaItens
-                    await socket.responderTexto(c, id_chat, respostaFinal, mensagem)
-                } catch(err){
-                    if(!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
-                }
-                break
-
-            case 'mangas':
-                try{
-                    const {resultado} = await api.Gerais.obterMangasLancamento()
-                    let respostaTitulo = comandos_info.utilidades.mangas.msgs.resposta_titulo, respostaItens = ''
-                    resultado.forEach((manga)=>{
-                        respostaItens += criarTexto(comandos_info.utilidades.mangas.msgs.resposta_item, manga.nome, manga.capitulo, manga.link)
-                    })
-                    const respostaFinal = respostaTitulo + respostaItens
-                    await socket.responderTexto(c, id_chat, respostaFinal, mensagem)
-                } catch(err){
-                    if(!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
-                }
-                break
-            
             case 'upimg':
                 try{
                     if (citacao?.tipo != tiposMensagem.imagem && tipo != tiposMensagem.imagem) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
@@ -109,7 +82,44 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
                 try{
                     if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
                     let usuarioTexto = texto_recebido
-                    let {resultado: resultadoTexto} = await api.IA.obterRespostaIA(usuarioTexto, remetente, id_chat)
+                    const { decidirAcaoChat, aplicarComandoNaMensagem } = await import('../lib/chatRoteador.js')
+                    const decisao = await decidirAcaoChat(usuarioTexto, botInfo, {
+                        mensagemDono: !!mensagemBaileys.mensagem_dono
+                    })
+                    if (decisao.tipo === 'comando') {
+                        await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `Beleza — vou rodar *${decisao.comando}${decisao.argsTexto ? ' ' + decisao.argsTexto : ''}*.`,
+                            mensagem
+                        )
+                        aplicarComandoNaMensagem(mensagemBaileys, decisao.comando, decisao.argsTexto)
+                        const { executarComandoDireto } = await import('../lib/chamadaComando.js')
+                        return await executarComandoDireto(c, mensagemBaileys, botInfo)
+                    }
+                    let historicoGrupoTexto = ''
+                    let nomeGrupo = ''
+                    if (mensagem_grupo) {
+                        try {
+                            const { historicoGrupo } = await import('../controles/HistoricoGrupoControle.js')
+                            const msgs = await historicoGrupo.obterUltimas(grupo?.id_grupo || id_chat, 30)
+                            historicoGrupoTexto = (msgs || [])
+                                .map((m) => {
+                                    const quando = m.timestamp
+                                        ? new Date(Number(m.timestamp)).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                                        : ''
+                                    return `${quando} ${m.nome_usuario || 'Alguém'}: ${String(m.texto || '').replace(/\s+/g, ' ').slice(0, 120)}`
+                                })
+                                .join('\n')
+                                .slice(0, 3500)
+                            nomeGrupo = grupo?.nome || ''
+                        } catch { /* ignore */ }
+                    }
+                    let {resultado: resultadoTexto} = await api.IA.obterRespostaIA(usuarioTexto, remetente, id_chat, {
+                        historicoGrupo: historicoGrupoTexto,
+                        nomeGrupo,
+                        nomeUsuario: nome_usuario || ''
+                    })
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.utilidades.chat.msgs.resposta, resultadoTexto), mensagem)
                 } catch(err){
                     if(!err.erro) throw err
@@ -392,20 +402,6 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
                     } else {
                         await socket.responderArquivoBuffer(c, tiposMensagem.audio, id_chat, resultadoAudio, '', mensagem, mimetype || 'audio/mpeg')
                     }
-                } catch(err){
-                    if(!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
-                }
-                break
-
-            case 'noticias':
-                try{
-                    let {resultado: resultadoNoticias} = await api.Gerais.obterNoticias()
-                    let respostaNoticias = comandos_info.utilidades.noticias.msgs.resposta_titulo
-                    for(let noticia of resultadoNoticias){
-                        respostaNoticias += criarTexto(comandos_info.utilidades.noticias.msgs.resposta_itens, noticia.titulo, noticia.autor, noticia.publicadoHa, noticia.url)
-                    }
-                    await socket.responderTexto(c, id_chat, respostaNoticias, mensagem)
                 } catch(err){
                     if(!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)

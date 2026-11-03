@@ -10,50 +10,14 @@ import {obterDadosBrasileiraoA, obterDadosBrasileiraoB} from '@victorsouzaleal/b
 import UserAgent from 'user-agents'
 
 
-export const obterAnimesLancamento = async()=>{
-    return new Promise(async(resolve, reject) =>{
-        try{
-            let resposta = {}
-            const {data} = await axios.get('https://api.jikan.moe/v4/seasons/now', {timeout:15000})
-            const animes = (data.data||[]).slice(0,15).map(a=>({
-                nome: a.title || a.title_english || 'Sem título',
-                episodio: a.episodes ? `Eps: ${a.episodes}` : (a.status || 'Em exibição'),
-                link: a.url
-            }))
-            if (!animes.length) {
-                reject({erro: 'Nenhum lançamento de anime encontrado no momento.'})
-                return
-            }
-            resposta.resultado = animes
-            resolve(resposta)
-        } catch(err){
-            console.log(`API obterAnimesLancamento - ${err.message}`)
-            reject({erro: 'Houve um erro no servidor para obter os lançamentos de animes.'})
-        }
-    })
+/** @deprecated comando !animes removido */
+export const obterAnimesLancamento = async () => {
+    throw { erro: 'Comando removido.' }
 }
 
-export const obterMangasLancamento = async()=>{
-    return new Promise(async(resolve, reject) =>{
-        try{
-            let resposta = {}
-            const {data} = await axios.get('https://api.jikan.moe/v4/top/manga', {params:{limit:15}, timeout:15000})
-            const mangas = (data.data||[]).map(m=>({
-                nome: m.title,
-                capitulo: m.chapters ? `Caps: ${m.chapters}` : (m.status||'N/A'),
-                link: m.url
-            }))
-            if (!mangas.length) {
-                reject({erro: 'Nenhum lançamento de mangá encontrado no momento.'})
-                return
-            }
-            resposta.resultado = mangas
-            resolve(resposta)
-        } catch(err){
-            console.log(`API obterMangasLancamento - ${err.message}`)
-            reject({erro: 'Houve um erro no servidor para obter os lançamentos de mangás.'})
-        }
-    })
+/** @deprecated comando !mangas removido */
+export const obterMangasLancamento = async () => {
+    throw { erro: 'Comando removido.' }
 }
 
 export const obterDadosBrasileirao = async(serie = "A")=>{
@@ -155,32 +119,9 @@ export const obterCalculo = async (expressao) =>{
     })
 }
 
-export const obterNoticias = async ()=>{
-    return new Promise(async(resolve,reject)=>{
-        try {
-            let resposta = {}
-            const noticias = await search({
-                query: 'noticias brasil',
-                resultTypes: [NewsResult],
-                requestConfig: { headers: { 'User-Agent': new UserAgent().toString() } }
-            })
-            if (!noticias?.length) {
-                resposta.erro = "Houve um erro no servidor de notícias."
-                reject(resposta)
-                return
-            }
-            resposta.resultado = noticias.slice(0, 15).map((noticia) => ({
-                titulo: noticia.title || 'Sem título',
-                publicadoHa: noticia.date || '',
-                autor: noticia.source || '',
-                url: noticia.link || noticia.url || ''
-            }))
-            resolve(resposta)
-        } catch(err){
-            console.log(`API obterNoticias - ${err.message}`)
-            reject({erro: "Houve um erro no servidor de notícias."})
-        }
-    })
+/** @deprecated comando !noticias removido */
+export const obterNoticias = async () => {
+    throw { erro: 'Comando removido.' }
 }
 
 export const obterTraducao = async (texto, idioma)=>{

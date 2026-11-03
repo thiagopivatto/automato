@@ -4,8 +4,6 @@ import { gradioCall, baixarArquivoGradio, achatarArquivosGradio } from './gradio
 
 const FLUX_BASE = 'https://black-forest-labs-flux-1-schnell.hf.space'
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-
 function bufferImagemOk(buf) {
     if (!buf || buf.length < 1500) return false
     const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf)
@@ -14,42 +12,6 @@ function bufferImagemOk(buf) {
     if (b.slice(0, 8).toString('hex').startsWith('89504e47')) return true
     if (b.slice(0, 4).toString() === 'RIFF' && b.slice(8, 12).toString() === 'WEBP') return true
     return false
-}
-
-async function pollinations(prompt, { width = 1024, height = 1024 } = {}) {
-    const seed = Math.floor(Math.random() * 1e9)
-    const hosts = [
-        `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 450))}?width=${width}&height=${height}&nologo=true&seed=${seed}`,
-        `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt.slice(0, 450))}?width=${width}&height=${height}&nologo=true&model=flux&seed=${seed}`
-    ]
-    let lastErr
-    for (const url of hosts) {
-        for (let tentativa = 0; tentativa < 3; tentativa++) {
-            try {
-                const { data, status } = await axios.get(url, {
-                    responseType: 'arraybuffer',
-                    timeout: 90000,
-                    maxContentLength: 15 * 1024 * 1024,
-                    validateStatus: () => true,
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0',
-                        Accept: 'image/*,*/*'
-                    }
-                })
-                if (status === 429) {
-                    await sleep(1500 * (tentativa + 1))
-                    continue
-                }
-                const buf = Buffer.from(data)
-                if (status < 400 && bufferImagemOk(buf)) return buf
-                lastErr = new Error(`pollinations ${status}`)
-            } catch (err) {
-                lastErr = err
-                await sleep(800 * (tentativa + 1))
-            }
-        }
-    }
-    throw lastErr || new Error('Pollinations falhou')
 }
 
 async function fluxHf(prompt, { width = 1024, height = 1024 } = {}) {
@@ -94,17 +56,10 @@ export async function gerarImagemMultiFonte(prompt, opts = {}) {
 
     const erros = []
 
-    // Flux HF primeiro (mais estável sob carga)
     try {
         return await fluxHf(p, opts)
     } catch (err) {
         erros.push(`flux:${err.message}`)
-    }
-
-    try {
-        return await pollinations(p, opts)
-    } catch (err) {
-        erros.push(`pollinations:${err.message}`)
     }
 
     try {

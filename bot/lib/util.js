@@ -34,9 +34,63 @@ export const mencaoNumero = (jid)=>{
 }
 
 /** Verifica se algum JID está na lista (suporta @lid e @s.whatsapp.net). */
+/** Chaves para comparar LID / PN / user:device. */
+export const chavesJid = (jid) => {
+  const s = String(jid || '').trim()
+  if (!s) return []
+  const user = s.split('@')[0].split(':')[0]
+  const digits = user.replace(/\D/g, '')
+  const out = [s, user]
+  if (digits && digits !== user) out.push(digits)
+  return out
+}
+
 export const listaContemJid = (lista = [], ...candidatos)=>{
-  const set = new Set((lista || []).filter(Boolean).map(String))
-  return candidatos.some(j => j && set.has(String(j)))
+  const set = new Set()
+  for (const j of lista || []) {
+    for (const k of chavesJid(j)) set.add(k)
+  }
+  return candidatos.some((j) => j && chavesJid(j).some((k) => set.has(k)))
+}
+
+/**
+ * Dado metadados do grupo (participants com id/phoneNumber),
+ * devolve todos os JIDs da mesma pessoa (LID + PN).
+ */
+export const aliasesParticipanteMeta = (participants = [], ...candidatos) => {
+  const out = new Set()
+  const cands = candidatos.flat().filter(Boolean)
+  for (const j of cands) out.add(j)
+  for (const p of participants || []) {
+    const ids = [p?.id, p?.phoneNumber, p?.jid].filter(Boolean)
+    if (!ids.length) continue
+    if (listaContemJid(ids, ...cands)) {
+      for (const id of ids) out.add(id)
+    }
+  }
+  return [...out]
+}
+
+/**
+ * Remove o bot (e JIDs vazios) da lista de participantes/marcações.
+ * Aceita vários JIDs do bot (numero @s.whatsapp.net + lid @lid).
+ * Também deduplica a mesma pessoa LID/PN.
+ */
+export const participantesSemBot = (participantes = [], ...botsBot) => {
+  const ban = new Set()
+  for (const b of botsBot.flat().filter(Boolean)) {
+    for (const k of chavesJid(b)) ban.add(k)
+  }
+  const porNumero = new Map()
+  for (const jid of participantes || []) {
+    if (!jid) continue
+    if (chavesJid(jid).some((k) => ban.has(k))) continue
+    const num = String(jid).split('@')[0].split(':')[0].replace(/\D/g, '') || String(jid)
+    const atual = porNumero.get(num)
+    // Prefere @s.whatsapp.net quando houver duplicata
+    if (!atual || String(jid).endsWith('@s.whatsapp.net')) porNumero.set(num, jid)
+  }
+  return [...porNumero.values()]
 }
 
 /** Sorteia N membros sem mutar o array original. */

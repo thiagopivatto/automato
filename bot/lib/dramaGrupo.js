@@ -1,11 +1,11 @@
-import { sortearMembros } from './util.js'
+import { sortearMembros, participantesSemBot } from './util.js'
 import { historicoGrupo } from '../controles/HistoricoGrupoControle.js'
 
 /**
  * Membros do grupo com nomes (pushName do histórico + fallback curto, sem expor número cru na lista da IA).
  */
-export async function membrosDoGrupo(id_grupo, participantes = [], numeroBot) {
-    const jids = [...(participantes || [])].filter((p) => p && p !== numeroBot)
+export async function membrosDoGrupo(id_grupo, participantes = [], ...botsBot) {
+    const jids = participantesSemBot(participantes, ...botsBot)
     let msgs = []
     try {
         msgs = await historicoGrupo.obterUltimas(id_grupo, 250)

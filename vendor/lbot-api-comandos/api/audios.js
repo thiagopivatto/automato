@@ -6,7 +6,7 @@ import {converterMp4ParaMp3} from './videos.js'
 import duration from 'format-duration-time'
 import acrcloud from 'acrcloud'
 import {createClient} from '@deepgram/sdk'
-import { textoParaVozRobusto } from '../lib/tts-robusto.js'
+import { textoParaVozRobusto, OPCOES_TTS_ULTRON } from '../lib/tts-robusto.js'
 
 async function obterChavesApi() {
     try {
@@ -19,9 +19,11 @@ async function obterChavesApi() {
 
 export const textoParaVoz = async (idioma, texto) => {
     try {
+        // Mesma pipeline/voz do !resumodogrupo
         const { resultado, mimetype, ptt } = await textoParaVozRobusto(texto, {
             idioma: String(idioma || 'pt').toLowerCase(),
-            maxPalavras: 1200
+            maxPalavras: 1200,
+            ...OPCOES_TTS_ULTRON
         })
         return { resultado, mimetype, ptt: ptt !== false }
     } catch (err) {
