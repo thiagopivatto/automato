@@ -44,6 +44,22 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
     // Comandos de grupo
     try{
         switch(comandoSemPrefixo){
+            case 'statusgrupo': {
+                try {
+                    const { publicarStatusGrupo } = await import('../lib/statusGrupo.js')
+                    const enviada = await publicarStatusGrupo(c, mensagemBaileys)
+                    try {
+                        const { MensagemControle } = await import('../controles/MensagemControle.js')
+                        await new MensagemControle().armazenarMensagem(enviada)
+                    } catch { /* publicação já enviada; cache de retry é secundário */ }
+                    await socket.responderTexto(c, id_chat, '✅ Enviei a mensagem para o status deste grupo.', mensagem)
+                } catch (err) {
+                    consoleErro(err, 'STATUS GRUPO')
+                    const validacao = /^(Esse recurso|Responda|Escolha|O bot ainda|Não consegui baixar|A mensagem respondida|Por enquanto|Atualize as dependências)/.test(err.message || '')
+                    await socket.responderTexto(c, id_chat, validacao ? err.message : 'Não consegui publicar no status do grupo. Verifique se o recurso está disponível para o grupo e tente novamente.', mensagem)
+                }
+                break
+            }
             case 'regras':
                 try{
                     let grupoDescricao = grupo.descricao || comandos_info.grupo.regras.msgs.sem_descrição
