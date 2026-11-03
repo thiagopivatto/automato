@@ -77,15 +77,7 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         //ATUALIZE NOME DO USUÁRIO 
         await usuarios.atualizarNome(remetente, nome_usuario)
 
-        // Backup de cache se a captura na chegada falhou
-        if (mensagem_vunica) {
-            try {
-                const { capturarViewOnceConvertida } = await import('./viewOnceCache.js')
-                await capturarViewOnceConvertida(c, mensagemBaileys)
-            } catch { /* */ }
-        }
-
-        // Autorevelar: também manda cópia normal pro PV do dono
+        // Autorevelar (cópia pro dono) — reenvio no grupo já ocorre em receberMensagem
         if(mensagem_vunica && botInfo.autorevelar && numero_dono){
             await bot.redirecionarMensagemRevelada(c, mensagemBaileys, botInfo)
         }

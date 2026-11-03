@@ -41,7 +41,27 @@ export function listarItens(nome) {
     return []
 }
 
-export function tamanhoBanco(nome) {
+/** Lê só o cabeçalho do JSON (rápido em NAS) — evita parse de milhares de itens no boot. */
+function lerTotalRapido(nome) {
+    const arquivo = path.join(DIR, `${nome}.json`)
+    try {
+        if (!fs.existsSync(arquivo)) return null
+        const fd = fs.openSync(arquivo, 'r')
+        const buf = Buffer.alloc(512)
+        const n = fs.readSync(fd, buf, 0, 512, 0)
+        fs.closeSync(fd)
+        const head = buf.slice(0, n).toString('utf8')
+        const m = head.match(/"total"\s*:\s*(\d+)/)
+        if (m) return Number(m[1])
+    } catch { /* */ }
+    return null
+}
+
+export function tamanhoBanco(nome, { rapido = false } = {}) {
+    if (rapido) {
+        const t = lerTotalRapido(nome)
+        if (t != null) return t
+    }
     const data = carregarJson(nome)
     if (!data) return 0
     if (data.total) return data.total
@@ -103,6 +123,6 @@ export function resumoConteudo() {
         'verdade_ou_desafio'
     ]
     const out = {}
-    for (const n of nomes) out[n] = tamanhoBanco(n)
+    for (const n of nomes) out[n] = tamanhoBanco(n, { rapido: true })
     return out
 }

@@ -70,11 +70,18 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
         const rawWa = mensagem.messages[0]
         if (!rawWa) return
 
-        // Stub de VO sem conteúdo: Desktop não recebe a mídia
+        // Stub sem corpo: tenta ACK (às vezes o conteúdo chega depois)
         if (!rawWa.message) {
-            const stub = rawWa.messageStubParameters?.[0] || rawWa.messageStubType
-            if (stub || rawWa.key?.isViewOnce) {
-                console.log(`[REVELAR] VO como stub (${stub || 'sem message'}). Se persistir: apague sessao/ e escaneie QR (browser Android).`)
+            const stub = rawWa.messageStubParameters?.[0]
+            const rawNode = rawWa.messageStubParameters?.[1]
+            if (String(stub || '').includes('absent') && rawNode) {
+                try {
+                    const { BufferJSON } = await import('@whiskeysockets/baileys')
+                    const node = typeof rawNode === 'string'
+                        ? JSON.parse(rawNode, BufferJSON.reviver)
+                        : rawNode
+                    if (typeof c.sendMessageAck === 'function') await c.sendMessageAck(node)
+                } catch { /* */ }
             }
             return
         }
@@ -82,29 +89,22 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
         const tipoMensagem = getContentType(rawWa.message)
         if (!tipoMensagem) return
 
-        const { ehViewOnceRaw, processarViewOnceChegada } = await import('../lib/viewOnceCache.js')
-        const isViewOnce = ehViewOnceRaw(rawWa.message)
+        const { ehViewOnce, aoReceberViewOnce } = await import('../lib/revelar.js')
+        const isViewOnce = ehViewOnce(rawWa.message)
 
         if (rawWa.key.fromMe || isViewOnce) {
             await new MensagemControle().armazenarMensagem(rawWa).catch(() => {})
         }
 
-        // Baixa + reenvia como mídia NORMAL no mesmo chat (antes do converter mutar o proto)
+        // VO → reenvia como mídia NORMAL (antes do converter mutar o proto)
         if (isViewOnce && !rawWa.key.fromMe) {
-            let cloneVo = rawWa
             try {
-                cloneVo = typeof structuredClone === 'function'
+                const cloneVo = typeof structuredClone === 'function'
                     ? structuredClone(rawWa)
-                    : {
-                        ...rawWa,
-                        key: { ...rawWa.key },
-                        message: JSON.parse(JSON.stringify(rawWa.message))
-                    }
-            } catch { /* */ }
-            try {
-                await processarViewOnceChegada(c, cloneVo)
+                    : { ...rawWa, key: { ...rawWa.key }, message: rawWa.message }
+                await aoReceberViewOnce(c, cloneVo)
             } catch (err) {
-                console.log(`processarViewOnceChegada - ${err?.message || err}`)
+                console.log(`[revelar] chegada - ${err?.message || err}`)
             }
         }
 
@@ -201,7 +201,6 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
         } catch {
             console.log(corTexto('Online', false))
         }
-        console.log(corTexto('  VO: reenvio automático ativo (browser Android). Se chegar só stub, apague sessao/ e escaneie o QR.', '#8f8'))
         return true
     } catch(err){
         consoleErro(err, "GROUPS.UPDATE")

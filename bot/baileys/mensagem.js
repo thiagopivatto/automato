@@ -95,20 +95,22 @@ export async function converterMensagem(m, botInfo) {
 
             // Se tiver citado alguma mensagem
             if (mensagem_citada) {
-                let quotedRaw = m.message.extendedTextMessage?.contextInfo?.quotedMessage
+                const ctxInfo = m.message.extendedTextMessage.contextInfo || {}
+                // Cópia do quote original (não mutar o wrapper antes de copiar a mídia)
+                let quotedOriginal = ctxInfo.quotedMessage
+                let quotedRaw = quotedOriginal
                 let tipoMensagemCitada = getContentType(quotedRaw)
                 let citacaoVunica = String(tipoMensagemCitada || '').includes('viewOnce')
                 if (citacaoVunica && quotedRaw?.[tipoMensagemCitada]?.message) {
                     quotedRaw = quotedRaw[tipoMensagemCitada].message
-                    m.message.extendedTextMessage.contextInfo.quotedMessage = quotedRaw
                     tipoMensagemCitada = getContentType(quotedRaw)
                 }
                 if (!citacaoVunica && quotedRaw?.[tipoMensagemCitada]?.viewOnce) citacaoVunica = true
-                if (quotedRaw?.[tipoMensagemCitada]?.viewOnce) quotedRaw[tipoMensagemCitada].viewOnce = false
 
-                const ctxInfo = m.message.extendedTextMessage.contextInfo || {}
-                const midiaCitada = quotedRaw?.[tipoMensagemCitada] || null
-                // Preservar proto bruto da citação (rebuild via WAMessageFromContent zera mediaKey).
+                const midiaCitada = quotedRaw?.[tipoMensagemCitada]
+                    ? { ...quotedRaw[tipoMensagemCitada], viewOnce: false }
+                    : null
+
                 const mensagemCitacaoBaixavel = {
                     key: {
                         remoteJid: m.key.remoteJid,
@@ -116,7 +118,9 @@ export async function converterMensagem(m, botInfo) {
                         fromMe: false,
                         participant: ctxInfo.participant || undefined
                     },
-                    message: quotedRaw
+                    message: midiaCitada
+                        ? { [tipoMensagemCitada]: midiaCitada }
+                        : quotedRaw
                 }
                 respostaInformacoes.citacao = {
                     tipo: tipoMensagemCitada,
@@ -130,6 +134,7 @@ export async function converterMensagem(m, botInfo) {
                     segundos: midiaCitada?.seconds,
                     mensagem_vunica: citacaoVunica,
                     conteudo: quotedRaw,
+                    quoteOriginal: quotedOriginal,
                     midia: midiaCitada,
                     mensagem: mensagemCitacaoBaixavel
                 }

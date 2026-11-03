@@ -247,17 +247,10 @@ export class BotControle{
             )
             let buffer = null
             try {
-                const { baixarMidiaViewOnce } = await import('../lib/revelarMidia.js')
-                const midia = mensagem?.message?.[tipo]
-                buffer = await baixarMidiaViewOnce({
-                    tipo,
-                    midia,
-                    conteudo: mensagem?.message,
-                    stanzaId: mensagem?.key?.id,
-                    remetente: mensagem?.key?.participant || mensagem?.key?.remoteJid,
-                    mensagem
-                }, c, mensagem?.key?.remoteJid)
-                if (!buffer?.length && midia?.mediaKey) {
+                const { baixarMidiaViewOnce } = await import('../lib/revelar.js')
+                const arquivo = await baixarMidiaViewOnce(c, mensagem)
+                buffer = arquivo?.buffer || null
+                if (!buffer?.length) {
                     buffer = await downloadMediaMessage(mensagem, 'buffer', {}, {
                         reuploadRequest: c.updateMediaMessage?.bind(c)
                     })

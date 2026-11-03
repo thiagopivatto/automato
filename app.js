@@ -2,7 +2,7 @@
 import { fileURLToPath } from 'url'
 import path from 'path'
 import { chdir } from 'process'
-import {makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason} from '@whiskeysockets/baileys'
+import {makeWASocket, useMultiFileAuthState, DisconnectReason} from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
 import * as eventosSocket from './bot/baileys/eventosSocket.js'
 import {BotControle} from './bot/controles/BotControle.js'
@@ -12,10 +12,11 @@ import moment from "moment-timezone"
 import NodeCache from 'node-cache'
 import qrcode from 'qrcode-terminal'
 import { carregarEnv } from './bot/lib/env.js'
+import { obterVersaoWaWeb } from './bot/lib/baileysVersion.js'
 
 // UNC/CMD no Windows pode iniciar o processo em C:\Windows; fixa a raiz do projeto
 const raizProjeto = path.dirname(fileURLToPath(import.meta.url))
-chdir(raizProjeto)
+try { chdir(raizProjeto) } catch { /* UNC sem drive letter: Node ainda resolve via import.meta.url */ }
 carregarEnv(raizProjeto)
 
 moment.tz.setDefault('America/Sao_Paulo')
@@ -45,19 +46,23 @@ async function connectToWhatsApp(){
     encerrarSocketAtual()
 
     let inicializacaoCompleta = false, eventosEsperando = []
-    const { state : estadoAuth , saveCreds } = await useMultiFileAuthState('sessao')
-    let {version : versaoWaWeb} = await fetchLatestBaileysVersion()
+    const sessaoDir = path.join(raizProjeto, 'sessao')
+    // Auth + versão WA em paralelo
+    const [auth, versaoInfo] = await Promise.all([
+        useMultiFileAuthState(sessaoDir),
+        obterVersaoWaWeb()
+    ])
+    const { state: estadoAuth, saveCreds } = auth
+    const versaoWaWeb = versaoInfo.version
+    console.log(`[boot] WA Web ${versaoWaWeb.join('.')} | sessao=${sessaoDir}`)
     const c = makeWASocket(configSocket(estadoAuth, cacheTentativasEnvio, versaoWaWeb))
     sockAtual = c
     const bot = new BotControle()
 
-    // Não zera o cache de mensagens (Baileys usa getMessage em retries).
-    // Só remove entradas antigas para não crescer sem limite.
-    try {
-        await new MensagemControle().podarMensagensAntigas()
-    } catch (e) {
+    // Poda em background — não bloqueia o QR/conexão
+    new MensagemControle().podarMensagensAntigas().catch((e) => {
         console.error('[cache msgs]', e?.message || e)
-    }
+    })
     
     //Escutando novos eventos
     c.ev.process(async(events)=>{
@@ -73,7 +78,15 @@ async function connectToWhatsApp(){
             const { connection, lastDisconnect, qr } = update
             if (qr) {
                 console.log('\n[QR] Escaneie o QR Code abaixo com o WhatsApp:\n')
-                qrcode.generate(qr, { small: true })
+                try {
+                    qrcode.generate(qr, { small: true })
+                } catch (err) {
+                    console.log('[QR] (terminal) ' + qr)
+                    console.error('[QR] falha ao desenhar:', err?.message || err)
+                }
+            }
+            if (connection) {
+                console.log(`[conexão] ${connection}`)
             }
             if (lastDisconnect?.error) {
                 console.log(`[⚠️] Desconectado com erro: ${lastDisconnect.error}`);

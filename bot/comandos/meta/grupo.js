@@ -118,6 +118,42 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                     banir_erro: "[❗] Não foi possível banir este membro, provavelmente ele já saiu do grupo."
                 }
             },
+            voteban: {
+                descricao: 'Abre votação para banir um membro',
+                guia:
+                    `*Como usar ${prefixo}voteban*\n\n` +
+                    `1) Iniciar: *${prefixo}voteban* @membro  *ou* responda a msg da pessoa com *${prefixo}voteban*\n` +
+                    `2) Votar: *${prefixo}voteban*  *ou*  *${prefixo}votar*\n` +
+                    `3) Ver: *${prefixo}voteban status*\n` +
+                    `4) Cancelar (admin): *${prefixo}voteban cancelar*\n\n` +
+                    `• Precisa de 3–5 votos (conforme tamanho do grupo)\n` +
+                    `• Vale por 2 minutos\n` +
+                    `• Não banir admin/bot\n` +
+                    `• O bot precisa ser *admin* do grupo\n`,
+                msgs: {
+                    iniciada:
+                        '🗳️ *Votação de ban* aberta contra @{p1}\n' +
+                        'Precisa de *{p2}* votos · tempo: *{p3}s*\n' +
+                        `Vote com *{p4}voteban* ou *{p4}votar*`,
+                    voto_ok: '✅ Voto computado contra @{p1}\nProgresso: *{p2}/{p3}* · resta *{p4}s*',
+                    banido: '🔨 @{p1} foi banido por votação (*{p2}* votos).',
+                    ja_votou: '[❗] Você já votou nesta rodada.',
+                    voto_alvo: '[❗] O alvo não pode votar na própria expulsão.',
+                    sem_votacao: '[❗] Não há votação de ban aberta neste grupo.',
+                    ja_ativa: '[❗] Já existe votação aberta contra @{p1} ({p2}/{p3}). Use *status* ou vote nela.',
+                    status: '🗳️ Votação contra @{p1}: *{p2}/{p3}* votos · resta *{p4}s*',
+                    cancelada: '✅ Votação de ban cancelada.',
+                    alvo_admin: '[❗] Não dá pra abrir voteban em administrador.',
+                    alvo_bot: '[❗] Não dá pra banir o bot.',
+                    nao_membro: '[❗] Essa pessoa não está no grupo.',
+                    banir_erro: '[❗] Atingiu os votos, mas não consegui banir (permissão/já saiu).'
+                }
+            },
+            votar: {
+                descricao: 'Vota na votação de ban aberta',
+                guia: `Ex: *${prefixo}votar* - Confirma seu voto na *${prefixo}voteban* aberta.\n`,
+                msgs: {}
+            },
             promover: {
                 descricao: '',
                 guia: `Ex: *${prefixo}promover* @membro - Promove o membro mencionado a *ADMINISTRADOR*.\n\n`+
@@ -456,8 +492,9 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
             },
             revelar: {
                 descricao: '',
-                guia: `Ex: Responder visualização única com *${prefixo}revelar* — reenvia imagem/vídeo/áudio como mídia *normal*.\n` +
-                    `O bot também tenta reenviar automaticamente assim que *recebe* a visualização única.\n`,
+                guia:
+                    `Ao *receber* visualização única (foto/vídeo/áudio/voz), o bot reenvia automaticamente como mídia normal.\n` +
+                    `Manual: responda a VO com *${prefixo}revelar* (admin).\n`,
                 msgs: {}
             },
         }

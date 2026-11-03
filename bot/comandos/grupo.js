@@ -32,6 +32,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
         grupo,
         citacao,
         mencionados,
+        mensagem_dono,
     } = mensagemBaileys
     const {mimetype} = {...midia}
     const {id_grupo, dono, participantes, admins, usuario_admin, bot_admin} = {...grupo}
@@ -265,112 +266,32 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            `Responda uma *mensagem de visualização única* com *${prefixo}revelar*.\n` +
-                            `Obs: o bot também reenvia automaticamente ao *receber* a VO.`,
+                            `Responda uma *visualização única* com *${prefixo}revelar*.\n` +
+                            `Obs: o bot já tenta reenviar sozinho quando a VO chega.`,
                             mensagem
                         )
                     }
-                    const {
-                        obterViewOnceCache,
-                        enviarMidiaNormal,
-                        capturarViewOnce
-                    } = await import('../lib/viewOnceCache.js')
-                    const { revelarViewOnce, retransmitirViewOnceSemDownload } = await import('../lib/revelarMidia.js')
-
-                    let cachedVo = citacao?.stanzaId
-                        ? await obterViewOnceCache(id_chat, citacao.stanzaId).catch(() => null)
-                        : null
-
-                    // Tenta baixar de novo a partir do quote bruto (se tiver mediaKey)
-                    if (!cachedVo?.buffer?.length && citacao?.conteudo) {
-                        try {
-                            await capturarViewOnce(c, {
-                                key: {
-                                    remoteJid: id_chat,
-                                    id: citacao.stanzaId,
-                                    fromMe: false,
-                                    participant: citacao.remetente
-                                },
-                                message: citacao.conteudo?.viewOnceMessageV2
-                                    || citacao.conteudo?.viewOnceMessage
-                                    || citacao.conteudo?.viewOnceMessageV2Extension
-                                    || {
-                                        viewOnceMessageV2: { message: citacao.conteudo }
-                                    }
-                            })
-                            cachedVo = await obterViewOnceCache(id_chat, citacao.stanzaId).catch(() => null)
-                        } catch (err) {
-                            console.log(`revelar captura quote - ${err?.message || err}`)
-                        }
-                    }
-
-                    if (!citacao?.mensagem_vunica && !cachedVo) {
+                    const { revelarPorCitacao, ehViewOnce } = await import('../lib/revelar.js')
+                    const pareceVo = !!(
+                        citacao?.mensagem_vunica ||
+                        ehViewOnce(citacao?.quoteOriginal) ||
+                        ehViewOnce(citacao?.conteudo) ||
+                        citacao?.midia?.viewOnce
+                    )
+                    if (!pareceVo && !citacao?.midia) {
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            `Responda uma *mensagem de visualização única* com *${prefixo}revelar*.`,
+                            `Responda uma *visualização única* com *${prefixo}revelar*.`,
                             mensagem
                         )
                     }
-
-                    const tipoCit = cachedVo?.tipo || citacao.tipo
-                    const tiposOk = [tiposMensagem.imagem, tiposMensagem.video, tiposMensagem.audio]
-                    if (!tiposOk.includes(tipoCit)) {
+                    const res = await revelarPorCitacao(c, citacao, id_chat, mensagem)
+                    if (!res?.ok) {
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            'Só consigo revelar *imagem*, *vídeo* ou *áudio* de visualização única.',
-                            mensagem
-                        )
-                    }
-
-                    if (cachedVo?.buffer?.length) {
-                        await enviarMidiaNormal(c, id_chat, {
-                            buffer: cachedVo.buffer,
-                            tipo: cachedVo.tipo || tipoCit,
-                            mimetype: cachedVo.mimetype || citacao.mimetype,
-                            caption: cachedVo.caption || citacao.legenda || ''
-                        }, mensagem)
-                        break
-                    }
-
-                    const revelado = await revelarViewOnce(citacao, c, id_chat)
-                    if (revelado?.buffer?.length) {
-                        await enviarMidiaNormal(c, id_chat, {
-                            buffer: revelado.buffer,
-                            tipo: revelado.tipo || tipoCit,
-                            mimetype: revelado.mimetype || citacao.mimetype,
-                            caption: revelado.legenda || citacao.legenda || ''
-                        }, mensagem)
-                        break
-                    }
-
-                    // Fallback clássico: relay do proto com viewOnce=false
-                    try {
-                        const protoMsg = citacao.conteudo || citacao.mensagem?.message
-                        if (protoMsg?.[tipoCit]) {
-                            const copia = {
-                                [tipoCit]: {
-                                    ...protoMsg[tipoCit],
-                                    viewOnce: false
-                                }
-                            }
-                            await socket.retransmitirMensagem(c, id_chat, copia, mensagem)
-                            break
-                        }
-                    } catch (err) {
-                        console.log(`revelar relay clássico - ${err?.message || err}`)
-                    }
-
-                    const okRelay = await retransmitirViewOnceSemDownload(c, id_chat, citacao, mensagem)
-                    if (!okRelay) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            'Não consegui revelar essa mensagem.\n' +
-                            '1) Peça pra *reenviar* a visualização única\n' +
-                            '2) O bot deve *receber* a mídia (se só chega stub, apague a pasta *sessao* e escaneie o QR de novo)\n' +
-                            '3) Ou use *' + prefixo + 'revelar* respondendo *sem abrir*',
+                            'Não consegui revelar essa mídia (quote sem chave/url). Peça pra reenviar a VO.',
                             mensagem
                         )
                     }
@@ -379,7 +300,7 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     await socket.responderTexto(
                         c,
                         id_chat,
-                        'Não consegui revelar essa mensagem. Ela pode ter expirado ou já ter sido vista.',
+                        'Não consegui revelar essa mensagem.',
                         mensagem
                     )
                 }
@@ -832,6 +753,233 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
                     }   
                 } catch(err){
                     throw err
+                }
+                break
+
+            case 'voteban':
+            case 'votar':
+                try {
+                    if (!bot_admin) {
+                        return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                    }
+                    const {
+                        obterVotoBan,
+                        iniciarVotoBan,
+                        registrarVotoBan,
+                        cancelarVotoBan,
+                        segundosRestantes,
+                        listaVotantes
+                    } = await import('../lib/votoBan.js')
+                    const msgsVb = comandos_info.grupo.voteban.msgs
+                    const arg = String(texto_recebido || '').trim().toLowerCase()
+
+                    if (['cancelar', 'cancel', 'parar', 'stop'].includes(arg)) {
+                        if (!usuario_admin && !mensagem_dono) {
+                            return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                        }
+                        const havia = cancelarVotoBan(id_grupo)
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            havia ? msgsVb.cancelada : msgsVb.sem_votacao,
+                            mensagem
+                        )
+                    }
+
+                    if (['status', 'ver', 'info'].includes(arg)) {
+                        const atual = obterVotoBan(id_grupo)
+                        if (!atual) return await socket.responderTexto(c, id_chat, msgsVb.sem_votacao, mensagem)
+                        return await socket.enviarTextoComMencoes(
+                            c,
+                            id_chat,
+                            criarTexto(
+                                msgsVb.status,
+                                mencaoNumero(atual.alvo),
+                                atual.votos.size,
+                                atual.votosNecessarios,
+                                segundosRestantes(atual)
+                            ),
+                            [atual.alvo, ...listaVotantes(atual)]
+                        )
+                    }
+
+                    // Sem alvo: tenta votar na votação aberta
+                    let alvo = null
+                    if (mencionados.length > 0) alvo = mencionados[0]
+                    else if (mensagem_citada && citacao?.remetente) alvo = citacao.remetente
+
+                    const aberta = obterVotoBan(id_grupo)
+
+                    // Só "!voteban" / "!votar" → registra voto
+                    if (!alvo && comandoSemPrefixo === 'votar') {
+                        if (!aberta) return await socket.responderTexto(c, id_chat, msgsVb.sem_votacao, mensagem)
+                        const res = registrarVotoBan(id_grupo, remetente)
+                        if (!res.ok && res.erro === 'ja_votou') {
+                            return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
+                        }
+                        if (!res.ok && res.erro === 'alvo') {
+                            return await socket.responderTexto(c, id_chat, msgsVb.voto_alvo, mensagem)
+                        }
+                        if (res.atingiu) {
+                            try {
+                                await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+                                return await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                    [res.voto.alvo]
+                                )
+                            } catch {
+                                return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
+                            }
+                        }
+                        return await socket.enviarTextoComMencoes(
+                            c,
+                            id_chat,
+                            criarTexto(
+                                msgsVb.voto_ok,
+                                mencaoNumero(res.voto.alvo),
+                                res.voto.votos.size,
+                                res.voto.votosNecessarios,
+                                segundosRestantes(res.voto)
+                            ),
+                            [res.voto.alvo]
+                        )
+                    }
+
+                    // Inicia ou vota na mesma pessoa
+                    if (!alvo) {
+                        if (aberta) {
+                            // !voteban sem menção = votar na aberta
+                            const res = registrarVotoBan(id_grupo, remetente)
+                            if (!res.ok && res.erro === 'ja_votou') {
+                                return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
+                            }
+                            if (res.atingiu) {
+                                try {
+                                    await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+                                    return await socket.enviarTextoComMencoes(
+                                        c,
+                                        id_chat,
+                                        criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                        [res.voto.alvo]
+                                    )
+                                } catch {
+                                    return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
+                                }
+                            }
+                            return await socket.enviarTextoComMencoes(
+                                c,
+                                id_chat,
+                                criarTexto(
+                                    msgsVb.voto_ok,
+                                    mencaoNumero(res.voto.alvo),
+                                    res.voto.votos.size,
+                                    res.voto.votosNecessarios,
+                                    segundosRestantes(res.voto)
+                                ),
+                                [res.voto.alvo]
+                            )
+                        }
+                        return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                    }
+
+                    if (listaContemJid(botsJid, alvo) || alvo === numero_bot) {
+                        return await socket.responderTexto(c, id_chat, msgsVb.alvo_bot, mensagem)
+                    }
+                    if (listaContemJid(admins, alvo)) {
+                        return await socket.responderTexto(c, id_chat, msgsVb.alvo_admin, mensagem)
+                    }
+                    if (!listaContemJid(participantes, alvo)) {
+                        return await socket.responderTexto(c, id_chat, msgsVb.nao_membro, mensagem)
+                    }
+
+                    // Já existe votação para outro alvo
+                    if (aberta && aberta.alvo !== alvo && !listaContemJid([aberta.alvo], alvo)) {
+                        return await socket.enviarTextoComMencoes(
+                            c,
+                            id_chat,
+                            criarTexto(
+                                msgsVb.ja_ativa,
+                                mencaoNumero(aberta.alvo),
+                                aberta.votos.size,
+                                aberta.votosNecessarios
+                            ),
+                            [aberta.alvo]
+                        )
+                    }
+
+                    // Mesmo alvo aberto → só registra voto
+                    if (aberta && (aberta.alvo === alvo || listaContemJid([aberta.alvo], alvo))) {
+                        const res = registrarVotoBan(id_grupo, remetente)
+                        if (!res.ok && res.erro === 'ja_votou') {
+                            return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
+                        }
+                        if (res.atingiu) {
+                            try {
+                                await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+                                return await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                    [res.voto.alvo]
+                                )
+                            } catch {
+                                return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
+                            }
+                        }
+                        return await socket.enviarTextoComMencoes(
+                            c,
+                            id_chat,
+                            criarTexto(
+                                msgsVb.voto_ok,
+                                mencaoNumero(res.voto.alvo),
+                                res.voto.votos.size,
+                                res.voto.votosNecessarios,
+                                segundosRestantes(res.voto)
+                            ),
+                            [res.voto.alvo]
+                        )
+                    }
+
+                    // Novo: votos necessários = min(5, max(3, ceil(membros/4)))
+                    const membros = Math.max(1, (participantes || []).length)
+                    const neces = Math.min(5, Math.max(3, Math.ceil(membros / 4)))
+                    const ini = iniciarVotoBan({
+                        idGrupo: id_grupo,
+                        alvo,
+                        iniciador: remetente,
+                        votosNecessarios: neces,
+                        duracaoMs: 2 * 60 * 1000
+                    })
+                    if (!ini.ok) {
+                        return await socket.enviarTextoComMencoes(
+                            c,
+                            id_chat,
+                            criarTexto(
+                                msgsVb.ja_ativa,
+                                mencaoNumero(ini.voto.alvo),
+                                ini.voto.votos.size,
+                                ini.voto.votosNecessarios
+                            ),
+                            [ini.voto.alvo]
+                        )
+                    }
+                    return await socket.enviarTextoComMencoes(
+                        c,
+                        id_chat,
+                        criarTexto(
+                            msgsVb.iniciada,
+                            mencaoNumero(alvo),
+                            ini.voto.votosNecessarios,
+                            segundosRestantes(ini.voto),
+                            prefixo
+                        ),
+                        [alvo]
+                    )
+                } catch (err) {
+                    consoleErro(err, 'VOTEBAN')
+                    await socket.responderTexto(c, id_chat, 'Não consegui processar a votação agora.', mensagem)
                 }
                 break
 
