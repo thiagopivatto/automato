@@ -149,31 +149,11 @@ export const obterContatosBloqueados = async (c) => {
 
 
 // Envio de mensagens
-/** Divide textos longos para o WhatsApp não cortar (~3500 chars por mensagem). */
-function dividirTextoLongo(texto, max = 3500) {
-    if (!texto || texto.length <= max) return [texto || '']
-    const partes = []
-    let restante = texto
-    while (restante.length > max) {
-        let corte = restante.lastIndexOf('\n', max)
-        if (corte < max * 0.5) corte = restante.lastIndexOf(' ', max)
-        if (corte < max * 0.5) corte = max
-        partes.push(restante.slice(0, corte).trimEnd())
-        restante = restante.slice(corte).trimStart()
-    }
-    if (restante) partes.push(restante)
-    return partes
-}
-
 export const enviarTexto = async(c, id_chat, texto)=>{
     await atualizarPresenca(c, id_chat, "composing")
-    const partes = dividirTextoLongo(String(texto ?? ''))
-    let ultima
-    for (const parte of partes) {
-        ultima = await c.sendMessage(id_chat, { text: parte, linkPreview: null })
-        await guardarEnvio(ultima)
-    }
-    return ultima
+    const enviada = await c.sendMessage(id_chat, { text: String(texto ?? ''), linkPreview: null })
+    await guardarEnvio(enviada)
+    return enviada
 }
 
 export const retransmitirMensagem = async(c, id_chat, mensagem, mensagemCitacao)=>{
@@ -245,17 +225,13 @@ export const enviarArquivoUrl = async(c, tipo, id_chat, url, legenda) =>{
 
 export const responderTexto = async(c, id_chat, texto, mensagemCitacao)=>{ 
     await atualizarPresenca(c, id_chat, "composing")
-    const partes = dividirTextoLongo(String(texto ?? ''))
-    let ultima
-    for (let i = 0; i < partes.length; i++) {
-        ultima = await c.sendMessage(
-            id_chat,
-            { text: partes[i], linkPreview: null },
-            i === 0 ? { quoted: mensagemCitacao } : undefined
-        )
-        await guardarEnvio(ultima)
-    }
-    return ultima
+    const enviada = await c.sendMessage(
+        id_chat,
+        { text: String(texto ?? ''), linkPreview: null },
+        { quoted: mensagemCitacao }
+    )
+    await guardarEnvio(enviada)
+    return enviada
 }
 
 export const responderArquivoLocal = async(c, tipo, id_chat, caminhoArquivo, legenda, mensagemCitacao, mimetype = '') =>{ 
