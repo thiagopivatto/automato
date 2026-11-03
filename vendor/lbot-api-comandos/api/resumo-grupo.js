@@ -5,7 +5,7 @@
 import { elevenKey } from '../lib/elevenlabs.js'
 import { estimarDuracaoSegundos, palavrasParaDuracao, WPM_TTS } from '../lib/tts-robusto.js'
 import { gerarTextoIA } from './ia.js'
-import { gerarAudioNarrado } from './tts-narrado.js'
+import { gerarAudioNarrado, gerarAudioNarradoGratis } from './tts-narrado.js'
 
 const msgErro = (err) => err?.erro || err?.message || err?.response?.status || String(err || 'erro desconhecido')
 
@@ -239,10 +239,95 @@ function extrairMemoriaDoRoteiro(texto, analise) {
     }
 }
 
+/** Contagem simples de quem falou mais. */
+function rankingParticipantes(lista, limite = 8) {
+    const mapa = new Map()
+    for (const m of lista || []) {
+        const nome = String(m.nome_usuario || 'Alguém').trim() || 'Alguém'
+        mapa.set(nome, (mapa.get(nome) || 0) + 1)
+    }
+    return [...mapa.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limite)
+}
+
+/**
+ * Roteiro local quando a API de texto falha — ainda assim gera áudio no TTS gratuito.
+ * Não inventa fatos: só comenta o que está nas mensagens.
+ */
+function montarRoteiroLocalFallback(lista, nomeGrupo, analise = {}) {
+    const grupo = nomeGrupo || 'o grupo'
+    const ranking = rankingParticipantes(lista, 6)
+    const trechos = (lista || [])
+        .map((m) => {
+            const nome = String(m.nome_usuario || 'Alguém').trim() || 'Alguém'
+            const texto = String(m.texto || '').replace(/\s+/g, ' ').trim()
+            if (!texto || texto.length < 3) return null
+            if (/^\[enviou/.test(texto)) return `${nome} mandou mídia.`
+            return `${nome} falou: ${texto.slice(0, 180)}`
+        })
+        .filter(Boolean)
+
+    const amostragem = []
+    const passo = Math.max(1, Math.floor(trechos.length / 25))
+    for (let i = 0; i < trechos.length && amostragem.length < 28; i += passo) {
+        amostragem.push(trechos[i])
+    }
+
+    const top = ranking.map(([n, q]) => `${n} com ${q} mensagens`).join(', ')
+    const assuntos = (analise.assuntos || []).slice(0, 5).join(', ')
+    const acontecimentos = (analise.acontecimentos || []).slice(0, 6).join('. ')
+
+    const blocos = [
+        `Eu analisei essa bagunça do grupo ${grupo}. Foram ${lista.length} mensagens na janela. ` +
+        `Sem enrolação: eu tô aqui pra falar o que rolou, do meu jeito.`,
+        top
+            ? `Quem mais apareceu: ${top}. Se alguém sumiu no meio, eu vi. Se alguém só veio pra bagunçar, eu também vi.`
+            : `O movimento ficou espalhado. Pouca gente puxando, muita gente reagindo.`,
+        assuntos ? `Assuntos que se destacaram: ${assuntos}.` : '',
+        acontecimentos ? `Do que deu pra cravar: ${acontecimentos}.` : '',
+        `Agora o que eu peguei no histórico, sem inventar diálogo:`,
+        ...amostragem.map((t, i) => {
+            const tom = i % 3 === 0 ? 'Olha só.' : i % 3 === 1 ? 'Aí vem essa.' : 'E ainda teve isso.'
+            return `${tom} ${t}`
+        }),
+        `Fechando: esse grupo continua sendo um circo com entrada franca. Eu acompanhei, eu comentei, e se pedirem de novo eu volto. ` +
+        `Por enquanto, é isso que deu pra extrair sem inventar história.`
+    ].filter(Boolean)
+
+    let texto = blocos.join(' ')
+    // Alonga um pouco se ficou curto demais para o TTS (sem inventar fatos)
+    while (contarPalavras(texto) < 420 && amostragem.length) {
+        texto +=
+            ` De novo, só pra ficar claro do meu ponto de vista: eu li o histórico, eu vi quem falou, ` +
+            `e o clima do ${grupo} tá exatamente do jeito que essas mensagens mostram. ` +
+            `Não precisa romantizar. Não precisa dramatizar além do que já tá escrito. ` +
+            `Eu só tô colocando ordem nessa bagunça e devolvendo em voz.`
+        if (contarPalavras(texto) >= 420) break
+        texto += ` ${amostragem[contarPalavras(texto) % amostragem.length]}`
+        break
+    }
+    return limparRoteiroFalado(texto)
+}
+
+async function sintetizarAudioResumo(texto, optsTts) {
+    // 1) ElevenLabs → Edge → OpenAI
+    try {
+        const audio = await gerarAudioNarrado(texto, optsTts)
+        if (audio?.resultado?.length) return audio
+    } catch (err) {
+        console.log(`API resumo TTS completo - ${msgErro(err)}`)
+    }
+    // 2) Força Edge neural gratuito (voz natural)
+    const gratis = await gerarAudioNarradoGratis(texto, optsTts)
+    if (!gratis?.resultado?.length) throw { erro: 'Áudio vazio no TTS gratuito' }
+    return gratis
+}
+
 /**
  * Resumo falado do grupo (3–5 min).
- * Fluxo: análise → roteiro com memória → estimativa de duração → TTS (ElevenLabs → Edge silencioso).
- * Se o TTS falhar, lança erro (só entrega áudio — sem fallback em texto).
+ * Fluxo: análise → roteiro (IA, com fallback local) → TTS ElevenLabs → Edge gratuito.
+ * Erro de API de texto NÃO cancela o áudio: usa roteiro local + voz natural gratuita.
  */
 export const gerarResumoGrupoAudio = async ({
     mensagens,
@@ -303,12 +388,22 @@ export const gerarResumoGrupoAudio = async ({
         `MATERIAL BRUTO (âncora factual):\n${linhas.slice(-16000)}\n\n` +
         'Escreva agora a narração falada completa.'
 
-    const { resultado: roteiroBruto } = await gerarTextoIA(userRoteiro, SYSTEM_ROTEIRO_RESUMO, OPCOES_ROTEIRO)
-    let texto = limparRoteiroFalado(roteiroBruto)
-    let est = estimarDuracaoSegundos(texto, fontePrevista)
+    let texto = ''
+    let usouRoteiroLocal = false
+    try {
+        const { resultado: roteiroBruto } = await gerarTextoIA(userRoteiro, SYSTEM_ROTEIRO_RESUMO, OPCOES_ROTEIRO)
+        texto = limparRoteiroFalado(roteiroBruto)
+        if (contarPalavras(texto) < 60) throw { erro: 'roteiro curto demais' }
+    } catch (err) {
+        console.log(`API resumo roteiro IA falhou → local - ${msgErro(err)}`)
+        texto = montarRoteiroLocalFallback(lista, nomeGrupo, analise)
+        usouRoteiroLocal = true
+    }
 
-    // Ajuste de roteiro se fora da faixa preferida (1 tentativa; não inventa se raso)
-    if (conteudoRico && est < RESUMO_DUR.prefMinSeg && contarPalavras(texto) < palavrasAlvoMin) {
+    let est = estimarDuracaoSegundos(texto, usouRoteiroLocal ? 'edge' : fontePrevista)
+
+    // Ajuste de roteiro se fora da faixa (só se a IA de texto estiver ok)
+    if (!usouRoteiroLocal && conteudoRico && est < RESUMO_DUR.prefMinSeg && contarPalavras(texto) < palavrasAlvoMin) {
         try {
             const { resultado: expandido } = await gerarTextoIA(
                 `O roteiro ficou curto (~${est}s / ${contarPalavras(texto)} palavras). ` +
@@ -326,7 +421,7 @@ export const gerarResumoGrupoAudio = async ({
         } catch (err) {
             console.log(`API resumo ajuste curto - ${msgErro(err)}`)
         }
-    } else if (est > RESUMO_DUR.maxSeg || contarPalavras(texto) > palavrasHardMax) {
+    } else if (!usouRoteiroLocal && (est > RESUMO_DUR.maxSeg || contarPalavras(texto) > palavrasHardMax)) {
         texto = cortarPorPalavras(texto, palavrasHardMax)
         est = estimarDuracaoSegundos(texto, fontePrevista)
         if (est > RESUMO_DUR.prefMaxSeg) {
@@ -349,44 +444,46 @@ export const gerarResumoGrupoAudio = async ({
         }
     }
 
-    if (contarPalavras(texto) < 60) throw { erro: 'Não foi possível gerar o comentário do grupo.' }
+    if (contarPalavras(texto) < 40) {
+        texto = montarRoteiroLocalFallback(lista, nomeGrupo, analise)
+        usouRoteiroLocal = true
+        est = estimarDuracaoSegundos(texto, 'edge')
+    }
+    if (contarPalavras(texto) < 40) throw { erro: 'Não foi possível montar o comentário do grupo.' }
 
     console.log(
-        `resumo grupo: ${contarPalavras(texto)} palavras, ~${est}s estimado (${fontePrevista}), ` +
-        `${lista.length} msgs, nível=${analise.nivel_conteudo}`
+        `resumo grupo: ${contarPalavras(texto)} palavras, ~${est}s estimado, ` +
+        `${lista.length} msgs, nível=${analise.nivel_conteudo}, local=${usouRoteiroLocal}`
     )
 
     const memoriaExtraida = extrairMemoriaDoRoteiro(texto, analise)
-
-    let ultimoErroTts = null
-    for (let tentativa = 1; tentativa <= 2; tentativa++) {
-        try {
-            const audio = await gerarAudioNarrado(texto, {
-                maxPalavras: palavrasHardMax + 80,
-                minSegundos: RESUMO_DUR.minSeg,
-                maxSegundos: RESUMO_DUR.maxSeg,
-                forcarDuracaoMinima: conteudoRico && est >= RESUMO_DUR.minSeg * 0.85
-            })
-            if (!audio?.resultado?.length) throw { erro: 'Áudio vazio' }
-            return {
-                resultado: audio.resultado,
-                roteiro: texto,
-                totalMsgs: lista.length,
-                ttsFonte: audio.fonte,
-                mimetype: audio.mimetype || 'audio/ogg; codecs=opus',
-                ptt: audio.ptt !== false,
-                duracao: audio.duracao || 0,
-                entrega: 'audio',
-                memoria: memoriaExtraida,
-                analiseNivel: analise.nivel_conteudo
-            }
-        } catch (err) {
-            ultimoErroTts = err
-            console.log(`API resumo TTS tentativa ${tentativa} - ${msgErro(err)}`)
-        }
+    const optsTts = {
+        maxPalavras: palavrasHardMax + 80,
+        minSegundos: usouRoteiroLocal ? 0 : RESUMO_DUR.minSeg,
+        maxSegundos: RESUMO_DUR.maxSeg,
+        forcarDuracaoMinima: !usouRoteiroLocal && conteudoRico && est >= RESUMO_DUR.minSeg * 0.85
     }
-    throw {
-        erro: `Não foi possível gerar o áudio do resumo. ${msgErro(ultimoErroTts)}`.slice(0, 280)
+
+    try {
+        const audio = await sintetizarAudioResumo(texto, optsTts)
+        return {
+            resultado: audio.resultado,
+            roteiro: texto,
+            totalMsgs: lista.length,
+            ttsFonte: audio.fonte,
+            mimetype: audio.mimetype || 'audio/ogg; codecs=opus',
+            ptt: audio.ptt !== false,
+            duracao: audio.duracao || 0,
+            entrega: 'audio',
+            memoria: memoriaExtraida,
+            analiseNivel: analise.nivel_conteudo,
+            roteiroLocal: usouRoteiroLocal
+        }
+    } catch (err) {
+        console.log(`API resumo TTS final - ${msgErro(err)}`)
+        throw {
+            erro: 'Não foi possível gerar o áudio do resumo agora. Tenta de novo daqui a pouco.'
+        }
     }
 }
 

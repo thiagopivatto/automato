@@ -10,11 +10,14 @@ export async function converterMensagem(m, botInfo) {
         try {
             m = m.messages[0]
             let tipo = getContentType(m.message)
-            let mensagem_vunica = tipo.includes('viewOnce')
+            let mensagem_vunica = String(tipo || '').includes('viewOnce')
             if (mensagem_vunica) {
                 m.message = m.message[tipo].message
                 tipo = getContentType(m.message)
             }
+            // Algumas versões mandam a mídia já “desembrulhada” com flag viewOnce
+            if (!mensagem_vunica && m.message?.[tipo]?.viewOnce) mensagem_vunica = true
+            if (m.message?.[tipo]?.viewOnce) m.message[tipo].viewOnce = false
             let mensagem_citada = tipo == tiposMensagem.textoExt && m.message.extendedTextMessage?.contextInfo?.quotedMessage != undefined
             let { numero_bot, lid_bot } = botInfo
             let remetente = (m.key.fromMe) ? numero_bot : m.key.participant || m.key.remoteJid
@@ -93,23 +96,32 @@ export async function converterMensagem(m, botInfo) {
 
             // Se tiver citado alguma mensagem
             if (mensagem_citada) {
-                let tipoMensagemCitada = getContentType(m.message.extendedTextMessage?.contextInfo?.quotedMessage)
-                let mensagem_vunica = tipoMensagemCitada.includes('viewOnce')
-                if (mensagem_vunica) {
-                    m.message.extendedTextMessage.contextInfo.quotedMessage = m.message.extendedTextMessage.contextInfo.quotedMessage[tipoMensagemCitada].message
-                    tipoMensagemCitada = getContentType(m.message.extendedTextMessage?.contextInfo?.quotedMessage)
+                let quotedRaw = m.message.extendedTextMessage?.contextInfo?.quotedMessage
+                let tipoMensagemCitada = getContentType(quotedRaw)
+                let citacaoVunica = String(tipoMensagemCitada || '').includes('viewOnce')
+                if (citacaoVunica && quotedRaw?.[tipoMensagemCitada]?.message) {
+                    quotedRaw = quotedRaw[tipoMensagemCitada].message
+                    m.message.extendedTextMessage.contextInfo.quotedMessage = quotedRaw
+                    tipoMensagemCitada = getContentType(quotedRaw)
                 }
+                if (!citacaoVunica && quotedRaw?.[tipoMensagemCitada]?.viewOnce) citacaoVunica = true
+                if (quotedRaw?.[tipoMensagemCitada]?.viewOnce) quotedRaw[tipoMensagemCitada].viewOnce = false
+
                 respostaInformacoes.citacao = {
                     tipo: tipoMensagemCitada,
                     remetente: m.message.extendedTextMessage.contextInfo.participant || m.message.extendedTextMessage.contextInfo.remoteJid,
-                    corpo: m.message.extendedTextMessage.contextInfo.quotedMessage?.conversation || m.message.extendedTextMessage.contextInfo.quotedMessage?.extendedTextMessage?.text,
-                    legenda: m.message.extendedTextMessage.contextInfo.quotedMessage[tipoMensagemCitada]?.caption,
-                    midia_url: m.message.extendedTextMessage.contextInfo.quotedMessage[tipoMensagemCitada]?.url,
-                    mimetype: m.message.extendedTextMessage.contextInfo.quotedMessage[tipoMensagemCitada]?.mimetype,
-                    tamanho_arquivo: m.message.extendedTextMessage.contextInfo.quotedMessage[tipoMensagemCitada]?.fileLength,
-                    segundos: m.message.extendedTextMessage.contextInfo.quotedMessage[tipoMensagemCitada]?.seconds,
-                    mensagem_vunica,
-                    mensagem: generateWAMessageFromContent(m.message.extendedTextMessage.contextInfo.participant || m.message.extendedTextMessage.contextInfo.remoteJid, m.message.extendedTextMessage.contextInfo.quotedMessage, { logger: pino() })
+                    corpo: quotedRaw?.conversation || quotedRaw?.extendedTextMessage?.text,
+                    legenda: quotedRaw?.[tipoMensagemCitada]?.caption,
+                    midia_url: quotedRaw?.[tipoMensagemCitada]?.url,
+                    mimetype: quotedRaw?.[tipoMensagemCitada]?.mimetype,
+                    tamanho_arquivo: quotedRaw?.[tipoMensagemCitada]?.fileLength,
+                    segundos: quotedRaw?.[tipoMensagemCitada]?.seconds,
+                    mensagem_vunica: citacaoVunica,
+                    mensagem: generateWAMessageFromContent(
+                        m.message.extendedTextMessage.contextInfo.participant || m.message.extendedTextMessage.contextInfo.remoteJid,
+                        quotedRaw,
+                        { logger: pino({ level: 'silent' }) }
+                    )
                 }
             }
 

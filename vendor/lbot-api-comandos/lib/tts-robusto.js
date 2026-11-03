@@ -240,7 +240,9 @@ export async function textoParaVozRobusto(texto, {
     prosodiaEdge = null,
     minSegundos = 0,
     maxSegundos = 0,
-    forcarDuracaoMinima = false
+    forcarDuracaoMinima = false,
+    /** Pula ElevenLabs e vai direto no Edge neural (grátis). */
+    somenteEdge = false
 } = {}) {
     let limpo = String(texto || '').replace(/\s+/g, ' ').trim()
     if (!limpo) throw { erro: 'Texto vazio para áudio.' }
@@ -256,8 +258,8 @@ export async function textoParaVozRobusto(texto, {
     let audio = null
     let fonte = ''
 
-    // 1) ElevenLabs
-    if (elevenKey()) {
+    // 1) ElevenLabs (exceto quando forçado Edge gratuito)
+    if (!somenteEdge && elevenKey()) {
         try {
             const pedacos = await textoLongoParaVozEleven(limpo, { idioma: lang, chunkSize: 1800 })
             audio = await concatenarMp3(pedacos)
@@ -281,8 +283,8 @@ export async function textoParaVozRobusto(texto, {
         }
     }
 
-    // 3) OpenAI Rapid (reserva)
-    if (!audio && rapidKey()) {
+    // 3) OpenAI Rapid (reserva) — também pula se somenteEdge
+    if (!audio && !somenteEdge && rapidKey()) {
         try {
             const pedacosTxt = fatiarTexto(limpo, 180)
             const buffers = []

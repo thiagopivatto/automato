@@ -19,3 +19,8 @@ export const gerarAudioNarrado = async (texto, { maxPalavras = 750, idioma = 'pt
         ...extra
     })
 }
+
+/** Só Edge neural gratuito (voz natural) — usado quando ElevenLabs/API paga falha. */
+export const gerarAudioNarradoGratis = async (texto, opts = {}) => {
+    return gerarAudioNarrado(texto, { ...opts, somenteEdge: true })
+}

@@ -297,8 +297,18 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         consoleErro(erroMarco, 'RESUMO GRUPO')
                     }
                 } catch (err) {
-                    if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
+                    // Não joga erro técnico de API no grupo quando der pra recuperar áudio no fluxo interno;
+                    // se chegou aqui, o fallback também falhou.
+                    const msg = err?.erro
+                        ? String(err.erro).slice(0, 280)
+                        : 'Não consegui gerar o áudio do resumo agora. Tenta de novo daqui a pouco.'
+                    await socket.responderTexto(c, id_chat, msg, mensagem)
+                    if (!err?.erro) {
+                        err.message = `${comando} - ${err.message}`
+                        consoleErro(err, 'IA')
+                    } else {
+                        consoleErro(new Error(String(err.erro)), 'RESUMO GRUPO')
+                    }
                 }
                 break
 

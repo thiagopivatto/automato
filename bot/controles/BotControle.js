@@ -231,16 +231,47 @@ export class BotControle{
 
     async redirecionarMensagemRevelada(c, mensagemBaileys, botInfo){
         try{
+            const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
+            const { tiposMensagem } = await import('../baileys/mensagem.js')
             const comandos_info = comandosInfo(botInfo)
-            const {mensagem, nome_usuario : nomeUsuario, remetente, mensagem_grupo, tipo, grupo} = mensagemBaileys
+            const {mensagem, nome_usuario : nomeUsuario, remetente, mensagem_grupo, tipo, grupo, midia} = mensagemBaileys
             const numeroDono = await new UsuarioControle().obterIdDono()
-            const numeroUsuario = remetente.replace("@s.whatsapp.net", '')
-            const nomeGrupo = mensagem_grupo ? grupo.nome : '----'
-            const tipoMensagem = obterTipoDeMensagem(tipo)
-            let mensagemVisivel = mensagem.message
-            mensagemVisivel[tipo].viewOnce = false
-            const mensagemInfo = await socket.enviarTexto(c, numeroDono, criarTexto(comandos_info.admin.autorevelar.msgs.restransmissao, nomeUsuario, numeroUsuario, nomeGrupo, tipoMensagem))
-            await socket.retransmitirMensagem(c, numeroDono, mensagemVisivel, mensagemInfo)
+            if (!numeroDono) return
+            const numeroUsuario = String(remetente || '').replace(/@.*/, '')
+            const nomeGrupo = mensagem_grupo ? (grupo?.nome || '----') : '----'
+            const tipoMensagem = obterTipoDeMensagem(tipo) || tipo
+            await socket.enviarTexto(
+                c,
+                numeroDono,
+                criarTexto(comandos_info.admin.autorevelar.msgs.restransmissao, nomeUsuario, numeroUsuario, nomeGrupo, tipoMensagem)
+            )
+            const buffer = await downloadMediaMessage(mensagem, 'buffer')
+            if (!buffer?.length) return
+            const legenda = mensagemBaileys.legenda || ''
+            if (tipo === tiposMensagem.imagem) {
+                await socket.responderArquivoBuffer(c, tiposMensagem.imagem, numeroDono, buffer, legenda)
+            } else if (tipo === tiposMensagem.video) {
+                await socket.responderArquivoBuffer(
+                    c,
+                    tiposMensagem.video,
+                    numeroDono,
+                    buffer,
+                    legenda,
+                    null,
+                    midia?.mimetype || 'video/mp4'
+                )
+            } else if (tipo === tiposMensagem.audio) {
+                await socket.responderArquivoBuffer(
+                    c,
+                    tiposMensagem.audio,
+                    numeroDono,
+                    buffer,
+                    '',
+                    null,
+                    midia?.mimetype || 'audio/ogg; codecs=opus',
+                    { ptt: true }
+                )
+            }
         } catch(err){
             err.message = `redirecionarMensagemRevelada - ${err.message}`
             consoleErro(err, "AUTO-REVELAR")

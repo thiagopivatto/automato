@@ -261,12 +261,66 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
             case "revelar":
                 try{
                     if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if(!mensagem_citada && !citacao.mensagem_vunica) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
-                    let mensagemVisivel = citacao.mensagem.message
-                    mensagemVisivel[citacao.tipo].viewOnce = false
-                    await socket.retransmitirMensagem(c, id_chat, mensagemVisivel, mensagem)
+                    if (!mensagem_citada || !citacao?.mensagem_vunica) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `Responda uma *mensagem de visualização única* (imagem/vídeo/áudio) com *${prefixo}revelar*.`,
+                            mensagem
+                        )
+                    }
+                    const tipoCit = citacao.tipo
+                    const tiposOk = [tiposMensagem.imagem, tiposMensagem.video, tiposMensagem.audio]
+                    if (!tiposOk.includes(tipoCit)) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            'Só consigo revelar *imagem*, *vídeo* ou *áudio* de visualização única.',
+                            mensagem
+                        )
+                    }
+                    const buffer = await downloadMediaMessage(citacao.mensagem, 'buffer')
+                    if (!buffer?.length) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            'Não consegui baixar essa mídia. Ela pode ter expirado ou já ter sido vista.',
+                            mensagem
+                        )
+                    }
+                    const legenda = citacao.legenda || ''
+                    if (tipoCit === tiposMensagem.imagem) {
+                        await socket.responderArquivoBuffer(c, tiposMensagem.imagem, id_chat, buffer, legenda, mensagem)
+                    } else if (tipoCit === tiposMensagem.video) {
+                        await socket.responderArquivoBuffer(
+                            c,
+                            tiposMensagem.video,
+                            id_chat,
+                            buffer,
+                            legenda,
+                            mensagem,
+                            citacao.mimetype || 'video/mp4'
+                        )
+                    } else {
+                        await socket.responderArquivoBuffer(
+                            c,
+                            tiposMensagem.audio,
+                            id_chat,
+                            buffer,
+                            '',
+                            mensagem,
+                            citacao.mimetype || 'audio/ogg; codecs=opus',
+                            { ptt: true }
+                        )
+                    }
                 } catch(err){
-                    throw err
+                    consoleErro(err, 'REVELAR')
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        'Não consegui revelar essa mensagem. Ela pode ter expirado ou já ter sido vista.',
+                        mensagem
+                    )
                 }
                 break
                     
