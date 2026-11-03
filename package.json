@@ -4,6 +4,9 @@
   "description": "Ultron — bot brasileiro para WhatsApp com utilidades, downloads e IA.",
   "type": "module",
   "exports": "./app.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node app.js",
     "dev": "node app.js",
@@ -17,7 +20,7 @@
     "docs:lista": "node scripts/gerar-lista-comandos-txt.js",
     "docs": "node scripts/gerar-comandos-md.js && node scripts/gerar-lista-comandos-txt.js",
     "sync:vendor": "node scripts/sync-vendor.js",
-    "postinstall": "node scripts/sync-vendor.js && node scripts/patch-baileys-group-status.js",
+    "postinstall": "node --input-type=module -e \"import('node:path').then(async path=>{const {pathToFileURL}=await import('node:url');const root=process.env.INIT_CWD||process.cwd();await import(pathToFileURL(path.join(root,'scripts','postinstall.js')).href)})\"",
     "patch:statusgrupo": "node scripts/patch-baileys-group-status.js",
     "setup:tts": "bash scripts/setup-edge-tts.sh",
     "gerar:conteudo": "node scripts/gerar-conteudo-json.js"
@@ -36,13 +39,11 @@
     "@seald-io/nedb": "^4.0.4",
     "@victorsouzaleal/lbot-api-comandos": "file:vendor/lbot-api-comandos",
     "@vitalets/google-translate-api": "^9.2.1",
-    "@whiskeysockets/baileys": "^7.0.0-rc14",
-    "axios": "^1.18.1",
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "axios": "^1.9.0",
     "chalk": "^4.1.2",
     "dotenv": "^16.5.0",
-    "format-duration-time": "^1.5.4",
     "fs-extra": "^11.3.0",
-    "link-preview-js": "^4.0.4",
     "moment-timezone": "^0.5.48",
     "node-cache": "^5.1.2",
     "p-queue": "^8.0.1",
