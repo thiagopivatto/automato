@@ -4,12 +4,21 @@ import {spawn} from 'node:child_process'
 import {obterCaminhoTemporario} from '../lib/util.js'
 import {converterMp4ParaMp3} from './videos.js'
 import {YouTube} from 'youtube-sr'
-import ytdl from '@distube/ytdl-core'
 import instagramGetUrl from 'instagram-url-direct'
 import {getFbVideoInfo} from 'fb-downloader-scrapper'
-import Tiktok from '@tobyg74/tiktok-api-dl'
 import {TwitterDL} from 'twitter-downloader'
 import axios from 'axios'
+
+function ytValidateURL(url) {
+    return /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i.test(String(url || ''))
+}
+
+function ytGetVideoID(url) {
+    const s = String(url || '')
+    const m = s.match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([\w-]{6,})/i)
+    if (!m?.[1]) throw new Error('ID YouTube inválido')
+    return m[1]
+}
 
 const COBALT_INSTANCES = [
     process.env.COBALT_API_URL?.trim(),
@@ -227,8 +236,8 @@ async function obterVideoIdYT(texto) {
     const urlEmbed = extrairUrlDeTexto(bruto)
     const candidato = urlEmbed || bruto
 
-    if (ytdl.validateURL(candidato)) {
-        try { return ytdl.getVideoID(candidato) } catch { /* */ }
+    if (ytValidateURL(candidato)) {
+        try { return ytGetVideoID(candidato) } catch { /* */ }
     }
     const m = candidato.match(/(?:youtu\.be\/|v=|shorts\/|embed\/|live\/)([\w-]{6,})/i)
     if (m?.[1]) return m[1]
@@ -260,7 +269,7 @@ async function obterVideoIdYT(texto) {
 
 function urlYoutube(texto, videoId) {
     const url = extrairUrlDeTexto(texto) || String(texto || '').trim()
-    if (ytdl.validateURL(url)) return url
+    if (ytValidateURL(url)) return url
     return `https://www.youtube.com/watch?v=${videoId}`
 }
 
@@ -465,22 +474,6 @@ async function baixarMidiaTwitterScraper(url) {
     }
 }
 
-async function baixarMidiaTiktokScraper(url) {
-    const resultado = await Tiktok.Downloader(url, {version: 'v2'})
-    if (resultado.status != 'success') {
-        throw {erro: 'Não foi encontrado resultado para este link, verifique o link.'}
-    }
-
-    let midiaUrl = resultado.result?.video || resultado.result?.images?.[0]
-    if (Array.isArray(midiaUrl)) midiaUrl = midiaUrl[0]
-
-    return {
-        autor_perfil: resultado.result?.author?.nickname,
-        descricao: resultado.result?.desc,
-        url: midiaUrl
-    }
-}
-
 async function baixarMidiaFacebookScraper(url) {
     const res = await getFbVideoInfo(url)
     const resultado = {...res}
@@ -658,15 +651,7 @@ export const obterMidiaTiktok = async (url) => {
             } catch {}
         }
 
-        // 3) scraper
-        const resultado = await baixarMidiaTiktokScraper(link)
-        if (resultado?.url) {
-            try {
-                const buffer = await baixarBufferDeUrl(resultado.url)
-                if (buffer?.length > 1000) resultado.buffer = buffer
-            } catch {}
-        }
-        return { resultado }
+        throw { erro: 'Não foi possível baixar este TikTok (yt-dlp/Cobalt indisponíveis).' }
     } catch (err) {
         console.log(`API obterMidiaTiktok - ${msgErro(err)}`)
         if (err?.erro) throw err

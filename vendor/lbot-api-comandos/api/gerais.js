@@ -2,8 +2,8 @@ import axios from 'axios'
 import {prettyNum} from 'pretty-num'
 import { rastrearEncomendas } from 'correios-brasil'
 import { translate } from '@vitalets/google-translate-api'
-import { OrganicResult, NewsResult, search } from 'google-sr'
 import Genius from 'genius-lyrics'
+import { JSDOM } from 'jsdom'
 import qs from 'querystring'
 import { timestampParaData } from '../lib/util.js'
 import {obterDadosBrasileiraoA, obterDadosBrasileiraoB} from '@victorsouzaleal/brasileirao'
@@ -193,21 +193,36 @@ export const obterPesquisaWeb = async (texto) =>{
     return new Promise(async (resolve, reject)=>{
         try{
             let resposta = {}
-            const resultados = await search({
-                query: texto,
-                resultTypes: [OrganicResult],
-                requestConfig: { headers: { 'User-Agent': new UserAgent().toString() } }
+            const { data: html } = await axios.get('https://html.duckduckgo.com/html/', {
+                params: { q: String(texto || '').trim() },
+                headers: { 'User-Agent': new UserAgent().toString() },
+                timeout: 15000
             })
+            const dom = new JSDOM(String(html || ''))
+            const cards = [...dom.window.document.querySelectorAll('.result')]
+            const resultados = cards.slice(0, 10).map((el) => {
+                const a = el.querySelector('a.result__a')
+                const snip = el.querySelector('.result__snippet')
+                let link = a?.getAttribute('href') || ''
+                // DDG às vezes envolve o destino em /l/?uddg=
+                try {
+                    const u = new URL(link, 'https://duckduckgo.com')
+                    if (u.pathname === '/l/' && u.searchParams.get('uddg')) {
+                        link = decodeURIComponent(u.searchParams.get('uddg'))
+                    }
+                } catch { /* mantém link cru */ }
+                return {
+                    titulo: (a?.textContent || '').trim(),
+                    link,
+                    descricao: (snip?.textContent || '').trim()
+                }
+            }).filter((r) => r.titulo && r.link)
             if(!resultados?.length){
                 resposta.erro = "Não foram encontrados resultados para esta pesquisa."
                 reject(resposta)
                 return
             }
-            resposta.resultado = resultados.map((resultado) => ({
-                titulo: resultado.title,
-                link: resultado.link,
-                descricao: resultado.description || ''
-            }))
+            resposta.resultado = resultados
             resolve(resposta)
         } catch(err) {
             console.log(`API obterPesquisaWeb - ${err.message}`)

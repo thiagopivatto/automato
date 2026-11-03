@@ -64,6 +64,10 @@
     "stream-json": "^3.7.0",
     "undici": "^6.29.1",
     "deepmerge": "4.1.2",
-    "music-metadata": "^12.3.4"
+    "music-metadata": "^12.3.4",
+    "fluent-ffmpeg": "npm:@modernized/fluent-ffmpeg@^1.0.3",
+    "jsdom": "^27.4.0",
+    "encoding-sniffer": "^1.0.2",
+    "html-encoding-sniffer": "^7.0.0"
   }
 }
