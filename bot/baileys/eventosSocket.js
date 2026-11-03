@@ -1,10 +1,10 @@
-import {DisconnectReason, getContentType} from '@whiskeysockets/baileys'
+import {DisconnectReason, getContentType, normalizeMessageContent} from '@whiskeysockets/baileys'
 import { Boom } from '@hapi/boom'
 import {criarTexto, consoleErro, corTexto, verificarEnv, criarArquivosNecessarios, verificarNumeroDono, listaContemJid} from'../lib/util.js'
 import {comandosInfo} from '../comandos/comandos.js'
 import fs from "fs-extra"
 import * as socket from './socket.js'
-import {converterMensagem, tiposPermitidosMensagens}  from './mensagem.js'
+import {converterMensagem, tiposPermitidosMensagens, obterTipoConteudo}  from './mensagem.js'
 import {checagemMensagem} from '../lib/checagemMensagem.js'
 import {chamadaComando} from '../lib/chamadaComando.js'
 import {BotControle} from '../controles/BotControle.js'
@@ -65,68 +65,102 @@ export const conexaoAberta = async(c, botInfo)=>{
     }
 }
 
+/** Processa uma única WAMessage (notify ou append). */
+async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
+    if (!rawWa) return
+
+    // Stub sem corpo: tenta ACK (às vezes o conteúdo chega depois)
+    if (!rawWa.message) {
+        const stub = rawWa.messageStubParameters?.[0]
+        const rawNode = rawWa.messageStubParameters?.[1]
+        if (String(stub || '').includes('absent') && rawNode) {
+            try {
+                const { BufferJSON } = await import('@whiskeysockets/baileys')
+                const node = typeof rawNode === 'string'
+                    ? JSON.parse(rawNode, BufferJSON.reviver)
+                    : rawNode
+                if (typeof c.sendMessageAck === 'function') await c.sendMessageAck(node)
+            } catch { /* */ }
+        }
+        return
+    }
+
+    // Normaliza wrappers (ephemeral / documentWithCaption / etc.)
+    rawWa.message = normalizeMessageContent(rawWa.message) || rawWa.message
+
+    const tipoMensagem = obterTipoConteudo(rawWa.message) || getContentType(rawWa.message)
+    if (!tipoMensagem) return
+
+    const { ehViewOnce, aoReceberViewOnce } = await import('../lib/revelar.js')
+    const isViewOnce = ehViewOnce(rawWa.message)
+
+    if (rawWa.key.fromMe || isViewOnce) {
+        await new MensagemControle().armazenarMensagem(rawWa).catch(() => {})
+    }
+
+    // VO → reenvia como mídia NORMAL (antes do converter mutar o proto)
+    if (isViewOnce && !rawWa.key.fromMe) {
+        try {
+            const cloneVo = typeof structuredClone === 'function'
+                ? structuredClone(rawWa)
+                : { ...rawWa, key: { ...rawWa.key }, message: rawWa.message }
+            await aoReceberViewOnce(c, cloneVo)
+        } catch (err) {
+            console.log(`[revelar] chegada - ${err?.message || err}`)
+        }
+    }
+
+    const grupos = new GrupoControle()
+    const mensagemBaileys = await converterMensagem(rawWa, botInfo)
+
+    // Diagnóstico: comando detectado
+    const pref = botInfo?.prefixo || '!'
+    if (String(mensagemBaileys.comando || '').startsWith(pref)) {
+        console.log(
+            `[msg] ${tipoUpsert || '?'} tipo=${mensagemBaileys.tipo} cmd=${mensagemBaileys.comando} de=${mensagemBaileys.remetente}`
+        )
+    }
+
+    // SHH primeiro: apaga antes de histórico/filtros (qualquer tipo de mídia)
+    if(!await grupos.filtroShh(c, mensagemBaileys, botInfo)) return
+    // Histórico — guarda msgs de grupo (comandos + midia); áudios podem ser transcritos
+    try {
+        const { registrarHistoricoGrupo } = await import('../controles/HistoricoGrupoControle.js')
+        await registrarHistoricoGrupo(mensagemBaileys)
+    } catch {}
+    if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) {
+        if (String(mensagemBaileys.comando || '').startsWith(pref)) {
+            console.log(`[msg] ignorada: tipo não permitido (${mensagemBaileys.tipo})`)
+        }
+        return
+    }
+    if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
+    if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
+    if(!await checagemMensagem(c, mensagemBaileys, botInfo)) {
+        if (String(mensagemBaileys.comando || '').startsWith(pref)) {
+            console.log('[msg] bloqueada na checagemMensagem')
+        }
+        return
+    }
+    await chamadaComando(c, mensagemBaileys, botInfo)
+}
+
 export const receberMensagem = async (c, mensagem, botInfo)=>{
     try{
-        const rawWa = mensagem.messages[0]
-        if (!rawWa) return
+        // Baileys 7: offline = append; online = notify. Ambos precisam rodar comandos.
+        const tipoUpsert = mensagem?.type
+        if (tipoUpsert && tipoUpsert !== 'notify' && tipoUpsert !== 'append') return
 
-        // Stub sem corpo: tenta ACK (às vezes o conteúdo chega depois)
-        if (!rawWa.message) {
-            const stub = rawWa.messageStubParameters?.[0]
-            const rawNode = rawWa.messageStubParameters?.[1]
-            if (String(stub || '').includes('absent') && rawNode) {
-                try {
-                    const { BufferJSON } = await import('@whiskeysockets/baileys')
-                    const node = typeof rawNode === 'string'
-                        ? JSON.parse(rawNode, BufferJSON.reviver)
-                        : rawNode
-                    if (typeof c.sendMessageAck === 'function') await c.sendMessageAck(node)
-                } catch { /* */ }
-            }
-            return
-        }
+        const lista = Array.isArray(mensagem?.messages) ? mensagem.messages : []
+        if (!lista.length) return
 
-        const tipoMensagem = getContentType(rawWa.message)
-        if (!tipoMensagem) return
-
-        const { ehViewOnce, aoReceberViewOnce } = await import('../lib/revelar.js')
-        const isViewOnce = ehViewOnce(rawWa.message)
-
-        if (rawWa.key.fromMe || isViewOnce) {
-            await new MensagemControle().armazenarMensagem(rawWa).catch(() => {})
-        }
-
-        // VO → reenvia como mídia NORMAL (antes do converter mutar o proto)
-        if (isViewOnce && !rawWa.key.fromMe) {
+        // Processa TODAS as msgs do batch (antes só a [0] — no Linux o batch costuma vir cheio)
+        for (const rawWa of lista) {
             try {
-                const cloneVo = typeof structuredClone === 'function'
-                    ? structuredClone(rawWa)
-                    : { ...rawWa, key: { ...rawWa.key }, message: rawWa.message }
-                await aoReceberViewOnce(c, cloneVo)
+                await processarUmaMensagem(c, rawWa, botInfo, tipoUpsert)
             } catch (err) {
-                console.log(`[revelar] chegada - ${err?.message || err}`)
+                consoleErro(err, "MESSAGES.UPSERT.ITEM")
             }
-        }
-
-        switch (mensagem.type) {
-            case "notify":
-                const grupos = new GrupoControle()
-                const mensagemBaileys = await converterMensagem(mensagem, botInfo)
-                // SHH primeiro: apaga antes de histórico/filtros (qualquer tipo de mídia)
-                if(!await grupos.filtroShh(c, mensagemBaileys, botInfo)) return
-                // Histórico — guarda msgs de grupo (comandos + midia); áudios podem ser transcritos
-                try {
-                    const { registrarHistoricoGrupo } = await import('../controles/HistoricoGrupoControle.js')
-                    await registrarHistoricoGrupo(mensagemBaileys)
-                } catch {}
-                if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) return
-                if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
-                if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
-                if(!await checagemMensagem(c, mensagemBaileys, botInfo)) return
-                await chamadaComando(c, mensagemBaileys, botInfo)
-                break
-            case "append":
-                break
         }
     } catch(err){
         consoleErro(err, "MESSAGES.UPSERT")
@@ -206,11 +240,35 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
         return true
     } catch(err){
         consoleErro(err, "GROUPS.UPDATE")
+        // Mesmo com falha nos grupos, liberar o processamento de mensagens/comandos
+        try {
+            const { bootPronto } = await import('../lib/boot.js')
+            bootPronto()
+        } catch {
+            console.log(corTexto('Online', false))
+        }
+        return true
     }
 }
 
-export const realizarEventosEspera = async(c, eventosEsperando)=>{
-    for(let ev of eventosEsperando) c.ev.emit(ev.evento, ev.dados)
+/** Processa fila diretamente (não re-emite no ev — no Baileys 7 o emit interno se perde). */
+export const realizarEventosEspera = async(c, eventosEsperando, botInfo)=>{
+    for (const ev of eventosEsperando) {
+        try {
+            if (ev.evento === 'messages.upsert') {
+                await receberMensagem(c, ev.dados, botInfo)
+            } else if (ev.evento === 'group-participants.update') {
+                await atualizacaoParticipantesGrupo(c, ev.dados, botInfo)
+            } else if (ev.evento === 'groups.upsert') {
+                await adicionadoEmGrupo(c, ev.dados, botInfo)
+            } else if (ev.evento === 'groups.update') {
+                const grupos = ev.dados
+                if (Array.isArray(grupos) && grupos[0]) await atualizacaoDadosGrupo(grupos[0])
+            }
+        } catch (err) {
+            consoleErro(err, 'EVENTOS.ESPERA')
+        }
+    }
 }
 
 export const atualizacaoDadosGrupo = async (dadosGrupo)=>{
@@ -220,5 +278,3 @@ export const atualizacaoDadosGrupo = async (dadosGrupo)=>{
         consoleErro(err, "GROUPS.UPDATE")
     }
 }
-
-

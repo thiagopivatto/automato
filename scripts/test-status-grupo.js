@@ -75,25 +75,26 @@ test('texto serializado é um status de grupo V2, com o conteúdo original', asy
     const envio = sock.envios[0]
     assert.equal(envio.jid, pedido().id_chat)
     assert.equal(envio.options.messageId, gerada.key.id)
+    assert.deepEqual(envio.options.additionalNodes, [{ tag: 'meta', attrs: { is_group_status: 'true' } }])
     const texto = envio.message.groupStatusMessageV2.message.extendedTextMessage
     assert.equal(texto.text, 'a gente se vira')
     assert.equal(texto.contextInfo.isGroupStatus, true)
     assert.equal(texto.contextInfo.statusSourceType, proto.ContextInfo.StatusSourceType.TEXT)
-    assert.equal(texto.contextInfo.statusAttributions[0].type, proto.StatusAttribution.Type.GROUP_STATUS)
-    assert.equal(texto.contextInfo.statusAttributions[0].groupStatus.authorJid, bot.numero_bot)
+    assert.equal(texto.contextInfo.statusAttributions.length, 0)
+    assert.equal(envio.message.messageContextInfo.messageSecret.length, 32)
     assert.equal(envio.message.conversation, null)
 })
 
 test('imagem é baixada da citação, reenviada com legenda e envolvida como status', async () => {
     const sock = socket()
     const m = pedido()
-    const citada = { key: { remoteJid: m.id_chat, id: 'FOTO', participant: '777@lid' }, message: { imageMessage: {} } }
+    const citada = { key: { remoteJid: m.id_chat, id: 'FOTO', participant: '777@lid' }, message: { imageMessage: { url: 'https://example.invalid/foto', mediaKey: Buffer.alloc(32) } } }
     m.citacao = { tipo: 'imageMessage', legenda: 'Legenda original', mimetype: 'image/png', mensagem: citada }
     const foto = Buffer.from('imagem de teste')
     let preparacoes = 0
     await publicarStatusGrupo(sock, m, {
         async baixar(wa, formato) {
-            assert.equal(wa, citada)
+            assert.deepEqual(wa, citada)
             assert.equal(formato, 'buffer')
             return foto
         },
@@ -108,6 +109,8 @@ test('imagem é baixada da citação, reenviada com legenda e envolvida como sta
     })
     assert.equal(preparacoes, 1)
     const imagem = sock.envios[0].message.groupStatusMessageV2.message.imageMessage
+    assert.equal(sock.envios[0].message.messageContextInfo.messageSecret.length, 32)
+    assert.deepEqual(sock.envios[0].options.additionalNodes, [{ tag: 'meta', attrs: { is_group_status: 'true' } }])
     assert.equal(imagem.caption, 'Legenda original')
     assert.equal(imagem.contextInfo.isGroupStatus, true)
     assert.equal(imagem.contextInfo.statusSourceType, proto.ContextInfo.StatusSourceType.IMAGE)
@@ -129,9 +132,9 @@ test('rejeita entradas inválidas antes de publicar', async () => {
 test('falha no download ou no relay não publica uma mensagem comum como alternativa', async () => {
     const sock = socket()
     await assert.rejects(publicarStatusGrupo(sock, {
-        ...pedido(), citacao: { tipo: 'imageMessage', mensagem: {} }
-    }, { baixar: async () => { throw new Error('download indisponível') } }), /download indisponível/)
+        ...pedido(), citacao: { tipo: 'imageMessage', mensagem: { message: { imageMessage: { url: 'https://example.invalid/foto', mediaKey: Buffer.alloc(32) } } } }
+    }, { baixar: async () => { throw new Error('download indisponível') } }), (err) => err.etapaStatusGrupo === 'download' && err.cause.message === 'download indisponível')
     assert.equal(sock.envios.length, 0)
     sock.relayMessage = async () => { throw new Error('servidor recusou') }
-    await assert.rejects(publicarStatusGrupo(sock, pedido()), /servidor recusou/)
+    await assert.rejects(publicarStatusGrupo(sock, pedido()), (err) => err.etapaStatusGrupo === 'envio' && err.cause.message === 'servidor recusou')
 })

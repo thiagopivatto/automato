@@ -96,8 +96,14 @@ async function connectToWhatsApp(){
                 reconectando = false
                 tentativasReconexao = 0
                 await eventosSocket.conexaoAberta(c, botInfo)
-                inicializacaoCompleta = await eventosSocket.atualizacaoDadosGrupos(c, botInfo)
-                await eventosSocket.realizarEventosEspera(c, eventosEsperando)
+                // Sempre libera a fila de msgs — falha em grupos não pode travar comandos
+                inicializacaoCompleta = true
+                await eventosSocket.atualizacaoDadosGrupos(c, botInfo).catch((e) => {
+                    console.error('[grupos.init]', e?.message || e)
+                })
+                // Processa fila direto (sem c.ev.emit — no Baileys 7 o re-emit se perde)
+                await eventosSocket.realizarEventosEspera(c, eventosEsperando, botInfo)
+                eventosEsperando = []
             } else if (connection == 'close'){
                 necessarioReconectar = await eventosSocket.conexaoEncerrada(update, botInfo)
             }
@@ -121,19 +127,15 @@ async function connectToWhatsApp(){
             await saveCreds()
         }
 
-        // Ao receber novas mensagens
-        const delay = (ms) => new Promise(res => setTimeout(res, ms));
-
-        async function processarMensagemComDelay() {
-            const m = events['messages.upsert']
-            await delay(1000); // Aguarda 1s entre mensagens
-            if(sockAtual !== c) return
-            await eventosSocket.receberMensagem(c, m, botInfo);
-        }
+        // Ao receber novas mensagens — await no ev.process (Baileys 7 exige)
         if(events['messages.upsert']){
             const m = events['messages.upsert']
-            if(inicializacaoCompleta) processarMensagemComDelay();
-            else eventosEsperando.push({evento: 'messages.upsert', dados: m})
+            if(inicializacaoCompleta) {
+                if(sockAtual !== c) return
+                await eventosSocket.receberMensagem(c, m, botInfo)
+            } else {
+                eventosEsperando.push({evento: 'messages.upsert', dados: m})
+            }
         }
 
         //Ao haver mudanças nos participantes de um grupo

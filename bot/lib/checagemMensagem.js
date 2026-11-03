@@ -33,8 +33,13 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         } = mensagemBaileys
         const {id_grupo, usuario_admin, bot_admin} = {...grupo}
         const msgGuia = (!args.length) ? false : args[0] === "guia"
-        const usuariosBloqueados = await socket.obterContatosBloqueados(c)
-        const usuarioBloqueado = usuariosBloqueados.includes(remetente)
+        let usuarioBloqueado = false
+        try {
+            const usuariosBloqueados = await socket.obterContatosBloqueados(c)
+            usuarioBloqueado = Array.isArray(usuariosBloqueados) && usuariosBloqueados.includes(remetente)
+        } catch {
+            // Baileys 7 / LID: blocklist pode falhar — não bloqueia comandos
+        }
         const comandoExiste = verificarComandoExiste(botInfo, comando)
         
         // Verificação se o usuário existe e se não existir faça o cadastro.
@@ -72,10 +77,14 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
             await usuarios.recebeuBoasVindas(remetente)
         }
 
-        //ENVIE QUE LEU A MENSAGEM
-        await socket.lerMensagem(c, id_chat, remetente, id_mensagem)
+        //ENVIE QUE LEU A MENSAGEM (não pode derrubar o comando se falhar)
+        try {
+            await socket.lerMensagem(c, id_chat, remetente, id_mensagem)
+        } catch { /* */ }
         //ATUALIZE NOME DO USUÁRIO 
-        await usuarios.atualizarNome(remetente, nome_usuario)
+        try {
+            await usuarios.atualizarNome(remetente, nome_usuario)
+        } catch { /* */ }
 
         // Autorevelar (cópia pro dono) — reenvio no grupo já ocorre em receberMensagem
         if(mensagem_vunica && botInfo.autorevelar && numero_dono){
