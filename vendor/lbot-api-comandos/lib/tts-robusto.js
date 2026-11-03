@@ -1,7 +1,9 @@
 /**
- * TTS: ElevenLabs → Edge neural (grátis) → OpenAI Rapid (última reserva).
- * Saída preferencial: OGG/Opus para PTT do WhatsApp.
- * Fallback silencioso: erros só no log — nunca expor provedor ao usuário.
+ * TTS unificado (todos os comandos de voz/áudio):
+ *   1) ElevenLabs (prioridade)
+ *   2) Edge neural grátis — voz natural (fallback automático)
+ *   3) OpenAI Rapid (última reserva)
+ * Saída: OGG/Opus PTT. Fallback silencioso (só log).
  */
 import fs from 'fs-extra'
 import ffmpeg from 'fluent-ffmpeg'
@@ -11,13 +13,39 @@ import { elevenKey, textoLongoParaVozEleven } from './elevenlabs.js'
 import { openAiTts, rapidKey } from './rapidapi.js'
 import { concatenarMp3 } from './uvr5.js'
 
-const VOZ_EDGE_PT = {
-    pt: 'pt-BR-FranciscaNeural',
-    'pt-br': 'pt-BR-FranciscaNeural',
-    br: 'pt-BR-FranciscaNeural',
-    en: 'en-US-JennyNeural',
-    es: 'es-ES-ElviraNeural',
-    default: 'pt-BR-FranciscaNeural'
+/** Vozes neurais Edge (grátis) — preferência por naturalidade. */
+const VOZ_EDGE_NATURAL = {
+    pt: 'pt-BR-AntonioNeural',
+    'pt-br': 'pt-BR-AntonioNeural',
+    br: 'pt-BR-AntonioNeural',
+    en: 'en-US-AndrewNeural',
+    es: 'es-ES-AlvaroNeural',
+    it: 'it-IT-DiegoNeural',
+    fr: 'fr-FR-HenriNeural',
+    de: 'de-DE-ConradNeural',
+    ja: 'ja-JP-KeitaNeural',
+    jp: 'ja-JP-KeitaNeural',
+    ko: 'ko-KR-InJoonNeural',
+    ru: 'ru-RU-DmitryNeural',
+    sv: 'sv-SE-MattiasNeural',
+    zh: 'zh-CN-YunxiNeural',
+    cn: 'zh-CN-YunxiNeural',
+    ar: 'ar-SA-HamedNeural',
+    hi: 'hi-IN-MadhurNeural',
+    default: 'pt-BR-AntonioNeural'
+}
+
+/** Prosódia para soar conversacional (não robótica). */
+const PROSODIA_NATURAL = {
+    rate: 0.94,
+    pitch: '-1Hz',
+    volume: 100
+}
+
+/** Opções padrão Ultron / resumodogrupo (pt-BR narrativo). */
+export const OPCOES_TTS_ULTRON = {
+    vozEdge: VOZ_EDGE_NATURAL.pt,
+    prosodiaEdge: { ...PROSODIA_NATURAL }
 }
 
 /** Palavras por minuto aproximadas por provedor (pt-BR narrativo). */
@@ -38,6 +66,20 @@ export function estimarDuracaoSegundos(texto, fonte = 'default') {
 export function palavrasParaDuracao(segundos, fonte = 'default') {
     const wpm = WPM_TTS[fonte] || WPM_TTS.default
     return Math.round((Number(segundos) || 0) * (wpm / 60))
+}
+
+function normalizarIdioma(idioma) {
+    const lang = String(idioma || 'pt').toLowerCase().trim()
+    if (lang === 'pt-br' || lang === 'br') return 'pt'
+    if (lang === 'jp') return 'ja'
+    if (lang === 'cn') return 'zh'
+    return lang
+}
+
+function resolverVozEdge(idioma, vozOverride = '') {
+    if (vozOverride) return vozOverride
+    const lang = normalizarIdioma(idioma)
+    return VOZ_EDGE_NATURAL[lang] || VOZ_EDGE_NATURAL.default
 }
 
 function fatiarTexto(texto, maxChunk = 900) {
@@ -67,16 +109,16 @@ function escaparXml(texto) {
 async function edgeTtsChunk(texto, voice, prosodia) {
     const tts = new MsEdgeTTS()
     await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3)
-    const { audioStream } = await tts.toStream(escaparXml(texto), prosodia || undefined)
+    const opts = { ...PROSODIA_NATURAL, ...(prosodia || {}) }
+    const { audioStream } = await tts.toStream(escaparXml(texto), opts)
     const chunks = []
     for await (const c of audioStream) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c))
     return Buffer.concat(chunks)
 }
 
 async function textoParaVozEdge(texto, idioma = 'pt', { voz, prosodia } = {}) {
-    const lang = String(idioma || 'pt').toLowerCase()
-    const voice = voz || VOZ_EDGE_PT[lang] || VOZ_EDGE_PT.default
-    const pedacos = fatiarTexto(texto, 900)
+    const voice = resolverVozEdge(idioma, voz)
+    const pedacos = fatiarTexto(texto, 850)
     const buffers = []
     for (const p of pedacos) {
         if (!p.trim()) continue
@@ -143,7 +185,7 @@ async function aplicarAtempo(buffer, razao) {
 /**
  * Ajuste leve de duração.
  * - maxSeg: sempre corta se passar
- * - minSeg: só estica se forcarMinimo=true (conteúdo suficiente)
+ * - minSeg: só estica se forcarMinimo=true
  */
 export async function encaixarDuracaoMp3(buffer, minSeg, maxSeg, { forcarMinimo = false } = {}) {
     const min = Number(minSeg) || 0
@@ -187,20 +229,15 @@ export async function converterParaOpus(bufferAudio) {
     }
 }
 
-/** Voz padrão Ultron (mesma do !resumodogrupo). */
-export const OPCOES_TTS_ULTRON = {
-    vozEdge: 'pt-BR-AntonioNeural',
-    prosodiaEdge: { rate: '-3%', pitch: '-1Hz' }
-}
-
 /**
+ * Pipeline: ElevenLabs → Edge neural natural → OpenAI.
  * @returns {{ resultado: Buffer, fonte: string, mimetype: string, ptt: true, duracao?: number }}
  */
 export async function textoParaVozRobusto(texto, {
     idioma = 'pt',
     maxPalavras = 900,
-    vozEdge = OPCOES_TTS_ULTRON.vozEdge,
-    prosodiaEdge = OPCOES_TTS_ULTRON.prosodiaEdge,
+    vozEdge = '',
+    prosodiaEdge = null,
     minSegundos = 0,
     maxSegundos = 0,
     forcarDuracaoMinima = false
@@ -210,41 +247,53 @@ export async function textoParaVozRobusto(texto, {
     const palavras = limpo.split(/\s+/)
     if (palavras.length > maxPalavras) limpo = palavras.slice(0, maxPalavras).join(' ')
 
+    const lang = normalizarIdioma(idioma)
+    const ehPt = lang === 'pt'
+    // pt: voz Ultron; outros idiomas: neural nativo (não força Antonio)
+    const voz = vozEdge || (ehPt ? OPCOES_TTS_ULTRON.vozEdge : resolverVozEdge(lang))
+    const prosodia = prosodiaEdge || OPCOES_TTS_ULTRON.prosodiaEdge
+
     let audio = null
     let fonte = ''
 
+    // 1) ElevenLabs
     if (elevenKey()) {
         try {
-            const pedacos = await textoLongoParaVozEleven(limpo, { idioma, chunkSize: 1800 })
+            const pedacos = await textoLongoParaVozEleven(limpo, { idioma: lang, chunkSize: 1800 })
             audio = await concatenarMp3(pedacos)
             if (audio?.length > 500) fonte = 'elevenlabs'
             else audio = null
         } catch (err) {
-            console.log(`TTS ElevenLabs fallback - ${err?.erro || err?.message || err}`)
+            console.log(`TTS ElevenLabs → Edge - ${err?.erro || err?.message || err}`)
             audio = null
         }
     }
 
+    // 2) Edge neural (grátis, voz natural)
     if (!audio) {
         try {
-            audio = await textoParaVozEdge(limpo, idioma, { voz: vozEdge, prosodia: prosodiaEdge })
+            audio = await textoParaVozEdge(limpo, lang, { voz, prosodia })
             if (audio?.length > 500) fonte = 'edge'
             else audio = null
         } catch (err) {
-            console.log(`TTS Edge fallback - ${err?.message || err}`)
+            console.log(`TTS Edge → OpenAI - ${err?.message || err}`)
             audio = null
         }
     }
 
+    // 3) OpenAI Rapid (reserva)
     if (!audio && rapidKey()) {
         try {
             const pedacosTxt = fatiarTexto(limpo, 180)
             const buffers = []
+            const instrucao = ehPt
+                ? 'Speak naturally in Brazilian Portuguese (pt-BR), warm, expressive and conversational, not robotic.'
+                : `Speak naturally in language code ${lang}, warm and expressive, not robotic.`
             for (const pedaco of pedacosTxt.slice(0, 80)) {
                 const buf = await openAiTts(pedaco, {
-                    voice: 'nova',
+                    voice: 'onyx',
                     model: 'tts-1-hd',
-                    instructions: 'Speak naturally in Brazilian Portuguese (pt-BR), warm and expressive, not robotic.'
+                    instructions: instrucao
                 })
                 if (buf?.length > 200) buffers.push(buf)
             }
@@ -253,7 +302,7 @@ export async function textoParaVozRobusto(texto, {
                 fonte = 'openai'
             }
         } catch (err) {
-            console.log(`TTS OpenAI fallback - ${err?.message || err}`)
+            console.log(`TTS OpenAI falhou - ${err?.message || err}`)
         }
     }
 

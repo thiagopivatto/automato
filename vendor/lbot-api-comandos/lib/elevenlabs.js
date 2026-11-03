@@ -80,9 +80,9 @@ export const textoParaVozEleven = async (texto, { idioma = 'pt', voiceId } = {})
                     text: String(texto).slice(0, 4000),
                     model_id,
                     voice_settings: {
-                        stability: 0.45,
-                        similarity_boost: 0.75,
-                        style: 0.2,
+                        stability: 0.35,
+                        similarity_boost: 0.8,
+                        style: 0.4,
                         use_speaker_boost: true
                     }
                 },
