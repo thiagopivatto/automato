@@ -25,5 +25,6 @@ async function run(rel) {
     }
 }
 
+await run('fix-lock-vendor.js')
 await run('sync-vendor.js')
 await run('patch-baileys-group-status.js')
