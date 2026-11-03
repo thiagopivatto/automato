@@ -471,23 +471,47 @@ export class GrupoControle {
             const comandos_info = comandosInfo(botInfo)
             const { corpo, legenda, remetente, id_chat, mensagem_grupo, mensagem, grupo } = mensagemBaileys
             const usuarioTexto = corpo || legenda
-            const { id_grupo, admins, bot_admin } = { ...grupo }
+            const { id_grupo, admins, bot_admin, dono, usuario_admin } = { ...grupo }
             if (!mensagem_grupo) return true
             if (!grupo?.antilink) return true
 
             if (!bot_admin) {
                 await this.alterarAntiLink(id_grupo, false)
-            } else {
-                if (usuarioTexto) {
-                    const textoComUrl = usuarioTexto.match(new RegExp(/(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?/img))
-                    if (textoComUrl && !admins.includes(remetente)) {
-                        await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.grupo.alink.msgs.detectou, remetente.replace("@s.whatsapp.net", "")), [remetente])
-                        await socket.deletarMensagem(c, mensagem)
-                        return false
-                    }
-                }
+                return true
             }
-            return true
+
+            if (!usuarioTexto) return true
+
+            const textoComUrl = usuarioTexto.match(
+                /(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?/img
+            )
+            if (!textoComUrl) return true
+
+            // Dono e admins podem enviar links (compara LID ↔ PN)
+            const key = mensagem?.key || {}
+            const candidatosRemetente = [
+                remetente,
+                key.participant,
+                key.participantPn,
+                key.participantAlt,
+                key.participantLid
+            ].filter(Boolean)
+
+            if (usuario_admin || listaContemJid(admins || [], ...candidatosRemetente)) {
+                return true
+            }
+            if (dono && listaContemJid([dono], ...candidatosRemetente)) {
+                return true
+            }
+
+            await socket.enviarTextoComMencoes(
+                c,
+                id_chat,
+                criarTexto(comandos_info.grupo.alink.msgs.detectou, remetente.replace("@s.whatsapp.net", "").replace("@lid", "")),
+                [remetente]
+            )
+            await socket.deletarMensagem(c, mensagem)
+            return false
         } catch (err) {
             err.message = `antiLink - ${err.message}`
             consoleErro(err, "ANTI-LINK")

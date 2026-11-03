@@ -95,6 +95,24 @@ function heuristicaRapida(texto, prefixo) {
     return null
 }
 
+/** Só chama IA-roteador se parecer pedido de função do bot (evita +1 round-trip no bate-papo). */
+function parecePedidoDeComando(texto, prefixo) {
+    const t = String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+    if (!t.trim()) return false
+    if (t.includes(prefixo)) return true
+    return (
+        /resumo(\s+do)?\s+grupo|resumir|faz(er)?\s+(o\s+)?resumo/.test(t) ||
+        /\btop\s+\d+/.test(t) ||
+        /\b(casal|trisal|sortear|piada|fofoca|jornal|cancelado|enquete)\b/.test(t) ||
+        /\b(baixa|baixar|download|play|yt|youtube|spotify|figurinha|sticker|sticker|stz)\b/.test(t) ||
+        /\b(roda|executa|manda|gera|ativa|desativa|liga|desliga)\b/.test(t) ||
+        /\b(promover|rebaixar|banir|kick|mutar|voteban)\b/.test(t)
+    )
+}
+
 /**
  * @returns {Promise<{tipo:'conversa'}|{tipo:'comando',comando:string,argsTexto:string}>}
  */
@@ -112,6 +130,11 @@ export async function decidirAcaoChat(textoUsuario, botInfo, { mensagemDono = fa
         return rapido
     }
 
+    // Bate-papo comum → conversa direto (sem Gemini extra)
+    if (!parecePedidoDeComando(textoUsuario, prefixo)) {
+        return { tipo: 'conversa' }
+    }
+
     const catalogo = catalogoCompacto(botInfo)
     const system =
         'Você é o roteador de intenções do bot Ultron no WhatsApp. ' +
@@ -125,11 +148,15 @@ export async function decidirAcaoChat(textoUsuario, botInfo, { mensagemDono = fa
     const prompt =
         `Prefixo do bot: ${prefixo}\n` +
         `Pedido do usuário:\n${textoUsuario}\n\n` +
-        `Catálogo (comando | categoria | guia):\n${catalogo.slice(0, 14000)}\n\n` +
+        `Catálogo (comando | categoria | guia):\n${catalogo.slice(0, 8000)}\n\n` +
         'JSON:'
 
     try {
-        const { resultado } = await api.IA.gerarTextoIA(prompt, system, { temperature: 0.1, timeout: 25000 })
+        const { resultado } = await api.IA.gerarTextoIA(prompt, system, {
+            temperature: 0.1,
+            timeout: 12000,
+            maxOutputTokens: 128
+        })
         const json = extrairJson(resultado)
         if (!json || json.acao !== 'comando') return { tipo: 'conversa' }
         const nome = String(json.comando || '')

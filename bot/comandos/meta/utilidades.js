@@ -34,10 +34,12 @@ export function metaUtilidades({ prefixo, nome_adm, nome_bot }) {
                 }
             },
             chat : {
-                descricao: 'Conversa com opinião; pesquisa na web antes (como !pesquisa)',
-                guia: `Ex: *${prefixo}chat* o que rolou hoje na política?\n`+
+                descricao: 'Conversa marcando o bot (ou !chat); pesquisa web só quando precisa',
+                guia: `Ex: marque o bot *@Ultron* oi, tudo bem?\n`+
+                `Ex: *@bot* o que rolou hoje na política?\n`+
                 `Ex: *${prefixo}chat* faz o resumo do grupo → roda *${prefixo}resumodogrupo*\n`+
-                `Antes de responder, pesquisa na internet (mesma lógica de *${prefixo}pesquisa*) e trata o resultado em tom de conversa.\n`,
+                `No grupo, basta marcar o número do bot — ele escuta tudo e só responde quando for mencionado.\n`+
+                `Pesquisa na web só em perguntas de fato/atualidade (bate-papo fica mais rápido).\n`,
                 msgs: {
                     resposta: "{p1}"
                 }

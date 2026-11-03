@@ -294,7 +294,8 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
             },
             alink: {
                 descricao: '',
-                guia: `Ex: *${prefixo}alink* - Liga/desliga o antilink e apaga a mensagem de quem postar qualquer tipo de link.\n`,
+                guia: `Ex: *${prefixo}alink* - Liga/desliga o antilink e apaga a mensagem de quem postar link.\n`+
+                `*Dono e admins do grupo* podem enviar links normalmente.\n`,
                 msgs: {
                     motivo: "Banido pelo ANTI-LINK",
                     detectou: "🤖 Ei @{p1}, o ANTI-LINK está ativado e um possível link foi detectado na sua mensagem, ela foi apagada por segurança.",

@@ -300,7 +300,7 @@ const pesquisarDuckDuckGo = async (query) => {
     try {
         const { data } = await axios.get('https://api.duckduckgo.com/', {
             params: { q, format: 'json', no_html: 1, skip_disambig: 1 },
-            timeout: 12000,
+            timeout: 6000,
             headers: { 'User-Agent': 'Mozilla/5.0' }
         })
         const partes = []
@@ -329,18 +329,52 @@ const pesquisarPerplexityBruto = async (query) => {
 }
 
 /**
- * Agrega fontes em tempo real para o !chat:
- * Perplexity (atual) → DuckDuckGo → (Gemini Google Search no generate).
+ * Agrega fontes em tempo real para o !chat.
+ * DuckDuckGo primeiro (rápido); Perplexity só se DDG vier fraco.
  */
 const pesquisarWebSimples = async (query) => {
     const q = String(query || '').trim()
     if (!q) return ''
-    const partes = []
-    const px = await pesquisarPerplexityBruto(q)
-    if (px) partes.push(`[Perplexity]\n${px}`)
     const ddg = await pesquisarDuckDuckGo(q)
+    if (ddg && ddg.length >= 100) return `[DuckDuckGo]\n${ddg}`.slice(0, 6500)
+    const px = await pesquisarPerplexityBruto(q)
+    const partes = []
+    if (px) partes.push(`[Perplexity]\n${px}`)
     if (ddg) partes.push(`[DuckDuckGo]\n${ddg}`)
     return partes.join('\n\n').slice(0, 6500)
+}
+
+/** Bate-papo casual não precisa de web; só fatos/atualidades. */
+export const precisaPesquisaWeb = (texto) => {
+    const t = String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .trim()
+    if (t.length < 10) return false
+    if (
+        /^(oi+|ola|eai|e ae|eaii|blz|tmj|kkk+|haha+|rs+|obrigad\w*|valeu|bom dia|boa tarde|boa noite|tudo bem|td bem|como (voce|vc|tu) (esta|ta|tá)|fala|salve|hey|hi|hello)\b/.test(
+            t
+        )
+    ) {
+        return false
+    }
+    if (
+        /^(o que vc acha|o que voce acha|acha que|concorda|discorda|me conta|conta uma|opiniao|opinião)\b/.test(t) &&
+        !/\b(hoje|agora|noticia|notícia|202[4-9])\b/.test(t)
+    ) {
+        return false
+    }
+    return (
+        /\b(quem (e|é|foi|ganhou|morreu)|o que (e|é|aconteceu|rolou)|quando|onde fica|quanto custa|preco|preço|cotacao|cotação)\b/.test(
+            t
+        ) ||
+        /\b(noticia|notícia|hoje|ontem|agora|atual|ultim[oa]|pesquisa|busca|clima|tempo|temperatura|placar|resultado|eleic|presidente)\b/.test(
+            t
+        ) ||
+        /\b(dolar|dólar|euro|bitcoin|btc|filme|serie|série|lancamento|lançamento)\b/.test(t) ||
+        /\b(202[4-9]|essa semana|neste momento)\b/.test(t)
+    )
 }
 
 const completarRapidChat = async (messages) => {
@@ -405,8 +439,7 @@ export const gerarTextoIA = async (prompt, system, opcoes = {}) => {
 
 /**
  * Chat natural com memória.
- * Antes responde, pesquisa na web com a mesma lógica do !pesquisa (Perplexity)
- * e trata o resultado no tom do chat.
+ * Pesquisa na web só quando necessário (usarPesquisa: true|'auto'|false).
  * opcoes: { historicoGrupo, nomeGrupo, nomeUsuario, usarPesquisa }
  */
 export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes = {}) => {
@@ -416,17 +449,21 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
     adicionarAoHistorico(contextoChat, key, 'user', pergunta, MAX_CTX_CHAT)
 
     try {
+        const flag = opcoes.usarPesquisa
+        // true = sempre; false = nunca; 'auto'/undefined = só se parecer fato/atualidade
+        const devePesquisar = flag === true || (flag !== false && precisaPesquisaWeb(pergunta))
+
         let pesquisaBruta = ''
-        if (opcoes.usarPesquisa !== false) {
+        if (devePesquisar) {
             try {
-                // Mesma fonte do !pesquisa
-                pesquisaBruta = limparBrutoPesquisa(await perplexityPesquisa(pergunta))
+                // DDG rápido primeiro; Perplexity só se precisar
+                const web = await pesquisarWebSimples(pergunta)
+                pesquisaBruta = limparBrutoPesquisa(String(web || '').replace(/^\[(Perplexity|DuckDuckGo)\]\s*/gm, ''))
+                if (!pesquisaBruta) {
+                    pesquisaBruta = limparBrutoPesquisa(await perplexityPesquisa(pergunta))
+                }
             } catch (err) {
                 console.log(`API chat pesquisa prévia - ${msgErro(err)}`)
-                try {
-                    const web = await pesquisarWebSimples(pergunta)
-                    pesquisaBruta = limparBrutoPesquisa(String(web || '').replace(/^\[Perplexity\]\s*/m, ''))
-                } catch { /* segue sem web */ }
             }
         }
 
@@ -435,21 +472,21 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         if (opcoes.historicoGrupo) {
             system +=
                 `\n\n[HISTÓRICO RECENTE DO GRUPO${opcoes.nomeGrupo ? ` "${opcoes.nomeGrupo}"` : ''}]\n` +
-                String(opcoes.historicoGrupo).slice(0, 3000)
+                String(opcoes.historicoGrupo).slice(0, 2200)
         }
         if (pesquisaBruta) {
             system +=
                 `\n\n[PESQUISA NA WEB — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]\n` +
-                pesquisaBruta.slice(0, 4500) +
+                pesquisaBruta.slice(0, 3500) +
                 '\n\nReescreva isso em conversa natural (não copie cru; sem “Sources”).'
         }
 
         const messages = montarMensagens(hist, system)
         let resultado = await completarMensagens(messages, {
             temperature: 0.82,
-            timeout: TIMEOUT_PADRAO,
+            timeout: 28000,
             usarWeb: false,
-            maxOutputTokens: 2048
+            maxOutputTokens: pesquisaBruta ? 1200 : 700
         })
 
         if (!resultado && pesquisaBruta) {

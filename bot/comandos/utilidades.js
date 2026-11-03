@@ -81,46 +81,8 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
             case "chat":
                 try{
                     if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    let usuarioTexto = texto_recebido
-                    const { decidirAcaoChat, aplicarComandoNaMensagem } = await import('../lib/chatRoteador.js')
-                    const decisao = await decidirAcaoChat(usuarioTexto, botInfo, {
-                        mensagemDono: !!mensagemBaileys.mensagem_dono
-                    })
-                    if (decisao.tipo === 'comando') {
-                        await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `Beleza — vou rodar *${decisao.comando}${decisao.argsTexto ? ' ' + decisao.argsTexto : ''}*.`,
-                            mensagem
-                        )
-                        aplicarComandoNaMensagem(mensagemBaileys, decisao.comando, decisao.argsTexto)
-                        const { executarComandoDireto } = await import('../lib/chamadaComando.js')
-                        return await executarComandoDireto(c, mensagemBaileys, botInfo)
-                    }
-                    let historicoGrupoTexto = ''
-                    let nomeGrupo = ''
-                    if (mensagem_grupo) {
-                        try {
-                            const { historicoGrupo } = await import('../controles/HistoricoGrupoControle.js')
-                            const msgs = await historicoGrupo.obterUltimas(grupo?.id_grupo || id_chat, 30)
-                            historicoGrupoTexto = (msgs || [])
-                                .map((m) => {
-                                    const quando = m.timestamp
-                                        ? new Date(Number(m.timestamp)).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-                                        : ''
-                                    return `${quando} ${m.nome_usuario || 'Alguém'}: ${String(m.texto || '').replace(/\s+/g, ' ').slice(0, 120)}`
-                                })
-                                .join('\n')
-                                .slice(0, 3500)
-                            nomeGrupo = grupo?.nome || ''
-                        } catch { /* ignore */ }
-                    }
-                    let {resultado: resultadoTexto} = await api.IA.obterRespostaIA(usuarioTexto, remetente, id_chat, {
-                        historicoGrupo: historicoGrupoTexto,
-                        nomeGrupo,
-                        nomeUsuario: nome_usuario || ''
-                    })
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.utilidades.chat.msgs.resposta, resultadoTexto), mensagem)
+                    const { processarChatIA } = await import('../lib/processarChat.js')
+                    await processarChatIA(c, mensagemBaileys, botInfo, texto_recebido)
                 } catch(err){
                     if(!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
