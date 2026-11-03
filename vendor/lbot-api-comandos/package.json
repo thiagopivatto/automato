@@ -25,7 +25,6 @@
     "google-sr": "^6.0.0",
     "google-tts-api": "^2.0.2",
     "instagram-url-direct": "^2.0.6",
-    "jimp": "^0.22.12",
     "jsdom": "^24.1.1",
     "moment-timezone": "^0.5.48",
     "msedge-tts": "^2.0.7",

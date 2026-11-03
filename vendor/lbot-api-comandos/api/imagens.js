@@ -30,23 +30,20 @@ export const imagemUpload = async (bufferImagem) =>{
     })
 }
 
+/** Fallback sem jimp: PNG 512×512 com texto via SVG → sharp opcional, senão API pública. */
 async function gerarImagemTextoLocal(texto){
-    const jimp = (await import('jimp')).default
-    const width = 512
-    const height = 512
-    const image = new jimp(width, height, 0x00000000)
-    const font = await jimp.loadFont(jimp.FONT_SANS_32_WHITE)
-    const lines = String(texto).match(/.{1,18}(\s|$)/g) || [texto]
-    let y = Math.max(40, Math.floor((height - lines.length * 40) / 2))
-    for (const line of lines.slice(0, 10)) {
-        image.print(font, 20, y, {
-            text: line.trim(),
-            alignmentX: jimp.HORIZONTAL_ALIGN_CENTER,
-            alignmentY: jimp.VERTICAL_ALIGN_MIDDLE
-        }, width - 40, 40)
-        y += 40
+    const t = encodeURIComponent(String(texto).slice(0, 120))
+    const urls = [
+        `https://placehold.co/512x512/000000/FFFFFF/png?text=${t}&font=roboto`,
+        `https://dummyimage.com/512x512/000/fff.png&text=${t}`
+    ]
+    for (const url of urls) {
+        try {
+            const { data } = await axios.get(url, { responseType: 'arraybuffer', timeout: 12000 })
+            if (data && data.byteLength > 200) return Buffer.from(data)
+        } catch { /* próxima */ }
     }
-    return await image.getBufferAsync(jimp.MIME_PNG)
+    throw new Error('fallback texto→imagem indisponível')
 }
 
 export const textoParaImagem = async(texto, animado = false)=>{

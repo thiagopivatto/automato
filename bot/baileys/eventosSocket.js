@@ -65,15 +65,13 @@ export const conexaoAberta = async(c, botInfo)=>{
     }
 }
 
-const MSG_MAX_IDADE_S = 180 // ignora histórico antigo em batches "append"
-
 function timestampMsgSeg(rawWa) {
     const t = Number(rawWa?.messageTimestamp || 0)
     if (!t) return Math.floor(Date.now() / 1000)
     return t > 1e12 ? Math.floor(t / 1000) : t
 }
 
-/** Processa uma única WAMessage (notify ou append). */
+/** Processa uma única WAMessage (notify ou append recente). */
 async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
     if (!rawWa) return
 
@@ -93,10 +91,11 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
         return
     }
 
-    // Append antigo = histórico — não reprocessa comandos velhos
+    // Histórico (append) no connect traz dezenas/centenas de msgs e trava o bot.
+    // Só processa append se for quase em tempo real (< 12s) — senão ignore.
     if (tipoUpsert === 'append') {
         const idade = Math.floor(Date.now() / 1000) - timestampMsgSeg(rawWa)
-        if (idade > MSG_MAX_IDADE_S) return
+        if (idade > 12) return
     }
 
     // Normaliza wrappers (ephemeral / documentWithCaption / etc.)
@@ -143,12 +142,17 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
 
 export const receberMensagem = async (c, mensagem, botInfo)=>{
     try{
-        // Baileys 7: offline = append; online = notify. Ambos precisam rodar comandos.
+        // Baileys 7: notify = tempo real; append = histórico/offline.
         const tipoUpsert = mensagem?.type
         if (tipoUpsert && tipoUpsert !== 'notify' && tipoUpsert !== 'append') return
 
         const lista = Array.isArray(mensagem?.messages) ? mensagem.messages : []
         if (!lista.length) return
+
+        // Lote enorme de histórico: não percorre item a item
+        if (tipoUpsert === 'append' && lista.length > 20) {
+            return
+        }
 
         for (const rawWa of lista) {
             try {

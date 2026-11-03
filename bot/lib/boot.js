@@ -8,7 +8,7 @@ import { versaoAtual } from './util.js'
 import { raizProjeto } from './caminhos.js'
 
 /** Muda a cada correção relevante — confira no Linux se bate com o Windows. */
-export const BUILD_ID = '20261103-recv2'
+export const BUILD_ID = '20261103-notify'
 
 const W = 54
 
@@ -131,11 +131,6 @@ export function bootPronto() {
     row('Sessão', _meta.sessao || path.join(raiz, 'sessao'))
     if (!mesmaPasta) {
         console.log(c.warn('     ⚠  CWD diferente da raiz — inicie com cd na pasta do app.js'))
-    }
-    if (/[/\\]automato$/i.test(raiz) && !/Whatsapp BOTS|Documentos[/\\]Projetos/i.test(raiz)) {
-        console.log(c.warn('     ⚠  Pasta ~/automato detectada'))
-        console.log(c.warn('        O Cursor edita Documentos/Projetos/.../automato'))
-        console.log(c.warn('        Sincronize ou rode o bot nessa pasta do projeto.'))
     }
 
     console.log('')

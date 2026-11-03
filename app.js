@@ -196,7 +196,11 @@ async function connectToWhatsApp() {
             recvCount++
             if (recvCount === 1) {
                 const n = m?.messages?.length || 0
-                console.log(`[recv] eventos de mensagem OK (1º lote: ${n} msg, type=${m?.type})`)
+                console.log(`[recv] socket OK (1º lote: ${n} msg, type=${m?.type})`)
+            }
+            // Comandos em tempo real
+            if (m?.type === 'notify' && recvCount <= 3) {
+                console.log(`[recv] notify x${m?.messages?.length || 0}`)
             }
             if (!inicializacaoCompleta) {
                 eventosEsperando.push({ evento: 'messages.upsert', dados: m })
