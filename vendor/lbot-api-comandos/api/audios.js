@@ -19,14 +19,15 @@ async function obterChavesApi() {
 
 export const textoParaVoz = async (idioma, texto) => {
     try {
-        // Mesma pipeline do !resumodogrupo: ElevenLabs → Edge natural → OpenAI
+        // Mesma pipeline do !resumodogrupo: ElevenLabs → Edge neural (grátis) — sem Google
         const lang = String(idioma || 'pt').toLowerCase()
         const ehPt = /^(pt|pt-br|br)$/.test(lang)
-        const { resultado, mimetype, ptt } = await textoParaVozRobusto(texto, {
+        const { resultado, mimetype, ptt, fonte } = await textoParaVozRobusto(texto, {
             idioma: lang,
             maxPalavras: 1200,
             ...(ehPt ? OPCOES_TTS_ULTRON : {})
         })
+        if (fonte) console.log(`API textoParaVoz fonte=${fonte}`)
         return { resultado, mimetype, ptt: ptt !== false }
     } catch (err) {
         console.log(`API textoParaVoz - ${err?.erro || err?.message || err}`)

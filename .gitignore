@@ -17,3 +17,5 @@ dados
 sessao
 # ytdl-core player scripts dumpados na raiz
 *-player-script.js
+# venv local do Edge TTS (PEP 668)
+.venv-tts/

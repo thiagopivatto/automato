@@ -1,9 +1,11 @@
 /**
- * Edge neural TTS via Python edge-tts (v7.3+ com Sec-MS-GEC v2).
- * O pacote JS msedge-tts antigo retorna 403; este caminho é o fallback gratuito natural.
+ * Edge neural TTS via Python edge-tts (voz natural gratuita).
+ * Prefere o venv do projeto (.venv-tts) — evita PEP 668 no Debian/Ubuntu.
  */
 import { spawn } from 'node:child_process'
 import fs from 'fs-extra'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { obterCaminhoTemporario } from './util.js'
 
 const VOZ_POR_IDIOMA = {
@@ -21,80 +23,139 @@ const VOZ_POR_IDIOMA = {
     default: 'pt-BR-AntonioNeural'
 }
 
-function resolverPython() {
-    return process.env.PYTHON_PATH?.trim() || process.env.PYTHON?.trim() || 'python'
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+/** raiz do bot: vendor/lbot-api-comandos/lib → ../../.. */
+const raizProjeto = path.resolve(__dirname, '../../..')
+
+function candidatosPython() {
+    const venvs = [
+        path.join(process.cwd(), '.venv-tts', 'bin', 'python3'),
+        path.join(process.cwd(), '.venv-tts', 'bin', 'python'),
+        path.join(process.cwd(), '.venv-tts', 'Scripts', 'python.exe'),
+        path.join(raizProjeto, '.venv-tts', 'bin', 'python3'),
+        path.join(raizProjeto, '.venv-tts', 'bin', 'python'),
+        path.join(raizProjeto, '.venv-tts', 'Scripts', 'python.exe')
+    ]
+    return [
+        process.env.PYTHON_PATH?.trim(),
+        process.env.PYTHON?.trim(),
+        ...venvs,
+        'python3',
+        'python',
+        'py'
+    ].filter(Boolean)
 }
 
-let cacheDisponivel = null
+let cachePy = null
 
-export async function edgeTtsPythonDisponivel() {
-    if (cacheDisponivel != null) return cacheDisponivel
-    cacheDisponivel = await new Promise((resolve) => {
-        const py = spawn(resolverPython(), ['-c', 'import edge_tts; print("ok")'], {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            windowsHide: true
+function spawnPy(cmd, args, opts = {}) {
+    if (cmd === 'py') {
+        return spawn('py', ['-3', ...args], { windowsHide: true, ...opts })
+    }
+    return spawn(cmd, args, { windowsHide: true, ...opts })
+}
+
+async function testarPy(cmd) {
+    // Só testa path absoluto se o arquivo existir
+    if (path.isAbsolute(cmd) || cmd.includes(`${path.sep}.venv-tts${path.sep}`)) {
+        if (!(await fs.pathExists(cmd))) return false
+    }
+    return new Promise((resolve) => {
+        const p = spawnPy(cmd, ['-c', 'import edge_tts; print("ok")'], {
+            stdio: ['ignore', 'pipe', 'pipe']
         })
         let out = ''
-        py.stdout.on('data', (d) => { out += d.toString() })
-        py.on('error', () => resolve(false))
-        py.on('close', (code) => resolve(code === 0 && out.includes('ok')))
+        p.stdout?.on('data', (d) => { out += d.toString() })
+        p.on('error', () => resolve(false))
+        p.on('close', (code) => resolve(code === 0 && out.includes('ok')))
         setTimeout(() => {
-            try { py.kill() } catch { /* */ }
+            try { p.kill() } catch { /* */ }
             resolve(false)
-        }, 8000)
+        }, 10000)
     })
-    return cacheDisponivel
+}
+
+export async function edgeTtsPythonDisponivel() {
+    if (cachePy) return true
+    for (const cmd of candidatosPython()) {
+        if (await testarPy(cmd)) {
+            cachePy = cmd
+            console.log(`[tts] Edge Python: ${cmd}`)
+            return true
+        }
+    }
+    cachePy = null
+    return false
+}
+
+export function invalidarCacheEdgePython() {
+    cachePy = null
 }
 
 /**
- * @returns {Promise<Buffer>} MP3
+ * Gera MP3 via CLI: python -m edge_tts ...
  */
-export async function textoParaVozEdgePython(texto, { idioma = 'pt', voz = '', rate = '-4%', pitch = '-1Hz' } = {}) {
+export async function textoParaVozEdgePython(texto, {
+    idioma = 'pt',
+    voz = '',
+    rate = '-4%',
+    pitch = '-1Hz'
+} = {}) {
+    const ok = await edgeTtsPythonDisponivel()
+    if (!ok || !cachePy) {
+        throw new Error(
+            'edge-tts indisponível. No Linux: bash scripts/setup-edge-tts.sh'
+        )
+    }
+
     const lang = String(idioma || 'pt').toLowerCase()
     const voice = voz || VOZ_POR_IDIOMA[lang] || VOZ_POR_IDIOMA.default
     const saida = obterCaminhoTemporario('mp3')
-    const script = `
-import asyncio, edge_tts, sys
-texto = sys.argv[1]
-voz = sys.argv[2]
-saida = sys.argv[3]
-rate = sys.argv[4]
-pitch = sys.argv[5]
-async def main():
-    c = edge_tts.Communicate(texto, voz, rate=rate, pitch=pitch)
-    await c.save(saida)
-asyncio.run(main())
-`.trim()
+    let rateArg = String(rate || '-4%').trim()
+    if (!rateArg.startsWith('+') && !rateArg.startsWith('-')) rateArg = `-${rateArg}`
+    let pitchArg = String(pitch || '-1Hz').trim()
+    if (!pitchArg.includes('Hz')) pitchArg = `${pitchArg}Hz`
 
-    await new Promise((resolve, reject) => {
-        const py = spawn(
-            resolverPython(),
-            ['-c', script, String(texto), voice, saida, rate, pitch],
-            { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true }
-        )
-        let err = ''
-        py.stderr.on('data', (d) => { err += d.toString() })
-        py.on('error', reject)
-        py.on('close', (code) => {
-            if (code === 0) resolve()
-            else reject(new Error(err.trim() || `edge-tts python exit ${code}`))
+    const txtFile = obterCaminhoTemporario('txt')
+    await fs.writeFile(txtFile, String(texto || ''), 'utf8')
+
+    try {
+        await new Promise((resolve, reject) => {
+            const args = [
+                '-m', 'edge_tts',
+                '-f', txtFile,
+                '-v', voice,
+                `--rate=${rateArg}`,
+                `--pitch=${pitchArg}`,
+                '--write-media', saida,
+                '--no-progress'
+            ]
+            const p = spawnPy(cachePy, args, { stdio: ['ignore', 'pipe', 'pipe'] })
+            let err = ''
+            p.stderr?.on('data', (d) => { err += d.toString() })
+            p.on('error', reject)
+            p.on('close', (code) => {
+                if (code === 0) resolve()
+                else reject(new Error((err || `edge-tts exit ${code}`).trim().slice(0, 400)))
+            })
+            setTimeout(() => {
+                try { p.kill() } catch { /* */ }
+                reject(new Error('edge-tts timeout'))
+            }, 180000)
         })
-        setTimeout(() => {
-            try { py.kill() } catch { /* */ }
-            reject(new Error('edge-tts python timeout'))
-        }, 180000)
-    })
 
-    const buf = await fs.readFile(saida)
-    try { await fs.unlink(saida) } catch { /* */ }
-    if (!buf?.length || buf.length < 200) throw new Error('edge-tts python áudio vazio')
-    return buf
+        const buf = await fs.readFile(saida)
+        if (!buf?.length || buf.length < 200) throw new Error('edge-tts áudio vazio')
+        return buf
+    } finally {
+        try { await fs.unlink(saida) } catch { /* */ }
+        try { await fs.unlink(txtFile) } catch { /* */ }
+    }
 }
 
 export async function textoLongoParaVozEdgePython(texto, opts = {}) {
     const limpo = String(texto || '').replace(/\s+/g, ' ').trim()
     if (!limpo) throw new Error('texto vazio')
-    // edge-tts aguenta textos longos; ainda assim fatia por segurança (~1800 chars)
     const pedacos = []
     let resto = limpo
     const max = 1800

@@ -17,6 +17,7 @@
     "docs": "node scripts/gerar-comandos-md.js && node scripts/gerar-lista-comandos-txt.js",
     "sync:vendor": "node scripts/sync-vendor.js",
     "postinstall": "node scripts/sync-vendor.js",
+    "setup:tts": "bash scripts/setup-edge-tts.sh",
     "gerar:conteudo": "node scripts/gerar-conteudo-json.js"
   },
   "author": "Thiago Pivatto",
