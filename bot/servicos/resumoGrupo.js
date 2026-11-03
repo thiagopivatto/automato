@@ -16,7 +16,8 @@ export async function carregarJanelaResumo(idGrupo, prefixo) {
         teveResumoAnterior,
         memoriaTexto,
         periodoInicio,
-        periodoFim
+        periodoFim,
+        marcoNovo
     } = await obterJanelaResumoGrupo(idGrupo, prefixo, limiteSuperior)
 
     if (!msgs?.length) {
@@ -33,7 +34,7 @@ export async function carregarJanelaResumo(idGrupo, prefixo) {
         memoriaTexto,
         periodoInicio,
         periodoFim,
-        limiteSuperior
+        limiteSuperior: marcoNovo || limiteSuperior
     }
 }
 

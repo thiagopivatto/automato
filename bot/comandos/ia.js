@@ -249,42 +249,100 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         return await socket.responderTexto(c, id_chat, `O comando *${prefixo}resumodogrupo* só funciona em *grupos*.`, mensagem)
                     }
                     const idGrupo = grupo?.id_grupo || id_chat
-                    const limiteSuperior = Date.now()
-                    const { historicoGrupo, obterJanelaResumoGrupo } = await import('../controles/HistoricoGrupoControle.js')
-                    const { msgs, teveResumoAnterior, marcoNovo } = await obterJanelaResumoGrupo(idGrupo, prefixo, limiteSuperior)
-                    if (!msgs?.length) {
-                        const avisoVazio = teveResumoAnterior
-                            ? `Desde o último *${prefixo}resumodogrupo* não entrou mensagem nova. Deixa o grupo falar e chama de novo.`
-                            : 'Ainda não há mensagens guardadas deste grupo. Deixe o bot online enquanto o pessoal conversa e tente de novo.'
-                        return await socket.responderTexto(c, id_chat, avisoVazio, mensagem)
+                    const {
+                        carregarJanelaResumo,
+                        gerarResumoDaJanela,
+                        persistirAposResumo
+                    } = await import('../servicos/resumoGrupo.js')
+                    const janela = await carregarJanelaResumo(idGrupo, prefixo)
+                    if (janela.vazio) {
+                        return await socket.responderTexto(c, id_chat, janela.avisoVazio, mensagem)
                     }
-                    const semVozIa = !(process.env.ELEVENLABS_API_KEY?.trim() || process.env.XI_API_KEY?.trim())
-                    let espera = 'Tô montando o comentário do grupo. A nota de voz sai com *5 a 10 minutos*, então espera um pouco.'
-                    if (semVozIa) {
-                        espera += '\n\n[❗] Erro: a IA de voz não está disponível (ElevenLabs sem chave). O resumo vai no *TTS gratuito*.'
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        'Tô analisando a bagunça do grupo. Já volto com a nota de voz.',
+                        mensagem
+                    )
+                    let personalidadeGrupo = ''
+                    try {
+                        const { GrupoControle } = await import('../controles/GrupoControle.js')
+                        personalidadeGrupo = (await new GrupoControle().obterPersonalidadeResumo(idGrupo)) || ''
+                    } catch { /* ignore */ }
+                    const { gerado, limiteSuperior, periodoInicio, periodoFim } = await gerarResumoDaJanela(
+                        janela,
+                        grupo?.nome || 'o grupo',
+                        personalidadeGrupo
+                    )
+
+                    if (gerado.entrega === 'audio' && gerado.resultado) {
+                        await socket.responderVozBuffer(
+                            c,
+                            id_chat,
+                            gerado.resultado,
+                            mensagem,
+                            gerado.mimetype || 'audio/ogg; codecs=opus'
+                        )
+                    } else if (gerado.textoFallback || gerado.roteiro) {
+                        await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `📝 *Resumo do grupo*\n\n${gerado.textoFallback || gerado.roteiro}`,
+                            mensagem
+                        )
+                    } else {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            'Não consegui montar o resumo agora. Tenta de novo daqui a pouco.',
+                            mensagem
+                        )
                     }
-                    await socket.responderTexto(c, id_chat, espera, mensagem)
-                    const nomeGrupo = grupo?.nome || 'o grupo'
-                    const { resultado, mimetype, avisoTts } = await api.IA.gerarResumoGrupoAudio({
-                        mensagens: msgs,
-                        nomeGrupo,
-                        teveResumoAnterior,
-                        avisarSemVozIa: !semVozIa
-                    })
-                    if (avisoTts) {
-                        await socket.responderTexto(c, id_chat, avisoTts, mensagem)
+
+                    try {
+                        await persistirAposResumo(idGrupo, limiteSuperior, gerado, { periodoInicio, periodoFim })
+                    } catch (erroMarco) {
+                        consoleErro(erroMarco, 'RESUMO GRUPO')
                     }
-                    await socket.responderVozBuffer(
+                } catch (err) {
+                    if (!err.erro) throw err
+                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
+                }
+                break
+
+            case 'personalidaderesumo':
+            case 'resumopersona':
+                try {
+                    if (!mensagem_grupo) {
+                        return await socket.responderTexto(c, id_chat, `Só funciona em *grupos*.`, mensagem)
+                    }
+                    if (!grupo?.usuario_admin && !mensagemBaileys.mensagem_dono) {
+                        return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                    }
+                    const idGrupo = grupo?.id_grupo || id_chat
+                    const { GrupoControle } = await import('../controles/GrupoControle.js')
+                    const gruposCtrl = new GrupoControle()
+                    const texto = String(texto_recebido || '').trim()
+                    if (!texto || /^reset|padrao|padrão|limpar$/i.test(texto)) {
+                        await gruposCtrl.definirPersonalidadeResumo(idGrupo, '')
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            'Personalidade do *resumodogrupo* neste grupo voltou ao padrão (agressivo/egocêntrico).',
+                            mensagem
+                        )
+                    }
+                    if (/^ver|atual|mostrar$/i.test(texto)) {
+                        const atual = (await gruposCtrl.obterPersonalidadeResumo(idGrupo)) || '(padrão do bot)'
+                        return await socket.responderTexto(c, id_chat, `🎭 Personalidade atual deste grupo:\n${atual}`, mensagem)
+                    }
+                    await gruposCtrl.definirPersonalidadeResumo(idGrupo, texto)
+                    await socket.responderTexto(
                         c,
                         id_chat,
                         `✅ Personalidade do *resumodogrupo* salva *só neste grupo*.\nPróximos resumos usam:\n${texto.slice(0, 400)}`,
                         mensagem
                     )
-                    try {
-                        await historicoGrupo.definirMarcoResumo(idGrupo, marcoNovo || limiteSuperior)
-                    } catch (erroMarco) {
-                        consoleErro(erroMarco, 'RESUMO GRUPO')
-                    }
                 } catch (err) {
                     if (!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)

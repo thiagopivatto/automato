@@ -151,7 +151,31 @@ export async function obterJanelaResumoGrupo(id_grupo, prefixo, limiteSuperior =
     const marco = await historico.obterMarcoResumo(id_grupo)
     const brutas = await historico.obterDesde(id_grupo, marco, 1200)
     const { msgs, marcoNovo } = filtrarJanelaResumo(brutas, prefixo, limiteSuperior)
-    return { msgs, marco, teveResumoAnterior: marco > 0, marcoNovo }
+    const memoriaTexto = await memoriaResumo.obterContextoPrompt(id_grupo, 4)
+    return {
+        msgs,
+        marco,
+        teveResumoAnterior: marco > 0,
+        marcoNovo,
+        memoriaTexto,
+        periodoInicio: msgs[0]?.timestamp || marco || 0,
+        periodoFim: marcoNovo || limiteSuperior
+    }
 }
 
-export { historico as historicoGrupo }
+/** Últimas N mensagens do grupo para !resumoportema (inclui áudios já transcritos). */
+export async function obterJanelaResumoPorTema(id_grupo, limite = 1000) {
+    const msgs = await historico.obterUltimas(id_grupo, Math.min(Math.max(Number(limite) || 1000, 50), 1200))
+    const lista = (msgs || []).filter((m) => m?.texto)
+    return {
+        msgs: lista,
+        periodoInicio: lista[0]?.timestamp || 0,
+        periodoFim: lista.length ? lista[lista.length - 1].timestamp : Date.now()
+    }
+}
+
+export async function registrarMemoriaResumo(id_grupo, dados) {
+    return memoriaResumo.registrar({ id_grupo, ...dados })
+}
+
+export { historico as historicoGrupo, memoriaResumo }

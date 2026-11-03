@@ -42,6 +42,17 @@ export class HistoricoGrupo {
         return (docs || []).reverse()
     }
 
+    /** Atualiza texto de uma msg recente (ex.: após transcrever áudio). */
+    async atualizarTextoPorChave({ id_grupo, id_usuario, timestamp, texto }) {
+        const body = String(texto || '').trim().slice(0, MAX_TEXTO)
+        if (!id_grupo || !body || !timestamp) return
+        await db.updateAsync(
+            { id_grupo, id_usuario: id_usuario || '', timestamp: Number(timestamp) },
+            { $set: { texto: body } },
+            { multi: false }
+        )
+    }
+
     /** Mensagens com timestamp estritamente posterior ao corte (0 = todas ainda no TTL). */
     async obterDesde(id_grupo, timestampExclusivo = 0, limite = 1200) {
         await this.limparAntigas(id_grupo)
