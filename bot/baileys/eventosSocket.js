@@ -108,26 +108,25 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
             }
         }
 
-        switch (mensagem.type) {
-            case "notify":
-                const grupos = new GrupoControle()
-                const mensagemBaileys = await converterMensagem(mensagem, botInfo)
-                // SHH primeiro: apaga antes de histórico/filtros (qualquer tipo de mídia)
-                if(!await grupos.filtroShh(c, mensagemBaileys, botInfo)) return
-                // Histórico — guarda msgs de grupo (comandos + midia); áudios podem ser transcritos
-                try {
-                    const { registrarHistoricoGrupo } = await import('../controles/HistoricoGrupoControle.js')
-                    await registrarHistoricoGrupo(mensagemBaileys)
-                } catch {}
-                if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) return
-                if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
-                if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
-                if(!await checagemMensagem(c, mensagemBaileys, botInfo)) return
-                await chamadaComando(c, mensagemBaileys, botInfo)
-                break
-            case "append":
-                break
-        }
+        // Baileys 7: msgs offline chegam como "append"; "notify" = online.
+        // Ignorar append fazia o bot “não responder nenhum comando” (comum em VPS/Linux).
+        const tipoUpsert = mensagem.type
+        if (tipoUpsert !== 'notify' && tipoUpsert !== 'append') return
+
+        const grupos = new GrupoControle()
+        const mensagemBaileys = await converterMensagem(mensagem, botInfo)
+        // SHH primeiro: apaga antes de histórico/filtros (qualquer tipo de mídia)
+        if(!await grupos.filtroShh(c, mensagemBaileys, botInfo)) return
+        // Histórico — guarda msgs de grupo (comandos + midia); áudios podem ser transcritos
+        try {
+            const { registrarHistoricoGrupo } = await import('../controles/HistoricoGrupoControle.js')
+            await registrarHistoricoGrupo(mensagemBaileys)
+        } catch {}
+        if(!tiposPermitidosMensagens.includes(mensagemBaileys.tipo)) return
+        if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
+        if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
+        if(!await checagemMensagem(c, mensagemBaileys, botInfo)) return
+        await chamadaComando(c, mensagemBaileys, botInfo)
     } catch(err){
         consoleErro(err, "MESSAGES.UPSERT")
         // Não derruba a conexão por erro de comando/mensagem
@@ -206,6 +205,14 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
         return true
     } catch(err){
         consoleErro(err, "GROUPS.UPDATE")
+        // Mesmo com falha nos grupos, liberar o processamento de mensagens/comandos
+        try {
+            const { bootPronto } = await import('../lib/boot.js')
+            bootPronto()
+        } catch {
+            console.log(corTexto('Online', false))
+        }
+        return true
     }
 }
 

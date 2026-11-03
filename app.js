@@ -96,8 +96,11 @@ async function connectToWhatsApp(){
                 reconectando = false
                 tentativasReconexao = 0
                 await eventosSocket.conexaoAberta(c, botInfo)
-                inicializacaoCompleta = await eventosSocket.atualizacaoDadosGrupos(c, botInfo)
+                // Sempre libera a fila de msgs — falha em grupos não pode travar comandos
+                inicializacaoCompleta = !!(await eventosSocket.atualizacaoDadosGrupos(c, botInfo).catch(() => true))
+                if (!inicializacaoCompleta) inicializacaoCompleta = true
                 await eventosSocket.realizarEventosEspera(c, eventosEsperando)
+                eventosEsperando = []
             } else if (connection == 'close'){
                 necessarioReconectar = await eventosSocket.conexaoEncerrada(update, botInfo)
             }
@@ -126,14 +129,20 @@ async function connectToWhatsApp(){
 
         async function processarMensagemComDelay() {
             const m = events['messages.upsert']
-            await delay(1000); // Aguarda 1s entre mensagens
+            // Delay curto — 1s acumulava e parecia que “nenhum comando funciona”
+            await delay(150)
             if(sockAtual !== c) return
-            await eventosSocket.receberMensagem(c, m, botInfo);
+            await eventosSocket.receberMensagem(c, m, botInfo)
         }
         if(events['messages.upsert']){
             const m = events['messages.upsert']
-            if(inicializacaoCompleta) processarMensagemComDelay();
-            else eventosEsperando.push({evento: 'messages.upsert', dados: m})
+            if(inicializacaoCompleta) {
+                processarMensagemComDelay().catch((err) => {
+                    console.error('[messages.upsert]', err?.message || err)
+                })
+            } else {
+                eventosEsperando.push({evento: 'messages.upsert', dados: m})
+            }
         }
 
         //Ao haver mudanças nos participantes de um grupo
