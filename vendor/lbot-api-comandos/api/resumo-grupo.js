@@ -242,7 +242,7 @@ function extrairMemoriaDoRoteiro(texto, analise) {
 /**
  * Resumo falado do grupo (3–5 min).
  * Fluxo: análise → roteiro com memória → estimativa de duração → TTS (ElevenLabs → Edge silencioso).
- * Se o TTS falhar, retorna textoFallback para o comando enviar como texto.
+ * Se o TTS falhar, lança erro (só entrega áudio — sem fallback em texto).
  */
 export const gerarResumoGrupoAudio = async ({
     mensagens,
@@ -357,42 +357,36 @@ export const gerarResumoGrupoAudio = async ({
     )
 
     const memoriaExtraida = extrairMemoriaDoRoteiro(texto, analise)
-    const textoFallback = texto.length > 3800 ? `${texto.slice(0, 3780).trim()}…` : texto
 
-    try {
-        const audio = await gerarAudioNarrado(texto, {
-            maxPalavras: palavrasHardMax + 80,
-            minSegundos: RESUMO_DUR.minSeg,
-            maxSegundos: RESUMO_DUR.maxSeg,
-            forcarDuracaoMinima: conteudoRico && est >= RESUMO_DUR.minSeg * 0.85
-        })
-        return {
-            resultado: audio.resultado,
-            roteiro: texto,
-            totalMsgs: lista.length,
-            ttsFonte: audio.fonte,
-            mimetype: audio.mimetype,
-            ptt: audio.ptt,
-            duracao: audio.duracao || 0,
-            entrega: 'audio',
-            memoria: memoriaExtraida,
-            analiseNivel: analise.nivel_conteudo
+    let ultimoErroTts = null
+    for (let tentativa = 1; tentativa <= 2; tentativa++) {
+        try {
+            const audio = await gerarAudioNarrado(texto, {
+                maxPalavras: palavrasHardMax + 80,
+                minSegundos: RESUMO_DUR.minSeg,
+                maxSegundos: RESUMO_DUR.maxSeg,
+                forcarDuracaoMinima: conteudoRico && est >= RESUMO_DUR.minSeg * 0.85
+            })
+            if (!audio?.resultado?.length) throw { erro: 'Áudio vazio' }
+            return {
+                resultado: audio.resultado,
+                roteiro: texto,
+                totalMsgs: lista.length,
+                ttsFonte: audio.fonte,
+                mimetype: audio.mimetype || 'audio/ogg; codecs=opus',
+                ptt: audio.ptt !== false,
+                duracao: audio.duracao || 0,
+                entrega: 'audio',
+                memoria: memoriaExtraida,
+                analiseNivel: analise.nivel_conteudo
+            }
+        } catch (err) {
+            ultimoErroTts = err
+            console.log(`API resumo TTS tentativa ${tentativa} - ${msgErro(err)}`)
         }
-    } catch (err) {
-        console.log(`API resumo TTS falhou → texto - ${msgErro(err)}`)
-        return {
-            resultado: null,
-            roteiro: texto,
-            textoFallback,
-            totalMsgs: lista.length,
-            ttsFonte: '',
-            mimetype: '',
-            ptt: false,
-            duracao: 0,
-            entrega: 'texto',
-            memoria: memoriaExtraida,
-            analiseNivel: analise.nivel_conteudo
-        }
+    }
+    throw {
+        erro: `Não foi possível gerar o áudio do resumo. ${msgErro(ultimoErroTts)}`.slice(0, 280)
     }
 }
 

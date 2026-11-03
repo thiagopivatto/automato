@@ -2,6 +2,17 @@ import {getContentType } from '@whiskeysockets/baileys'
 import {tiposMensagem} from './mensagem.js'
 import {delayAleatorio, listaContemJid} from '../lib/util.js'
 import api from '@victorsouzaleal/lbot-api-comandos'
+import { MensagemControle } from '../controles/MensagemControle.js'
+
+/** Guarda envios do bot p/ getMessage (retries do Baileys/Signal). */
+async function guardarEnvio(msg) {
+    try {
+        if (msg?.key?.id && msg?.message) {
+            await new MensagemControle().armazenarMensagem(msg)
+        }
+    } catch { /* ignore */ }
+    return msg
+}
 
 // Gerais
 export const deletarMensagem = async(c, mensagem, mensagemCitada = false)=>{
@@ -160,6 +171,7 @@ export const enviarTexto = async(c, id_chat, texto)=>{
     let ultima
     for (const parte of partes) {
         ultima = await c.sendMessage(id_chat, { text: parte, linkPreview: null })
+        await guardarEnvio(ultima)
     }
     return ultima
 }
@@ -241,6 +253,7 @@ export const responderTexto = async(c, id_chat, texto, mensagemCitacao)=>{
             { text: partes[i], linkPreview: null },
             i === 0 ? { quoted: mensagemCitacao } : undefined
         )
+        await guardarEnvio(ultima)
     }
     return ultima
 }
@@ -268,36 +281,39 @@ export const responderArquivoUrl = async(c, tipo, id_chat, url, legenda, mensage
 }
 
 export const responderArquivoBuffer = async(c, tipo, id_chat, buffer, legenda, mensagemCitacao, mimetype = '', extras = {})=>{ 
+    let enviada
     if(tipo == tiposMensagem.video){
         let base64Thumb = (await api.Videos.obterThumbnailVideo(buffer, "buffer")).resultado
-        return await c.sendMessage(id_chat, {video: buffer, caption: legenda, mimetype, jpegThumbnail: base64Thumb}, {quoted: mensagemCitacao})
+        enviada = await c.sendMessage(id_chat, {video: buffer, caption: legenda, mimetype, jpegThumbnail: base64Thumb}, {quoted: mensagemCitacao})
     } else if(tipo == tiposMensagem.imagem){
         // PNG com alpha precisa de mimetype image/png (rbg / fundo transparente)
         const mimeImg = mimetype || (buffer?.[0] === 0x89 && buffer?.[1] === 0x50 ? 'image/png' : 'image/jpeg')
-        return await c.sendMessage(id_chat, {image: buffer, caption: legenda, mimetype: mimeImg}, {quoted: mensagemCitacao})
+        enviada = await c.sendMessage(id_chat, {image: buffer, caption: legenda, mimetype: mimeImg}, {quoted: mensagemCitacao})
     } else if (tipo == tiposMensagem.audio){
         const payload = {
             audio: buffer,
             mimetype: mimetype || 'audio/mpeg',
             ptt: !!extras.ptt
         }
-        return await c.sendMessage(id_chat, payload, {quoted: mensagemCitacao})
+        enviada = await c.sendMessage(id_chat, payload, {quoted: mensagemCitacao})
     } else if (tipo == 'documento' || tipo == 'document') {
-        return await c.sendMessage(id_chat, {
+        enviada = await c.sendMessage(id_chat, {
             document: buffer,
             mimetype: mimetype || 'application/octet-stream',
             fileName: legenda || 'arquivo.bin'
         }, {quoted: mensagemCitacao})
     }
+    return guardarEnvio(enviada)
 }
 
 /** Envia buffer como nota de voz (PTT / opus). */
 export const responderVozBuffer = async(c, id_chat, buffer, mensagemCitacao = null, mimetype = 'audio/ogg; codecs=opus')=>{
-    return await c.sendMessage(id_chat, {
+    const enviada = await c.sendMessage(id_chat, {
         audio: buffer,
         mimetype,
         ptt: true
     }, mensagemCitacao ? { quoted: mensagemCitacao } : undefined)
+    return guardarEnvio(enviada)
 }
 
 export const responderComMencoes = async(c, id_chat, texto, mencionados, mensagemCitacao)=>{ 

@@ -51,8 +51,13 @@ async function connectToWhatsApp(){
     sockAtual = c
     const bot = new BotControle()
 
-    //Limpando mensagens armazenadas da sessão anterior
-    await new MensagemControle().limparMensagensArmazenadas()
+    // Não zera o cache de mensagens (Baileys usa getMessage em retries).
+    // Só remove entradas antigas para não crescer sem limite.
+    try {
+        await new MensagemControle().podarMensagensAntigas()
+    } catch (e) {
+        console.error('[cache msgs]', e?.message || e)
+    }
     
     //Escutando novos eventos
     c.ev.process(async(events)=>{
@@ -147,10 +152,27 @@ async function connectToWhatsApp(){
 // Execução principal
 connectToWhatsApp()
 
+/** Ruído conhecido do libsignal quando a sessão Signal está dessincronizada. */
+function ehRuidoSessaoSignal(args) {
+    const texto = args.map((a) => {
+        if (a instanceof Error) return `${a.name} ${a.message}`
+        if (typeof a === 'string') return a
+        try { return JSON.stringify(a) } catch { return String(a) }
+    }).join(' ')
+    return /Failed to decrypt message with any known session|Over 2000 messages into the future|SessionError/i.test(texto)
+}
+
+const _log = console.log.bind(console)
+const _err = console.error.bind(console)
+console.log = (...args) => { if (!ehRuidoSessaoSignal(args)) _log(...args) }
+console.error = (...args) => { if (!ehRuidoSessaoSignal(args)) _err(...args) }
+
 // Evita que erros não tratados derrubem o processo
 process.on('unhandledRejection', (err) => {
+    if (ehRuidoSessaoSignal([err])) return
     console.error('[UNHANDLED]', err?.message || err)
 })
 process.on('uncaughtException', (err) => {
+    if (ehRuidoSessaoSignal([err])) return
     console.error('[UNCAUGHT]', err?.message || err)
 })

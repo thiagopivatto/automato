@@ -275,29 +275,21 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         personalidadeGrupo
                     )
 
-                    if (gerado.entrega === 'audio' && gerado.resultado) {
-                        await socket.responderVozBuffer(
-                            c,
-                            id_chat,
-                            gerado.resultado,
-                            mensagem,
-                            gerado.mimetype || 'audio/ogg; codecs=opus'
-                        )
-                    } else if (gerado.textoFallback || gerado.roteiro) {
-                        await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `📝 *Resumo do grupo*\n\n${gerado.textoFallback || gerado.roteiro}`,
-                            mensagem
-                        )
-                    } else {
+                    if (!gerado?.resultado) {
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            'Não consegui montar o resumo agora. Tenta de novo daqui a pouco.',
+                            'Não consegui gerar o áudio do resumo agora. Tenta de novo daqui a pouco.',
                             mensagem
                         )
                     }
+                    await socket.responderVozBuffer(
+                        c,
+                        id_chat,
+                        gerado.resultado,
+                        mensagem,
+                        gerado.mimetype || 'audio/ogg; codecs=opus'
+                    )
 
                     try {
                         await persistirAposResumo(idGrupo, limiteSuperior, gerado, { periodoInicio, periodoFim })
