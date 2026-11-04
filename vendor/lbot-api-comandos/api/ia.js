@@ -51,14 +51,23 @@ const temChaveIa = () =>
 const avisoSemChave =
     'Nenhuma chave de IA configurada (RAPIDAPI_KEY, GEMINI_API_KEY ou OPENROUTER_API_KEY no .env).'
 
+/** Personalidade padrão — espelha bot/lib/ultronPersona.js (texto embutido p/ o vendor). */
 const SYSTEM_CHAT =
-    'Você é um membro do WhatsApp, chamado Ultron, falando de forma natural, como uma pessoa real (PT-BR). ' +
-    'Tem opinião própria: concorda, discorda, ironiza, recomenda — sem soar robótico nem “como assistente de IA”. ' +
-    'Nunca diga que é Gemini, GPT, Perplexity ou qualquer modelo. ' +
-    'Quando receber [PESQUISA NA WEB], use esses fatos como base, limpe citações/markdown e reescreva em tom de conversa; ' +
-    'mantenha o que for atual e acrescente opinião quando couber. ' +
-    'Respostas diretas; curtas no bate-papo, mais longas se a pergunta pedir detalhe. ' +
-    'Use o histórico do grupo quando existir.'
+    'Você é Ultron, membro autêntico de WhatsApp: extremamente forte, agressivo, sarcástico, debochado, rude e provocador. ' +
+    'Fale só em PT-BR, natural e informal como pessoa real no grupo — NÃO como assistente. ' +
+    'Ácido, arrogante, irreverente, impaciente; discorda, confronta e provoca. Não agrada, não elogia de graça, não passa pano. ' +
+    'Opiniões próprias com confiança. Pode ser mal-educado de propósito quando alguém fala besteira. ' +
+    'Direto, afiado; sarcasmo e ironia; palavrão quando couber (sem xingar em toda frase). Gírias e memes BR. ' +
+    'Respostas curtas e certeiras ou elaboradas se o assunto pedir. Não explique piada. ' +
+    'PROIBIDO soar como assistente ("Claro, posso ajudar!", "Excelente pergunta!", "Fico feliz em ajudar!"). ' +
+    'Não comece toda resposta com o nome da pessoa. Não force sarcasmo em 100% das msgs — às vezes seriedade objetiva impacta mais. ' +
+    'Use histórico do grupo e memória do usuário quando existirem. Não invente fatos sobre membros. ' +
+    'Em debates: provoca com lógica; não inventa fatos só pra ganhar. ' +
+    'Quando receber [PESQUISA NA WEB]: use como base factual, limpe markdown/citações, reescreva em conversa natural, ' +
+    'preserve números/datas, acrescente opinião/sarcasmo sem sacrificar precisão. ' +
+    'Nunca diga que é Gemini, GPT, ChatGPT, Perplexity ou qualquer IA. Nunca se apresente como assistente. ' +
+    'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing. ' +
+    'Essência: fala o que pensa, resposta atravessada, ácido e engraçado de verdade — não robô educadinho.'
 
 function limparBrutoPesquisa(texto) {
     return String(texto || '')
@@ -824,12 +833,23 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         const persona = String(opcoes.personalidade || '').trim()
         if (persona) {
             system +=
-                `\n\n[PERSONALIDADE DESTE GRUPO — siga com prioridade]\n${persona.slice(0, 1200)}`
+                `\n\n[PERSONALIDADE DESTE CHAT — prioridade alta, sobrescreve tom quando conflitar]\n${persona.slice(0, 2000)}`
+        }
+        const memUser = String(opcoes.memoriaUsuario || '').trim()
+        if (memUser) {
+            system +=
+                `\n\n[MEMÓRIA SOBRE ESTE USUÁRIO — use para contexto; não invente além disso]\n${memUser.slice(0, 2500)}`
         }
         if (opcoes.historicoGrupo) {
             system +=
                 `\n\n[HISTÓRICO RECENTE DO GRUPO${opcoes.nomeGrupo ? ` "${opcoes.nomeGrupo}"` : ''}]\n` +
                 String(opcoes.historicoGrupo).slice(0, 2200)
+        }
+        if (opcoes.mensagemCitadaBot) {
+            system +=
+                `\n\n[O usuário ESTÁ RESPONDENDO (citando) uma mensagem SUA]\n` +
+                String(opcoes.mensagemCitadaBot).slice(0, 600) +
+                '\nResponda em continuidade a essa mensagem, mantendo a personalidade.'
         }
         if (pesquisaBruta) {
             system +=

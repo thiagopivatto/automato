@@ -266,8 +266,12 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     )
                     let personalidadeGrupo = ''
                     try {
-                        const { GrupoControle } = await import('../controles/GrupoControle.js')
-                        personalidadeGrupo = (await new GrupoControle().obterPersonalidade(idGrupo)) || ''
+                        const { obterPersonalidadeChat } = await import('../lib/personalidadeChat.js')
+                        personalidadeGrupo = (await obterPersonalidadeChat(idGrupo)) || ''
+                        if (!personalidadeGrupo) {
+                            const { GrupoControle } = await import('../controles/GrupoControle.js')
+                            personalidadeGrupo = (await new GrupoControle().obterPersonalidade(idGrupo)) || ''
+                        }
                     } catch { /* ignore */ }
                     const { gerado, limiteSuperior, periodoInicio, periodoFim } = await gerarResumoDaJanela(
                         janela,
@@ -314,38 +318,11 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
 
             case 'personalidaderesumo':
             case 'resumopersona':
-                // Alias legado → mesmo efeito de !personalidade
+                // Alias → !personalidade (utilidades)
                 try {
-                    if (!mensagem_grupo) {
-                        return await socket.responderTexto(c, id_chat, `Só funciona em *grupos*.`, mensagem)
-                    }
-                    if (!grupo?.usuario_admin && !mensagemBaileys.mensagem_dono) {
-                        return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    }
-                    const idGrupo = grupo?.id_grupo || id_chat
-                    const { GrupoControle } = await import('../controles/GrupoControle.js')
-                    const gruposCtrl = new GrupoControle()
-                    const texto = String(texto_recebido || '').trim()
-                    if (!texto || /^reset|padrao|padrão|limpar$/i.test(texto)) {
-                        await gruposCtrl.definirPersonalidade(idGrupo, '')
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `Personalidade deste grupo voltou ao padrão. (Prefira *${prefixo}personalidade*)`,
-                            mensagem
-                        )
-                    }
-                    if (/^ver|atual|mostrar$/i.test(texto)) {
-                        const atual = (await gruposCtrl.obterPersonalidade(idGrupo)) || '(padrão do bot)'
-                        return await socket.responderTexto(c, id_chat, `🎭 Personalidade atual deste grupo:\n${atual}`, mensagem)
-                    }
-                    await gruposCtrl.definirPersonalidade(idGrupo, texto)
-                    await socket.responderTexto(
-                        c,
-                        id_chat,
-                        `✅ Personalidade salva *só neste grupo* (chat + resumo + etc.).\n${texto.slice(0, 400)}`,
-                        mensagem
-                    )
+                    mensagemBaileys.comando = `${prefixo}personalidade`
+                    const { utilidades } = await import('./utilidades.js')
+                    await utilidades(c, mensagemBaileys, botInfo)
                 } catch (err) {
                     if (!err.erro) throw err
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)

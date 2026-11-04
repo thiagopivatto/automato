@@ -338,15 +338,6 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                     desligado: '✅ OFENSA desativada.'
                 }
             },
-            personalidade: {
-                descricao: 'Define a personalidade do bot neste grupo (chat, resumo, etc.)',
-                guia:
-                    `Ex: *${prefixo}personalidade* fala como um tiozão fofoqueiro e chato\n` +
-                    `Ex: *${prefixo}personalidade* ver — Mostra a atual\n` +
-                    `Ex: *${prefixo}personalidade* padrão — Volta ao padrão do bot\n` +
-                    `Vale para *chat*, *@bot*, *resumodogrupo*, automsg e afins. *Apenas admins.*\n`,
-                msgs: {}
-            },
             automsg: {
                 descricao: 'Interações humanas esporádicas no grupo',
                 guia:

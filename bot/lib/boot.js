@@ -8,7 +8,7 @@ import { versaoAtual } from './util.js'
 import { raizProjeto } from './caminhos.js'
 
 /** Muda a cada correção relevante — confira no Linux se bate com o Windows. */
-export const BUILD_ID = '20261103-ia-nofail'
+export const BUILD_ID = '20261104-ultron-persona'
 
 const W = 54
 

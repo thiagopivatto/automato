@@ -10,6 +10,7 @@ import { historicoGrupo } from '../controles/HistoricoGrupoControle.js'
 import { membrosDoGrupo, sortearNomes, listaNomesTexto } from './dramaGrupo.js'
 import { mencaoNumero } from './util.js'
 import { aplicarMencoes } from './mencoes.js'
+import { ULTRON_SYSTEM_AUTOMSG } from './ultronPersona.js'
 
 const TZ = 'America/Sao_Paulo'
 const INTERVALO_TICK_MS = 3 * 60 * 1000
@@ -107,17 +108,12 @@ async function obterContextoDia(id_grupo) {
     }
 }
 
-const SYSTEM_HUMANO =
-    'Você é um membro do grupo de WhatsApp falando como pessoa real (PT-BR). ' +
-    'Mensagem curta (1–3 frases), natural, sem ser robô, sem listas, sem emoji excessivo. ' +
-    'Não diga que é IA/bot. Não invente números de telefone. Pode zoar leve se couber no contexto.'
-
 async function gerarTextoHumano(prompt, personalidade = '') {
     try {
-        let system = SYSTEM_HUMANO
+        let system = ULTRON_SYSTEM_AUTOMSG
         const persona = String(personalidade || '').trim()
         if (persona) {
-            system += `\n\n[PERSONALIDADE DESTE GRUPO]\n${persona.slice(0, 800)}`
+            system += `\n\n[PERSONALIDADE DESTE CHAT]\n${persona.slice(0, 800)}`
         }
         const { resultado } = await api.IA.gerarTextoIA(prompt, system, {
             temperature: 0.9,
@@ -158,7 +154,11 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
     const nomes = listaNomesTexto(membros, 16)
     let personalidade = ''
     try {
-        personalidade = (await new GrupoControle().obterPersonalidade(grupoInfo.id_grupo)) || ''
+        const { obterPersonalidadeChat } = await import('./personalidadeChat.js')
+        personalidade = (await obterPersonalidadeChat(grupoInfo.id_grupo)) || ''
+        if (!personalidade) {
+            personalidade = (await new GrupoControle().obterPersonalidade(grupoInfo.id_grupo)) || ''
+        }
     } catch { /* ignore */ }
 
     const tentarUnico = async (factory, tentativas = 3) => {

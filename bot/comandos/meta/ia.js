@@ -79,7 +79,7 @@ export function metaIa({ prefixo, nome_adm, nome_bot }) {
                 guia:
                     `Ex: *${prefixo}resumodogrupo* - Nota de voz de *3 a 5 min*, tom rebelde, egocêntrico e com palavrão.\n` +
                     `Na próxima vez, só entra o que foi dito *depois* deste pedido (anti-repetição).\n` +
-                    `Personalidade por grupo: *${prefixo}personalidade*\n` +
+                    `Personalidade deste chat: *${prefixo}personalidade*\n` +
                     `*Requisitos:* grupo; bot coletando mensagens.\n`,
                 msgs: {}
             },

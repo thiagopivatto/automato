@@ -34,16 +34,27 @@ export function metaUtilidades({ prefixo, nome_adm, nome_bot }) {
                 }
             },
             chat : {
-                descricao: 'Conversa marcando o bot (ou !chat); pesquisa web só quando precisa',
+                descricao: 'Conversa com o Ultron (!chat, @menção ou respondendo mensagem dele)',
                 guia: `Ex: marque o bot *@Ultron* oi, tudo bem?\n`+
+                `Ex: *responda uma mensagem do bot* com seu texto — ele continua a conversa\n`+
                 `Ex: *@bot* o que rolou hoje na política?\n`+
                 `Ex: *${prefixo}chat* faz o resumo do grupo → roda *${prefixo}resumodogrupo*\n`+
                 `Ex: envie/responda uma *imagem* com *${prefixo}chat* o que é isso?\n`+
-                `No grupo, basta marcar o número do bot — ele escuta tudo e só responde quando for mencionado.\n`+
-                `Pesquisa na web só em perguntas de fato/atualidade (bate-papo fica mais rápido).\n`,
+                `Personalidade deste chat: *${prefixo}personalidade*\n`+
+                `Pesquisa na web só em perguntas de fato/atualidade.\n`,
                 msgs: {
                     resposta: "{p1}"
                 }
+            },
+            personalidade: {
+                descricao: 'Personalidade do Ultron neste chat (grupo ou privado)',
+                guia:
+                    `Ex: *${prefixo}personalidade* fala como um tiozão fofoqueiro e chato\n` +
+                    `Ex: *${prefixo}personalidade* ver — Mostra a atual\n` +
+                    `Ex: *${prefixo}personalidade* padrão — Volta ao Ultron padrão\n` +
+                    `Salva em arquivo *por chat* (grupo e PV separados). Vale para chat, resumo e automsg.\n` +
+                    `Em grupo: *apenas admins*. No privado: você controla só o seu PV.\n`,
+                msgs: {}
             },
             oquetemaqui: {
                 descricao: 'Descreve o que tem na imagem marcada ou enviada',

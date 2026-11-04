@@ -94,6 +94,74 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
                 }
                 break
 
+            case 'personalidade':
+                try {
+                    // Grupo: só admin/dono. PV: qualquer um (só afeta aquele chat).
+                    if (mensagem_grupo && !grupo?.usuario_admin && !mensagemBaileys.mensagem_dono) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            comandos_info.outros.permissao.apenas_admin,
+                            mensagem
+                        )
+                    }
+                    const {
+                        obterPersonalidadeChat,
+                        definirPersonalidadeChat
+                    } = await import('../lib/personalidadeChat.js')
+                    const textoPers = String(texto_recebido || '').trim()
+                    const onde = mensagem_grupo ? 'neste grupo' : 'neste privado'
+                    if (!textoPers || /^ver|atual|mostrar|status$/i.test(textoPers)) {
+                        const atual = (await obterPersonalidadeChat(id_chat)) || ''
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            atual
+                                ? `🎭 Personalidade ${onde}:\n${atual}\n\n_Use *${prefixo}personalidade padrão* pra resetar._`
+                                : `🎭 Personalidade ${onde}: *padrão Ultron*.\nEx: *${prefixo}personalidade* fala como um tiozão fofoqueiro`,
+                            mensagem
+                        )
+                    }
+                    if (/^(padrao|padrão|reset|limpar|default)$/i.test(textoPers)) {
+                        await definirPersonalidadeChat(id_chat, '')
+                        // limpa espelho legado no grupo
+                        if (mensagem_grupo && grupo?.id_grupo) {
+                            try {
+                                const { GrupoControle } = await import('../controles/GrupoControle.js')
+                                await new GrupoControle().definirPersonalidade(grupo.id_grupo, '')
+                            } catch { /* ignore */ }
+                        }
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `✅ Personalidade ${onde} voltou ao *padrão Ultron* (chat, resumo, automsg…).`,
+                            mensagem
+                        )
+                    }
+                    await definirPersonalidadeChat(id_chat, textoPers)
+                    if (mensagem_grupo && grupo?.id_grupo) {
+                        try {
+                            const { GrupoControle } = await import('../controles/GrupoControle.js')
+                            await new GrupoControle().definirPersonalidade(grupo.id_grupo, textoPers)
+                        } catch { /* ignore */ }
+                    }
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        `✅ Personalidade salva *${onde}* (arquivo individual):\n${textoPers.slice(0, 500)}`,
+                        mensagem
+                    )
+                } catch (err) {
+                    if (!err.erro) throw err
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.outros.erro_api, comando, err.erro),
+                        mensagem
+                    )
+                }
+                break
+
             case 'oquetemaqui':
                 try {
                     const temImg =

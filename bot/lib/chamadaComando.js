@@ -13,7 +13,12 @@ import {figurinhas as figurinhasComandos, autoSticker} from '../comandos/figurin
 import {downloads as downloadsComandos} from '../comandos/downloads.js'
 import {comandosInfo, verificarComandoExiste, obterGuiaComando} from '../comandos/comandos.js'
 import api from '@victorsouzaleal/lbot-api-comandos'
-import { botFoiMencionado, limparTextoMencaoBot, processarChatIA } from './processarChat.js'
+import {
+    botFoiMencionado,
+    limparTextoMencaoBot,
+    processarChatIA,
+    citacaoEhDoBot
+} from './processarChat.js'
 import { ofensaAtivaNoGrupo, processarOfensaAutomatica, textoPareceOfensa } from './ofensa.js'
 import PQueue from 'p-queue';
 const queueMensagem = new PQueue({concurrency: 10, timeout: 180000})
@@ -93,23 +98,53 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
         // Auto-Simi: responde mensagens de texto sem comando quando ativado no grupo
         const textoSimi = (corpo || mensagemBaileys.texto_recebido || '').trim()
         const ehComando = verificarComandoExiste(botInfo, comando)
+        const tipoTextoOuImg =
+            tipo == tiposMensagem.texto ||
+            tipo == tiposMensagem.textoExt ||
+            tipo == tiposMensagem.imagem
         const botMarcado =
             mensagem_grupo &&
             !mensagem_bot &&
             !ehComando &&
-            (tipo == tiposMensagem.texto ||
-                tipo == tiposMensagem.textoExt ||
-                tipo == tiposMensagem.imagem) &&
+            tipoTextoOuImg &&
             botFoiMencionado(mensagemBaileys.mencionados, botInfo) &&
             !String(comando || '').startsWith(prefixo) &&
             !textoSimi.startsWith(prefixo)
-        const textoChatMencao = botMarcado ? limparTextoMencaoBot(textoSimi, botInfo) : ''
+
+        // Resposta citando mensagem do bot (grupo ou PV) → mesmo fluxo do !chat
+        let citouBot = false
+        if (
+            !mensagem_bot &&
+            !ehComando &&
+            tipoTextoOuImg &&
+            !botMarcado &&
+            mensagemBaileys.mensagem_citada &&
+            !String(comando || '').startsWith(prefixo) &&
+            !textoSimi.startsWith(prefixo)
+        ) {
+            try {
+                citouBot = await citacaoEhDoBot(mensagemBaileys, botInfo)
+            } catch {
+                citouBot = false
+            }
+        }
+
+        const textoChatMencao = botMarcado
+            ? limparTextoMencaoBot(textoSimi, botInfo)
+            : citouBot
+              ? textoSimi
+              : ''
+        const autoChat =
+            (botMarcado || citouBot) &&
+            !mensagem_bot &&
+            !ehComando
+
         const autoSimiGrupo =
             mensagem_grupo &&
             !mensagem_bot &&
             grupo?.autosimi &&
             !ehComando &&
-            !botMarcado &&
+            !autoChat &&
             (tipo == tiposMensagem.texto || tipo == tiposMensagem.textoExt) &&
             textoSimi.length > 0 &&
             !String(comando || '').startsWith(prefixo) &&
@@ -120,7 +155,7 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             !mensagem_bot &&
             ofensaAtivaNoGrupo(grupo) &&
             !ehComando &&
-            !botMarcado &&
+            !autoChat &&
             (tipo == tiposMensagem.texto || tipo == tiposMensagem.textoExt) &&
             textoPareceOfensa(textoSimi) &&
             !String(comando || '').startsWith(prefixo) &&
@@ -183,12 +218,20 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
                 await autoSticker(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "FIGURINHAS", "AUTO-STICKER", "#ae45d1", t, nome_usuario, nome_grupo)
             }, 2)
-        } else if (botMarcado) {
-            // @bot → mesmo fluxo do !chat (sempre ativo; não precisa de flag no grupo)
-            enfileirar(c, id_chat, mensagem, "AUTO-CHAT", botInfo, async()=>{
+        } else if (autoChat) {
+            // @bot OU resposta citando msg do bot → mesmo fluxo do !chat
+            enfileirar(c, id_chat, mensagem, citouBot ? 'AUTO-CHAT-REPLY' : 'AUTO-CHAT', botInfo, async()=>{
                 try {
                     await processarChatIA(c, mensagemBaileys, botInfo, textoChatMencao)
-                    consoleComando(mensagem_grupo, "UTILIDADES", "AUTO-CHAT", "#de9a07", t, nome_usuario, nome_grupo)
+                    consoleComando(
+                        mensagem_grupo,
+                        'UTILIDADES',
+                        citouBot ? 'AUTO-CHAT-REPLY' : 'AUTO-CHAT',
+                        '#de9a07',
+                        t,
+                        nome_usuario,
+                        nome_grupo
+                    )
                 } catch (err) {
                     const msg = err?.erro || err?.message || 'erro no chat'
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, '@chat', msg), mensagem).catch(()=>{})

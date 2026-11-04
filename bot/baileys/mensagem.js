@@ -192,9 +192,20 @@ export async function converterMensagem(m, botInfo) {
                     },
                     message: midiaCitada ? { [tipoMensagemCitada]: midiaCitada } : quotedRaw
                 }
+                const remetenteCitado =
+                    ctxInfo.participant ||
+                    ctxInfo.participantPn ||
+                    ctxInfo.participantAlt ||
+                    ctxInfo.remoteJid ||
+                    null
+                const citacaoDoBot = listaContemJid(
+                    [remetenteCitado, ctxInfo.participant, ctxInfo.participantPn, ctxInfo.participantAlt],
+                    numero_bot,
+                    lid_bot
+                )
                 respostaInformacoes.citacao = {
                     tipo: tipoMensagemCitada,
-                    remetente: ctxInfo.participant || ctxInfo.remoteJid,
+                    remetente: remetenteCitado,
                     stanzaId: ctxInfo.stanzaId || null,
                     corpo: quotedRaw?.conversation || quotedRaw?.extendedTextMessage?.text,
                     legenda: midiaCitada?.caption,
@@ -206,7 +217,8 @@ export async function converterMensagem(m, botInfo) {
                     conteudo: quotedRaw,
                     quoteOriginal: quotedOriginal,
                     midia: midiaCitada,
-                    mensagem: mensagemCitacaoBaixavel
+                    mensagem: mensagemCitacaoBaixavel,
+                    do_bot: citacaoDoBot
                 }
             }
 
