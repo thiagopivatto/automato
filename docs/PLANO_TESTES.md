@@ -12,19 +12,21 @@ Bot online (`npm start`). Prefixo: `!`
 
 | # | Comando | Esperado |
 |---|---------|----------|
-| 1 | `!menu` | menus 0–5 |
-| 2 | `!piada` | piada PT |
-| 3 | `!voz oi tudo bem` | nota de voz (opus) |
-| 4 | `!resumodogrupo` | nota de voz; roast + memória; repetir só msgs novas |
-| 5 | `!automsg` | toggle (admin) |
-| 6 | `!fofoca` | texto com menções |
-| 7 | `!play` música curta | áudio |
-| 8 | `!s` + foto | sticker |
-| 9 | `!chat` / @bot | conversa Ultron |
-| 10 | `!personalidade ver` | personalidade do chat |
+| 1 | `!menu` | catálogo de comandos |
+| 2 | `!voz oi tudo bem` | nota de voz (opus) |
+| 3 | `!resumodogrupo` | nota de voz; roast + memória; repetir só msgs novas |
+| 4 | `!automsg` | toggle (admin) |
+| 5 | `!play` música curta | áudio |
+| 6 | `!s` + foto | sticker |
+| 7 | `!chat` / @bot | conversa Ultron (+ links se pesquisa web) |
+| 8 | `!personalidade ver` | personalidade do chat |
+| 9 | `!criarimg` gato | imagem |
+| 10 | `!painel` | dump do grupo (admin) |
 
 ## Automatizado
 
 ```bash
-npm test
+npm run test:unidade
+npm run test:smoke
+npm run test:handlers
 ```

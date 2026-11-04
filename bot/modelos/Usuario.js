@@ -1,73 +1,71 @@
-import Datastore from '@seald-io/nedb'
-import { caminhoDados } from '../lib/caminhos.js'
-const db = new Datastore({filename : caminhoDados('usuarios.db'), autoload: true})
+import { createCollection } from '../db/sqlite.js'
+
+const db = createCollection('usuarios', { idField: 'id_usuario' })
 
 export class Usuario {
+    constructor() {}
 
-    constructor(){}
-
-    async adicionarUsuario(dadosUsuario){
+    async adicionarUsuario(dadosUsuario) {
         await db.insertAsync(dadosUsuario)
     }
 
-    async obterUsuario(id_usuario){
-        return await db.findOneAsync({id_usuario})
+    async obterUsuario(id_usuario) {
+        return await db.findOneAsync({ id_usuario })
     }
 
-    async obterUsuariosTipo(tipo){
-        return await db.findAsync({tipo})
+    async obterUsuariosTipo(tipo) {
+        return await db.findAsync({ tipo })
     }
 
-    async obterDono(){
-        return await db.findOneAsync({tipo: 'dono'})
+    async obterDono() {
+        return await db.findOneAsync({ tipo: 'dono' })
     }
 
-    async obterTodosUsuarios(){
+    async obterTodosUsuarios() {
         return await db.findAsync({})
     }
-    
-    async atualizarNome(id_usuario, nome){
-        await db.updateAsync({id_usuario}, {$set:{nome}})
+
+    async atualizarNome(id_usuario, nome) {
+        await db.updateAsync({ id_usuario }, { $set: { nome } })
     }
 
-    async verificarDono(id_usuario){
-        return await db.findOneAsync({id_usuario, tipo: "dono"})
+    async verificarDono(id_usuario) {
+        return await db.findOneAsync({ id_usuario, tipo: 'dono' })
     }
 
-    async resetarDonos(){
-        await db.updateAsync({tipo: "dono"}, {$set: {tipo: "comum"}}, {multi: true})
+    async resetarDonos() {
+        await db.updateAsync({ tipo: 'dono' }, { $set: { tipo: 'comum' } }, { multi: true })
     }
 
-    async atualizarDono(id_usuario){
-        await db.updateAsync({id_usuario}, {$set: {tipo : "dono"}})
+    async atualizarDono(id_usuario) {
+        await db.updateAsync({ id_usuario }, { $set: { tipo: 'dono' } })
     }
 
-    async alterarTipoUsuario(id_usuario, tipo){
-        await db.updateAsync({id_usuario}, {$set: {tipo}})
+    async alterarTipoUsuario(id_usuario, tipo) {
+        await db.updateAsync({ id_usuario }, { $set: { tipo } })
     }
 
-    async alterarRecebeuBoasVindas(id_usuario, status = true){
-        await db.updateAsync({id_usuario}, {$set : {recebeuBoasVindas : status}})
+    async alterarRecebeuBoasVindas(id_usuario, status = true) {
+        await db.updateAsync({ id_usuario }, { $set: { recebeuBoasVindas: status } })
     }
 
-    async limparTipo(tipo){
-        await db.updateAsync({tipo}, {$set: {tipo: "comum"}}, {multi: true})
+    async limparTipo(tipo) {
+        await db.updateAsync({ tipo }, { $set: { tipo: 'comum' } }, { multi: true })
     }
 
-    async addContagemDiaria(id_usuario){
-        await db.updateAsync({id_usuario}, {$inc: {comandos_total: 1, comandos_dia: 1}})
+    async addContagemDiaria(id_usuario) {
+        await db.updateAsync({ id_usuario }, { $inc: { comandos_total: 1, comandos_dia: 1 } })
     }
 
-    async addContagemTotal(id_usuario){
-        await db.updateAsync({id_usuario}, {$inc: {comandos_total: 1}})
+    async addContagemTotal(id_usuario) {
+        await db.updateAsync({ id_usuario }, { $inc: { comandos_total: 1 } })
     }
 
-    async resetarComandosDia(){
-        await db.updateAsync({}, {$set:{comandos_dia : 0}}, {multi: true})
+    async resetarComandosDia() {
+        await db.updateAsync({}, { $set: { comandos_dia: 0 } }, { multi: true })
     }
 
-    async resetarComandosDiaUsuario(id_usuario){
-        await db.updateAsync({id_usuario}, {$set:{comandos_dia : 0}})
+    async resetarComandosDiaUsuario(id_usuario) {
+        await db.updateAsync({ id_usuario }, { $set: { comandos_dia: 0 } })
     }
-
 }

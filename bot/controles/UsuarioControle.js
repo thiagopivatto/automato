@@ -13,10 +13,10 @@ export class UsuarioControle{
         return String(jid || '').split('@')[0].split(':')[0].replace(/\D/g, '')
     }
 
-    /** Dígitos do dono: DB e/ou .env DONO / DONO_JID. */
+    /** Dígitos do dono: DB e/ou .env DONO / DONO_JID / NUMERO_DONO (sem fallback hardcoded). */
     digitosDonoEsperado(donoJid = '') {
         const digDb = this.digitosJid(donoJid)
-        const digEnv = String(env('DONO_JID', 'DONO', 'NUMERO_DONO') || '5511999178699').replace(/\D/g, '')
+        const digEnv = String(env('DONO_JID', 'DONO', 'NUMERO_DONO') || '').replace(/\D/g, '')
         return digDb || digEnv
     }
 
@@ -78,8 +78,9 @@ export class UsuarioControle{
                 return dono && String(dono) === String(j)
             }
             const d = this.digitosJid(j)
-            if (!d) return false
-            return d === donoDig || d.endsWith(donoDig) || donoDig.endsWith(d)
+            if (!d || d.length < 10 || donoDig.length < 10) return false
+            // Match exato de dígitos (evita endsWith frouxo / falso-positivo)
+            return d === donoDig
         })
     }
 
@@ -125,20 +126,19 @@ export class UsuarioControle{
             if (isDono) await this.cadastrarDono(idCanonico)
             usuario = await this.usuario.obterUsuario(idCanonico)
         } else {
-            // Achou sob LID: promove/migra para PN do dono
-            if (isDono && usuario.id_usuario !== idCanonico) {
-                await this.cadastrarDono(idCanonico)
+            // Achou sob LID (ou outro alias): promove para PN canônico (todos os usuários)
+            if (pn && usuario.id_usuario !== idCanonico) {
                 const sobPn = await this.usuario.obterUsuario(idCanonico)
                 if (!sobPn) {
-                    await this.registrarUsuario(idCanonico, nomeOk || usuario.nome || 'Dono')
-                    await this.cadastrarDono(idCanonico)
+                    await this.registrarUsuario(
+                        idCanonico,
+                        nomeOk || usuario.nome || (isDono ? 'Dono' : 'Usuário')
+                    )
                 }
-                // Soma contadores do LID no PN se forem registros distintos
-                if (usuario.id_usuario !== idCanonico) {
-                    try {
-                        await this.usuario.addContagemTotal(idCanonico)
-                    } catch { /* */ }
-                }
+                if (isDono) await this.cadastrarDono(idCanonico)
+                try {
+                    await this.usuario.addContagemTotal(idCanonico)
+                } catch { /* */ }
                 usuario = await this.usuario.obterUsuario(idCanonico)
             } else if (isDono && usuario.tipo !== 'dono') {
                 await this.cadastrarDono(usuario.id_usuario)

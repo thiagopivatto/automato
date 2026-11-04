@@ -1,7 +1,7 @@
 import { gerarImagemMultiFonte } from './imagens-ia.js'
 
 /**
- * Gera imagem sem Pollinations (Flux HF / DeepAI).
+ * Gera imagem free: Pollinations classic / HF / DeepAI / Horde.
  */
 export async function gerarImagemPreferencial(prompt, opts = {}) {
     const p = String(prompt || '').trim()

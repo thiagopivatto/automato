@@ -3,7 +3,7 @@ import {erroComandoMsg, consoleErro, criarTexto} from '../lib/util.js'
 import * as socket from '../baileys/socket.js'
 import {tiposMensagem} from '../baileys/mensagem.js'
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from '../lib/lbotApi.js'
 import {comandosInfo} from '../comandos/comandos.js'
 
 

@@ -63,14 +63,34 @@ const VOZ_PADRAO = {
     default: 'EXAVITQu4vr4xnSDxMaL'
 }
 
+const modelosEleven = () => {
+    const preferido = process.env.ELEVENLABS_MODEL_ID?.trim()
+    // v4 primeiro (se a API aceitar); Multilingual v2 = qualidade natural estável no TTS
+    const base = [
+        'eleven_v4',
+        'eleven_multilingual_v2',
+        'eleven_flash_v2_5',
+        'eleven_turbo_v2_5'
+    ]
+    if (!preferido) return base
+    return [preferido, ...base.filter((m) => m !== preferido)]
+}
+
+const voiceIdPadrao = (idioma) => {
+    const envId = process.env.ELEVENLABS_VOICE_ID?.trim()
+    if (envId) return envId
+    const lang = String(idioma || 'pt').toLowerCase()
+    return VOZ_PADRAO[lang] || VOZ_PADRAO.default
+}
+
 /**
  * TTS ElevenLabs (Flash/Turbo costuma funcionar no free; Multilingual também).
+ * Override: ELEVENLABS_VOICE_ID, ELEVENLABS_MODEL_ID.
  */
 export const textoParaVozEleven = async (texto, { idioma = 'pt', voiceId } = {}) => {
     if (!elevenKey()) throw { erro: 'Configure ELEVENLABS_API_KEY no .env.' }
-    const lang = String(idioma || 'pt').toLowerCase()
-    const id = voiceId || VOZ_PADRAO[lang] || VOZ_PADRAO.default
-    const models = ['eleven_flash_v2_5', 'eleven_turbo_v2_5', 'eleven_multilingual_v2']
+    const id = voiceId || voiceIdPadrao(idioma)
+    const models = modelosEleven()
     let lastErr
     for (const model_id of models) {
         try {

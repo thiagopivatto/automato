@@ -48,9 +48,11 @@ const PROSODIA_NATURAL = {
     volume: 100
 }
 
-/** Opções padrão Ultron / resumodogrupo (pt-BR narrativo). */
+/** Opções padrão Ultron / resumodogrupo (pt-BR narrativo). Override: TTS_EDGE_VOICE. */
 export const OPCOES_TTS_ULTRON = {
-    vozEdge: VOZ_EDGE_NATURAL.pt,
+    get vozEdge() {
+        return process.env.TTS_EDGE_VOICE?.trim() || VOZ_EDGE_NATURAL.pt
+    },
     prosodiaEdge: { ...PROSODIA_NATURAL }
 }
 
@@ -84,6 +86,8 @@ function normalizarIdioma(idioma) {
 
 function resolverVozEdge(idioma, vozOverride = '') {
     if (vozOverride) return vozOverride
+    const envVoz = process.env.TTS_EDGE_VOICE?.trim()
+    if (envVoz && normalizarIdioma(idioma) === 'pt') return envVoz
     const lang = normalizarIdioma(idioma)
     return VOZ_EDGE_NATURAL[lang] || VOZ_EDGE_NATURAL.default
 }
@@ -236,7 +240,9 @@ export async function converterParaOpus(bufferAudio) {
 }
 
 /**
- * Pipeline: ElevenLabs → Edge Python (natural grátis) → Edge JS → OpenAI.
+ * Pipeline TTS:
+ * - padrão: só Edge (grátis)
+ * - preferirEleven / somenteEdge:false: ElevenLabs → Edge → OpenAI Rapid
  * Sem Google TTS (robótico).
  * @returns {{ resultado: Buffer, fonte: string, mimetype: string, ptt: true, duracao?: number }}
  */
@@ -248,9 +254,12 @@ export async function textoParaVozRobusto(texto, {
     minSegundos = 0,
     maxSegundos = 0,
     forcarDuracaoMinima = false,
-    /** Pula ElevenLabs/OpenAI e usa só Edge neural gratuito. */
-    somenteEdge = false
+    /** Pula ElevenLabs/OpenAI e usa só Edge neural gratuito (default: true). */
+    somenteEdge = true,
+    /** Se true, permite ElevenLabs (dono do bot). */
+    preferirEleven = false
 } = {}) {
+    if (preferirEleven) somenteEdge = false
     let limpo = String(texto || '').replace(/\s+/g, ' ').trim()
     if (!limpo) throw { erro: 'Texto vazio para áudio.' }
     const palavras = limpo.split(/\s+/)

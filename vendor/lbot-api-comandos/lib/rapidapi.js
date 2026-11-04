@@ -165,7 +165,7 @@ export const perplexityPesquisa = async (query) => {
             { content: String(query) },
             {
                 headers: rapidHeaders('perplexity2.p.rapidapi.com', 'application/json', key),
-                timeout: TIMEOUT_LONGO,
+                timeout: 8000,
                 validateStatus: () => true
             }
         )

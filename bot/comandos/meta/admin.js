@@ -62,61 +62,21 @@ export function metaAdmin({ prefixo, nome_adm, nome_bot }) {
                     resposta: "🤖✅ Saí de todos os grupos com sucesso, total de grupos : {p1}"
                 }
             },
+            painelbot: {
+                descricao: 'Painel global do bot + lista de grupos + dump por grupo',
+                guia:
+                    `Ex: *${prefixo}painelbot* — Dump global + lista de todos os grupos.\n` +
+                    `Ex: *${prefixo}painelbot grupo* 3 — Dump completo do 3º grupo da lista.\n` +
+                    `Ex: *${prefixo}painelbot grupo* <id> — Dump por id.\n` +
+                    `Ex: *${prefixo}painelbot* pv|autosticker|autorevelar|limitediario — Alterna.\n` +
+                    `Ex: *${prefixo}painelbot cotas* — Cotas das IAs.\n` +
+                    `*Só dono.* Alias: *${prefixo}infobot*\n`,
+                msgs: {}
+            },
             infobot: {
-                descricao: '',
-                guia: `Ex: *${prefixo}infobot* - Exibe as informações completas do bot, inclusive as configurações atuais.\n`,
-                msgs: {
-                    resposta_superior:"*Administrador do Bot* : {p1}\n"+
-                    "*Nome do bot* : {p2}\n"+
-                    "*Online desde* : {p3}\n"+
-                    "*Versão* : {p4}\n"+
-                    "-------------------\n",
-                    resposta_variavel:{
-                        limite_diario: {
-                            on: "*Limite diário* : ✅\n"+
-                            "- Reseta em : *{p1}*\n"+
-                            "-------------------\n",
-                            off: "*Limite diário* : ❌\n"+
-                            "-------------------\n"
-                        },
-                        autosticker: {
-                            on: "*Auto-Sticker privado* : ✅\n"+
-                            "-------------------\n",
-                            off: "*Auto-Sticker privado* : ❌\n"+
-                            "-------------------\n",
-                        },
-                        autorevelar: {
-                            on: "*Auto-Revelar* : ✅\n"+
-                            "-------------------\n",
-                            off: "*Auto-Revelar* : ❌\n"+
-                            "-------------------\n",
-                        },
-                        pvliberado: {
-                            on: "*PV Liberado* : ✅\n"+
-                            "-------------------\n",
-                            off: "*PV Liberado* : ❌\n"+
-                            "-------------------\n",
-                        },
-                        taxa_comandos:{
-                            on: "*Taxa comandos/minuto* : ✅\n"+
-                            "- *{p1}* Cmds/minuto por usuário\n"+
-                            "- Bloqueio : *{p2}* s\n"+
-                            "-------------------\n",
-                            off: "*Taxa comandos/minuto* : ❌\n"+
-                            "-------------------\n"
-                        },
-                        bloqueiocmds:{
-                            on: "*Bloqueio de comandos* : ✅\n"+
-                            "- Bloqueados: *{p1}*\n"+
-                            "-------------------\n",
-                            off: "*Bloqueio de comandos* : ❌\n"+
-                            "-------------------\n"
-                        }
-                    },
-                    resposta_inferior:"*Pessoas bloqueadas* : *{p1}* pessoas\n"+
-                    "*Comandos executados* : *{p2}*\n"+
-                    "*Contato do Administrador* : wa.me/{p3}\n"
-                }
+                descricao: 'Alias de !painelbot (dump global)',
+                guia: `Ex: *${prefixo}infobot* - Mesmo que *${prefixo}painelbot*.\n`,
+                msgs: {}
             },
             entrargrupo: {
                 descricao: '',
@@ -452,10 +412,11 @@ export function metaAdmin({ prefixo, nome_adm, nome_bot }) {
                 }
             },
             limpar: {
-                descricao: '',
+                descricao: 'Limpeza de cache/temp (leve por padrão)',
                 guia:
-                    `Ex: *${prefixo}limpar* - Limpa cache, mídias temporárias e mensagens guardadas.\n` +
-                    `*Mantém* dados de usuários, grupos, contador e sessão.\n` +
+                    `Ex: *${prefixo}limpar* — Limpeza leve: temp antigo, TTL de msgs/histórico, arquivos .bak.\n` +
+                    `Ex: *${prefixo}limpar tudo* — Wipe completo (inclui histórico de grupos / memória de resumo).\n` +
+                    `*Mantém* usuários, grupos, contador, sessão e bot.json.\n` +
                     `*Só dono do bot.*\n`,
                 msgs: {}
             },
@@ -469,13 +430,8 @@ export function metaAdmin({ prefixo, nome_adm, nome_bot }) {
             cotasia: {
                 descricao: 'Mostra créditos/cotas das IAs configuradas',
                 guia:
-                    `Ex: *${prefixo}cotasia* - Consulta saldo/status de Gemini, OpenRouter, Groq, RapidAPI, ElevenLabs.\n` +
+                    `Ex: *${prefixo}cotasia* - Consulta saldo/status de Gemini, OpenRouter, Tavily, Brave, RapidAPI, ElevenLabs.\n` +
                     `*Só dono do bot.*\n`,
-                msgs: {}
-            },
-            devtest: {
-                descricao: 'Testes',
-                guia: 'Testes',
                 msgs: {}
             }
         }

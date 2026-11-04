@@ -12,7 +12,6 @@ import {info as infoComandos} from '../comandos/info.js'
 import {figurinhas as figurinhasComandos, autoSticker} from '../comandos/figurinhas.js'
 import {downloads as downloadsComandos} from '../comandos/downloads.js'
 import {comandosInfo, verificarComandoExiste, obterGuiaComando} from '../comandos/comandos.js'
-import api from '@victorsouzaleal/lbot-api-comandos'
 import {
     botFoiMencionado,
     limparTextoMencaoBot,
@@ -20,26 +19,53 @@ import {
     citacaoEhDoBot
 } from './processarChat.js'
 import { ofensaAtivaNoGrupo, processarOfensaAutomatica, textoPareceOfensa } from './ofensa.js'
-import PQueue from 'p-queue';
-const queueMensagem = new PQueue({concurrency: 10, timeout: 180000})
+import { enfileirarPorChat, profundidadeFila } from './filaComandos.js'
+import { incrMetrica, logErro } from './logger.js'
+import { BotControle } from '../controles/BotControle.js'
+import { UsuarioControle } from '../controles/UsuarioControle.js'
+import {
+    reagirAckInicio,
+    reagirAckOk,
+    reagirAckErro,
+    comandoSemReacaoAck
+} from './reacoes.js'
 
-const enfileirar = (c, id_chat, mensagem, comando, botInfo, tarefa, prioridade = 1) => {
-    queueMensagem.add(async () => {
-        try {
-            await tarefa()
-        } catch (err) {
-            consoleErro(err, `COMANDO ${comando}`)
+const enfileirar = (c, id_chat, mensagem, comando, botInfo, tarefa, prioridade = 1, opts = {}) => {
+    const { contar = false, remetente = null, contagemDiaria = false } = opts
+    const comReacao = !comandoSemReacaoAck(comando, botInfo?.prefixo)
+    enfileirarPorChat(
+        id_chat,
+        async () => {
+            if (comReacao) await reagirAckInicio(c, mensagem).catch(() => {})
             try {
-                const comandos_info = comandosInfo(botInfo)
-                await socket.responderTexto(
-                    c,
-                    id_chat,
-                    criarTexto(comandos_info.outros.erro_comando_codigo, comando),
-                    mensagem
-                ).catch(()=>{})
-            } catch {}
-        }
-    }, {priority: prioridade}).catch((err) => {
+                incrMetrica('cmds')
+                await tarefa()
+                incrMetrica('cmds_ok')
+                if (comReacao) await reagirAckOk(c, mensagem).catch(() => {})
+                if (contar && remetente) {
+                    const usuarios = new UsuarioControle()
+                    if (contagemDiaria) await usuarios.adicionarContagemDiariaComandos(remetente)
+                    else await usuarios.adicionarContagemTotalComandos(remetente)
+                    await new BotControle().atualizarComandosFeitos()
+                }
+            } catch (err) {
+                incrMetrica('cmds_erro')
+                if (comReacao) await reagirAckErro(c, mensagem).catch(() => {})
+                consoleErro(err, `COMANDO ${comando}`)
+                logErro('comando falhou', err, { comando, chat: id_chat })
+                try {
+                    const comandos_info = comandosInfo(botInfo)
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.outros.erro_comando_codigo, comando),
+                        mensagem
+                    ).catch(()=>{})
+                } catch {}
+            }
+        },
+        { prioridade, rotulo: comando }
+    ).catch((err) => {
         consoleErro(err, 'FILA')
     })
 }
@@ -70,7 +96,6 @@ export const executarComandoDireto = async (c, mensagemBaileys, botInfo) => {
 
 export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
     try {
-        //Atribuição de valores
         const comandos_info = comandosInfo(botInfo)
         const {
             comando,
@@ -89,13 +114,19 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
         const {prefixo} = botInfo
         const t = moment.now()
         const msgGuia = (!args.length) ? false : args[0] === "guia"
-        const queueMensagemEspera = queueMensagem.size > 15
+
+        // fromMe / eco do próprio bot: nunca executa comando nem auto-handlers
+        if (mensagem_bot || mensagemBaileys.fromMe) {
+            return
+        }
+
+        const profundidade = profundidadeFila()
+        const queueMensagemEspera = profundidade.global > 15 || profundidade.chatJobs > 20
 
         //Verificação do Auto-Sticker
         const autoStickerPv = (!mensagem_grupo && (tipo == tiposMensagem.imagem || tipo == tiposMensagem.video) && botInfo.autosticker)
         const autoStickerGrupo = (mensagem_grupo && (tipo == tiposMensagem.imagem || tipo == tiposMensagem.video) && grupo?.autosticker)
 
-        // Auto-Simi: responde mensagens de texto sem comando quando ativado no grupo
         const textoSimi = (corpo || mensagemBaileys.texto_recebido || '').trim()
         const ehComando = verificarComandoExiste(botInfo, comando)
         const tipoTextoOuImg =
@@ -111,7 +142,6 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             !String(comando || '').startsWith(prefixo) &&
             !textoSimi.startsWith(prefixo)
 
-        // Resposta citando mensagem do bot (grupo ou PV) → mesmo fluxo do !chat
         let citouBot = false
         if (
             !mensagem_bot &&
@@ -139,17 +169,6 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             !mensagem_bot &&
             !ehComando
 
-        const autoSimiGrupo =
-            mensagem_grupo &&
-            !mensagem_bot &&
-            grupo?.autosimi &&
-            !ehComando &&
-            !autoChat &&
-            (tipo == tiposMensagem.texto || tipo == tiposMensagem.textoExt) &&
-            textoSimi.length > 0 &&
-            !String(comando || '').startsWith(prefixo) &&
-            !textoSimi.startsWith(prefixo)
-
         const autoOfensaGrupo =
             mensagem_grupo &&
             !mensagem_bot &&
@@ -161,68 +180,84 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             !String(comando || '').startsWith(prefixo) &&
             !textoSimi.startsWith(prefixo)
 
-        //Verificação se há mensagens em espera na fila
-        if(queueMensagemEspera) await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.fila_comando, queueMensagem.size), mensagem)
-        
-        //Chamadas de comandos
+        if (queueMensagemEspera) {
+            await socket.responderTexto(
+                c,
+                id_chat,
+                criarTexto(comandos_info.outros.fila_comando, profundidade.global),
+                mensagem
+            )
+        }
+
+        const contarOpts = mensagemBaileys._contarPosSucesso
+            ? {
+                  contar: true,
+                  remetente,
+                  contagemDiaria: !!mensagemBaileys._contagemDiaria
+              }
+            : {}
+
+        // Prioridade: 1 comando 2 @bot/reply-bot 3 ofensa 4 autosticker
         if(verificarComandoExiste(botInfo, comando, 'utilidades')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c,id_chat, obterGuiaComando("utilidades", comando, botInfo), mensagem)
                 await utilidadesComandos(c, mensagemBaileys, botInfo)
-                consoleComando(mensagem_grupo, "UTILIDADES", comando, "#de9a07", t, nome_usuario, nome_grupo)
-            }, 1)
+                const tm = mensagemBaileys._chatTiming
+                const detalheChat = tm
+                    ? `[pre=${(tm.pre / 1000).toFixed(1)} web=${(tm.web / 1000).toFixed(1)} cascade=${(tm.cascade / 1000).toFixed(1)}${tm.vision ? ` vision=${(tm.vision / 1000).toFixed(1)}` : ''}]`
+                    : ''
+                consoleComando(mensagem_grupo, "UTILIDADES", comando, "#de9a07", t, nome_usuario, nome_grupo, detalheChat)
+            }, 1, contarOpts)
         } else if(verificarComandoExiste(botInfo, comando, 'ia')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("ia", comando, botInfo), mensagem)
                 await iaComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "IA", comando, "#7c4dff", t, nome_usuario, nome_grupo)
-            }, 1)
+            }, 1, contarOpts)
         }  else if(verificarComandoExiste(botInfo, comando, 'figurinhas')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c,id_chat, obterGuiaComando("figurinhas", comando, botInfo), mensagem)
                 await figurinhasComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "FIGURINHAS", comando, "#ae45d1", t, nome_usuario, nome_grupo)
-            }, 2)
+            }, 2, contarOpts)
         } else if(verificarComandoExiste(botInfo, comando, 'downloads')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("downloads", comando, botInfo), mensagem)
                 await downloadsComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "DOWNLOADS", comando, "#2195cf", t, nome_usuario, nome_grupo)
-            }, 1)
+            }, 1, contarOpts)
         } else if (verificarComandoExiste(botInfo, comando, 'grupo')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("grupo", comando, botInfo), mensagem)
                 await grupoComandos(c, mensagemBaileys, botInfo)
                 if(mensagem_grupo) consoleComando(mensagem_grupo, "ADMINISTRAÇÃO", comando, "#e0e031", t, nome_usuario, nome_grupo)
-            }, 3)
+            }, 3, contarOpts)
         } else if(verificarComandoExiste(botInfo, comando, 'diversao')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("diversao", comando, botInfo), mensagem)
                 await diversaoComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "DIVERSÃO", comando, "#22e3dd", t, nome_usuario, nome_grupo)
-            }, 2)
+            }, 2, contarOpts)
         } else if(verificarComandoExiste(botInfo, comando, 'admin')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("admin", comando, botInfo), mensagem)
                 await adminComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "DONO", comando, "#d1d1d1", t, nome_usuario, nome_grupo)
-            }, 4)
+            }, 4, contarOpts)
         } else if(verificarComandoExiste(botInfo, comando, 'info')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("info", comando, botInfo), mensagem)
                 await infoComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "INFO", comando, "#8ac46e", t, nome_usuario, nome_grupo)
-            }, 3)
-        } else if(autoStickerPv || autoStickerGrupo){
-            enfileirar(c, id_chat, mensagem, "AUTO-STICKER", botInfo, async()=>{
-                await autoSticker(c, mensagemBaileys, botInfo)
-                consoleComando(mensagem_grupo, "FIGURINHAS", "AUTO-STICKER", "#ae45d1", t, nome_usuario, nome_grupo)
-            }, 2)
+            }, 3, contarOpts)
         } else if (autoChat) {
-            // @bot OU resposta citando msg do bot → mesmo fluxo do !chat
             enfileirar(c, id_chat, mensagem, citouBot ? 'AUTO-CHAT-REPLY' : 'AUTO-CHAT', botInfo, async()=>{
                 try {
                     await processarChatIA(c, mensagemBaileys, botInfo, textoChatMencao)
+                    const tm = mensagemBaileys._chatTiming
+                    const detalhe = tm
+                        ? `[pre=${(tm.pre / 1000).toFixed(1)} web=${(tm.web / 1000).toFixed(1)} cascade=${(tm.cascade / 1000).toFixed(1)}${tm.vision ? ` vision=${(tm.vision / 1000).toFixed(1)}` : ''}]`
+                        : ''
                     consoleComando(
                         mensagem_grupo,
                         'UTILIDADES',
@@ -230,9 +265,11 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
                         '#de9a07',
                         t,
                         nome_usuario,
-                        nome_grupo
+                        nome_grupo,
+                        detalhe
                     )
                 } catch (err) {
+                    incrMetrica('ia_erro')
                     const msg = err?.erro || err?.message || 'erro no chat'
                     await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, '@chat', msg), mensagem).catch(()=>{})
                 }
@@ -242,20 +279,12 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
                 const respondeu = await processarOfensaAutomatica(c, mensagemBaileys, botInfo)
                 if (respondeu) {
                     consoleComando(mensagem_grupo, "DIVERSÃO", "AUTO-OFENSA", "#c62828", t, nome_usuario, nome_grupo)
-                    return
-                }
-                // Se não era ofensa e autosimi está on, cai no simi
-                if (autoSimiGrupo) {
-                    const { resultado } = await api.IA.obterRespostaSimi(textoSimi, remetente)
-                    await socket.responderTexto(c, id_chat, resultado, mensagem)
-                    consoleComando(mensagem_grupo, "DIVERSÃO", "AUTO-SIMI", "#22e3dd", t, nome_usuario, nome_grupo)
                 }
             }, 2)
-        } else if (autoSimiGrupo) {
-            enfileirar(c, id_chat, mensagem, "AUTO-SIMI", botInfo, async()=>{
-                const { resultado } = await api.IA.obterRespostaSimi(textoSimi, remetente)
-                await socket.responderTexto(c, id_chat, resultado, mensagem)
-                consoleComando(mensagem_grupo, "DIVERSÃO", "AUTO-SIMI", "#22e3dd", t, nome_usuario, nome_grupo)
+        } else if(autoStickerPv || autoStickerGrupo){
+            enfileirar(c, id_chat, mensagem, "AUTO-STICKER", botInfo, async()=>{
+                await autoSticker(c, mensagemBaileys, botInfo)
+                consoleComando(mensagem_grupo, "FIGURINHAS", "AUTO-STICKER", "#ae45d1", t, nome_usuario, nome_grupo)
             }, 2)
         }
 

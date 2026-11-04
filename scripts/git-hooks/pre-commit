@@ -1,0 +1,24 @@
+#!/bin/sh
+# Bump automático do patch a cada commit (package.json + CHANGELOG).
+# Pule: SKIP_VERSION_BUMP=1 git commit ...
+
+if [ -n "$SKIP_VERSION_BUMP" ]; then
+  echo "[pre-commit] SKIP_VERSION_BUMP — sem bump"
+  exit 0
+fi
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$ROOT" || exit 0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "[pre-commit] node não encontrado — bump ignorado" >&2
+  exit 0
+fi
+
+node scripts/bump-version.js || {
+  echo "[pre-commit] falha no bump-version" >&2
+  exit 1
+}
+
+git add package.json package-lock.json CHANGELOG.md 2>/dev/null || true
+exit 0

@@ -10,7 +10,7 @@ export default function configSocket(state, cacheTentativasEnvio, versaoWaWeb) {
         },
         version: versaoWaWeb,
         msgRetryCounterCache: cacheTentativasEnvio,
-        defaultQueryTimeoutMs: undefined,
+        defaultQueryTimeoutMs: 60_000,
         syncFullHistory: false,
         // true ajuda a receber msgs de forma estável em VPS/Linux
         markOnlineOnConnect: true,

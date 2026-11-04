@@ -1,7 +1,0 @@
-{
-  "descricao": "Bancos de conteúdo do Ultron.",
-  "arquivos": [
-    "piadas.json"
-  ],
-  "regenerar": "node scripts/gerar-conteudo-json.js"
-}

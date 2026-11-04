@@ -2,25 +2,19 @@ import { getContentType, normalizeMessageContent } from '@whiskeysockets/baileys
 import { GrupoControle } from '../controles/GrupoControle.js'
 import { UsuarioControle } from '../controles/UsuarioControle.js'
 import { listaContemJid } from '../lib/util.js'
+import { aliasesDeKey, escolherCanonico, resolverIdentidade } from '../lib/identidade.js'
 
 /** Prefere JID de telefone (@s.whatsapp.net); LID só se não houver PN. */
 export function aliasesRemetenteKey(key = {}) {
-    return [
-        key.participantPn,
-        key.participantAlt,
-        key.participant,
-        key.remoteJidAlt,
-        key.remoteJid,
-        key.participantLid
-    ].filter(Boolean)
+    return aliasesDeKey(key)
 }
 
 export function escolherRemetente(key = {}, numeroBot = '') {
     if (key.fromMe) return numeroBot
-    const aliases = aliasesRemetenteKey(key)
-    const pn = aliases.find((j) => /@s\.whatsapp\.net$/i.test(String(j)) || /@hosted$/i.test(String(j)))
-    return pn || aliases[0] || ''
+    return escolherCanonico(...aliasesRemetenteKey(key))
 }
+
+export { resolverIdentidade }
 
 /** Chaves que não são conteúdo real (Baileys 7 / proto). */
 const TIPOS_IGNORAR = new Set([

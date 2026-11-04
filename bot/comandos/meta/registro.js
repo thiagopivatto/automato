@@ -7,8 +7,8 @@ import { comandosInfo } from '../comandos.js'
 /** Aliases de handler que não precisam de meta própria (case → canônico no registro). */
 export const ALIASES_HANDLER = {
     massacote: 'mascote',
-    joke: 'piada',
     resumopersona: 'personalidaderesumo',
+    criarimagem: 'criarimg',
     // admin: estado online|offline|manutencao são subargs de `estado`
     online: 'estado',
     offline: 'estado',

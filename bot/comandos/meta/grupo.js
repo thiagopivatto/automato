@@ -6,63 +6,20 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                 guia: `Responda um *texto ou imagem* com *${prefixo}statusgrupo*.\nImagens mantêm a legenda original. A publicação é feita no status do grupo de origem.\n`,
                 msgs: {}
             },
+            painel: {
+                descricao: 'Painel completo do grupo (flags, listas, personalidades) + toggles',
+                guia:
+                    `Ex: *${prefixo}painel* — Dump completo das configs do grupo.\n` +
+                    `Ex: *${prefixo}painel* ofensa|automsg|alink|autosticker|mutar|bv|contador — Alterna.\n` +
+                    `Ex: *${prefixo}painel* ofensa on|off\n` +
+                    `Ex: *${prefixo}painel* aflood [máx] [intervalo]\n` +
+                    `*Apenas admins.* Alias: *${prefixo}status*\n`,
+                msgs: {}
+            },
             status: {
-                descricao: '',
-                guia: `Ex: *${prefixo}status* - Exibe as configurações atuais do grupo\n`,
-                msgs: {
-                    resposta_titulo: "[ 🤖 STATUS DO GRUPO 🤖 ]\n\n",
-                    resposta_variavel: {
-                        bemvindo:{
-                            on: "Recurso Boas Vindas : ✅\n",
-                            off: "Recurso Boas Vindas : ❌\n"
-                        },
-                        mutar:{
-                            on: "Recurso Mutar : ✅\n",
-                            off: "Recurso Mutar : ❌\n"
-                        },
-                        autosticker:{
-                            on: "Recurso Auto-Sticker : ✅\n",
-                            off: "Recurso Auto-Sticker : ❌\n"
-                        },
-                        autosimi:{
-                            on: "Recurso Auto-Simi : ✅\n",
-                            off: "Recurso Auto-Simi : ❌\n"
-                        },
-                        ofensa:{
-                            on: "Recurso Ofensa : ✅\n",
-                            off: "Recurso Ofensa : ❌\n"
-                        },
-                        automsg:{
-                            on: "Recurso Auto-Msg : ✅\n",
-                            off: "Recurso Auto-Msg : ❌\n"
-                        },
-                        antilink:{
-                            on: "Recurso Anti-Link : ✅\n",
-                            off: "Recurso Anti-Link : ❌\n"
-                        },
-                        antifake:{
-                            on: "Recurso Anti-Fake : ✅\n"+
-                            "- *Liberados* : {p1}\n",
-                            off: "Recurso Anti-Fake : ❌\n"
-                        },
-                        antiflood:{
-                            on: "Recurso Anti-Flood : ✅\n"+
-                            "- Máx: *{p1}* msgs / *{p2}* s \n",
-                            off: "Recurso Anti-Flood : ❌\n"
-                        },
-                        contador:{
-                            on: "Recurso Contador : ✅\n"+
-                            "- {p1}\n",
-                            off: "Recurso Contador : ❌\n"
-                        },
-                        bloqueiocmds:{
-                            on: "Bloqueio de comandos : ✅\n"+
-                            "- *{p1}*\n",
-                            off: "Bloqueio de comandos : ❌\n"
-                        },
-                        listanegra: "Lista Negra : *{p1}*\n"
-                    }
-                }
+                descricao: 'Alias de !painel (dump completo do grupo)',
+                guia: `Ex: *${prefixo}status* - Mesmo que *${prefixo}painel* (dump completo).\n`,
+                msgs: {}
             },
             fotogrupo: {
                 descricao: '',
@@ -315,14 +272,6 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                     desligado: "✅ O recurso de AUTO-STICKER foi desativado com sucesso"
                 }
             },
-            autosimi: {
-                descricao: '',
-                guia: `Ex: *${prefixo}autosimi* - Liga/desliga respostas automáticas do Simi (sem comando). *Apenas admins*.\n`,
-                msgs: {
-                    ligado: "✅ AUTO-SIMI ativado — o bot responde mensagens de texto automaticamente.",
-                    desligado: "✅ AUTO-SIMI desativado."
-                }
-            },
             ofensa: {
                 descricao: 'Rebate ofensas com resposta bem mais pesada (ligado por padrão)',
                 guia:
@@ -362,18 +311,6 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                     "Seja bem vindo(a) ao grupo *{p2}*\n\n"+
                     "{p3}"+
                     "Digite "+`*${prefixo}menu*`+" para ver os comandos."
-                }
-            },
-            afake: {
-                descricao: '',
-                guia: `Ex: *${prefixo}afake* - Liga/desliga o anti-fake em grupos. - *DESATIVADO!*\n`+
-                `Ex: *${prefixo}afake* DDI - Configura o anti-fake para que todos números com o DDI exterior seja banido, exceto o que você escolheu.\n`+
-                `Ex: *${prefixo}afake* DDI1 DDI2 DDI3 - Configura o anti-fake para que todos números com DDI exterior sejam banidos, excetos o que você escolheu.\n\n`+
-                `*Obs*: A ativação do anti-fake bane pessoas com DDI do exterior (que não sejam 55 - Brasil).\n`,
-                msgs: {
-                    motivo: "Banido pelo ANTI-FAKE",
-                    ligado: "✅ O recurso de ANTI-FAKE foi ativado com sucesso",
-                    desligado: "✅ O recurso de ANTI-FAKE foi desativado com sucesso"
                 }
             },
             aflood: {

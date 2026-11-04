@@ -3,7 +3,6 @@
  * Uso: node scripts/test-smoke.js
  */
 import { comandosInfo, verificarComandoExiste } from '../bot/comandos/comandos.js'
-import { tamanhoBancoPiadas, obterPiadaAleatoria } from '../bot/lib/piadas.js'
 import * as menu from '../bot/lib/menu.js'
 
 const botInfo = {
@@ -17,12 +16,60 @@ const results = []
 const ok = (name, detail = '') => results.push({ name, pass: true, detail })
 const fail = (name, detail = '') => results.push({ name, pass: false, detail })
 
-const REMOVIDOS = ['qualanime', 'local', 'i22', 'animes', 'mangas', 'noticias', 'i2i', 'vocalsonly', 'instrumentalonly', 'criaimg', 'criavideo']
+const REMOVIDOS = [
+    'qualanime',
+    'local',
+    'i22',
+    'animes',
+    'mangas',
+    'noticias',
+    'i2i',
+    'vocalsonly',
+    'instrumentalonly',
+    'criaimg',
+    'criavideo',
+    'viadometro',
+    'gadometro',
+    'bafometro',
+    'jacometro',
+    'bolometro',
+    'fernandometro',
+    'simi',
+    'autosimi',
+    'devtest',
+    'fofoca',
+    'boladocotidiano',
+    'prefeito',
+    'jornal',
+    'piada',
+    'joke'
+]
 const OBRIGATORIOS = [
-    'mta', 'rt', 'rbg', 'ssf', 'emojimix', 'piada', 'sortear',
-    'simi', 'resumodogrupo', 'limpar', 's', 'play', 'chat',
-    'sugerir', 'fofoca', 'jornal', 'crime', 'tribunal', 'prefeito', 'cancelado',
-    'horoscopo', 'boladocotidiano', 'automsg', 'shh', 'resumoportema'
+    'mta',
+    'rt',
+    'rbg',
+    'ssf',
+    'emojimix',
+    'sortear',
+    'resumodogrupo',
+    'limpar',
+    's',
+    'play',
+    'chat',
+    'sugerir',
+    'crime',
+    'tribunal',
+    'cancelado',
+    'horoscopo',
+    'automsg',
+    'shh',
+    'resumoportema',
+    'painel',
+    'painelbot',
+    'personalidaderesumo',
+    'criarimg',
+    'status',
+    'infobot'
 ]
 
 function listarTodosComandos() {
@@ -50,9 +97,10 @@ async function run() {
         else fail(`removido:${cmd}`, 'ainda no registro')
     }
 
-    // verificarComandoExiste
-    if (verificarComandoExiste(botInfo, '!piada')) ok('verificarComandoExiste:piada')
-    else fail('verificarComandoExiste:piada')
+    if (verificarComandoExiste(botInfo, '!painel')) ok('verificarComandoExiste:painel')
+    else fail('verificarComandoExiste:painel')
+    if (!verificarComandoExiste(botInfo, '!piada')) ok('verificarComandoExiste:piada-gone')
+    else fail('verificarComandoExiste:piada-gone', 'ainda existe')
     if (!verificarComandoExiste(botInfo, '!qualanime')) ok('verificarComandoExiste:qualanime-gone')
     else fail('verificarComandoExiste:qualanime-gone', 'ainda existe')
 
@@ -81,31 +129,32 @@ async function run() {
         menu.menuDiversao(true, botInfo),
         menu.menuAdmin(botInfo)
     ].join('\n')
-    if (!/qualanime|i22\b|!local/.test(menusTxt)) ok('menus-sem-removidos')
-    else fail('menus-sem-removidos', 'ainda cita comando removido')
-    // Menus com novos
-    const menuFull = menu.menuCompleto(botInfo)
-    if (/sortear|limpar|piada|ssf|sugerir|fofoca|automsg|jornal|chat|resumodogrupo/.test(menuFull)) ok('menus-com-novos')
-    else fail('menus-com-novos', 'faltam novos comandos no menu')
-    if (!/desligar|bcgrupos/.test(menuFull) || /ADMIN/.test(menu.menuAdmin(botInfo))) ok('menus-sem-dono-no-completo')
-    else fail('menus-sem-dono-no-completo', 'comandos de dono vazaram no menu completo')
-
-    // Banco de piadas
-    const { tamanhoBancoPiadas, obterPiadaAleatoria } = await import('../bot/lib/piadas.js')
-    const n = tamanhoBancoPiadas()
-    if (n >= 2000) ok('piadas-banco', `${n}+`)
-    else fail('piadas-banco', `só ${n}`)
-
-    const { resumoConteudo } = await import('../bot/lib/conteudo.js')
-    const resumo = resumoConteudo()
-    for (const [k, v] of Object.entries(resumo)) {
-        if (v >= 2000) ok(`conteudo:${k}`, String(v))
-        else fail(`conteudo:${k}`, `só ${v}`)
+    if (!/qualanime|i22\b|!local|viadometro|autosimi|!piada|!fofoca|!jornal|!simi\b/.test(menusTxt)) {
+        ok('menus-sem-removidos')
+    } else {
+        fail('menus-sem-removidos', 'ainda cita comando removido')
     }
-    const a = await obterPiadaAleatoria('t1')
-    const b = await obterPiadaAleatoria('t1')
-    if (a.texto && b.texto) ok('piadas-sorteio')
-    else fail('piadas-sorteio')
+    const menuFull = menu.menuCompleto(botInfo)
+    if (/sortear|limpar|ssf|sugerir|automsg|chat|resumodogrupo|painel/.test(menuFull)) {
+        ok('menus-com-novos')
+    } else {
+        fail('menus-com-novos', 'faltam novos comandos no menu')
+    }
+    if (!/desligar|bcgrupos/.test(menuFull) || /ADMIN/.test(menu.menuAdmin(botInfo))) {
+        ok('menus-sem-dono-no-completo')
+    } else {
+        fail('menus-sem-dono-no-completo', 'comandos de dono vazaram no menu completo')
+    }
+
+    // Helpers novos
+    try {
+        await import('../bot/lib/painelGrupo.js')
+        await import('../bot/lib/painelBot.js')
+        await import('../bot/lib/personalidadeResumo.js')
+        ok('imports-paineis')
+    } catch (e) {
+        fail('imports-paineis', e.message)
+    }
 
     // Imports críticos
     try {
@@ -144,12 +193,54 @@ async function run() {
         for (const [cat, rel] of Object.entries(HANDLERS_POR_CATEGORIA)) {
             const src = await fs.readFile(path.join(raiz, rel), 'utf8')
             const found = new Set()
-            // Aspas simples/duplas ou template `case \`cmd\``
-            for (const m of src.matchAll(/case\s+(?:['"`])([^'"`]+)(?:['"`])\s*:/g)) {
-                const raw = m[1]
+            // case 'x': — ignora linhas comentadas
+            for (const m of src.matchAll(/^([^\n]*)$/gm)) {
+                const line = m[1]
+                if (/^\s*\/\//.test(line)) continue
+                // ignora comentário no meio da linha (ex.: return // case 'x':)
+                if (/\/\//.test(line.split(/case\s+/)[0] || '')) continue
+                const cm = line.match(/\bcase\s+(?:['"`])([^'"`]+)(?:['"`])\s*:/)
+                if (!cm) continue
+                const raw = cm[1]
                 const semPrefixo = raw.startsWith('!') ? raw.slice(1) : raw
                 found.add(semPrefixo)
-                if (raw !== semPrefixo) found.add(raw) // ainda registra bruto p/ diagnóstico
+                if (raw !== semPrefixo) found.add(raw)
+            }
+            // Mapa HANDLERS_* = { ... } com brace matching (não para no 1º })
+            for (const m of src.matchAll(/HANDLERS_[A-Z0-9_]+\s*=\s*\{/g)) {
+                const open = m.index + m[0].length - 1
+                let depth = 0
+                let end = -1
+                for (let p = open; p < src.length; p++) {
+                    if (src[p] === '{') depth++
+                    else if (src[p] === '}') {
+                        depth--
+                        if (depth === 0) {
+                            end = p
+                            break
+                        }
+                    }
+                }
+                if (end < 0) continue
+                const body = src.slice(open + 1, end)
+                // Só chaves de topo (indentação baixa): "cmd": async  |  cmd: fn
+                const bodyN = body.replace(/\r\n/g, '\n')
+                for (const km of bodyN.matchAll(
+                    /^ {0,8}(?:['"`])([a-z][a-z0-9_]*)(?:['"`])\s*:\s*async\s*\(/gm
+                )) {
+                    found.add(km[1])
+                }
+                for (const km of bodyN.matchAll(
+                    /^ {0,8}([a-z][a-z0-9_]*)\s*:\s*[A-Za-z_$][\w$]*\s*,?\s*$/gm
+                )) {
+                    found.add(km[1])
+                }
+            }
+            // Aliases: HANDLERS_X["alias"] = HANDLERS_X["canon"]
+            for (const m of src.matchAll(
+                /HANDLERS_[A-Z0-9_]+\[\s*(?:['"`])([a-z][a-z0-9_]*)(?:['"`])\s*\]\s*=/g
+            )) {
+                found.add(m[1])
             }
             casesPorCat[cat] = found
         }
@@ -159,7 +250,6 @@ async function run() {
             for (const nome of nomes) {
                 if (CASES_MENU_INFO.has(nome)) continue
                 if (!cases.has(nome)) {
-                    // alias inverso: meta canônico, handler só tem alias
                     const aliasHit = Object.entries(ALIASES_HANDLER).some(
                         ([alias, canon]) => canon === nome && cases.has(alias)
                     )
@@ -171,22 +261,20 @@ async function run() {
             }
             for (const cse of cases) {
                 if (CASES_MENU_INFO.has(cse)) continue
-                if (cse.startsWith('!')) continue // variante com prefixo já normalizada
+                if (cse.startsWith('!')) continue
                 const canon = ALIASES_HANDLER[cse] || cse
                 if (!(porCat[cat] || []).includes(canon) && !(porCat[cat] || []).includes(cse)) {
-                    // sub-switches (ex.: online dentro de estado) já mapeados em ALIASES
                     fail(`contrato-case-sem-meta:${cat}/${cse}`)
                     drift++
                 }
             }
         }
-        // Menu cita comandos do registro (amostra)
         const menuTxt = [
             menu.menuUtilidades(botInfo),
             menu.menuDiversao(true, botInfo),
             menu.menuGrupo(true, botInfo)
         ].join('\n')
-        for (const cmd of ['chat', 'sortear', 'resumodogrupo', 'mta', 'piada']) {
+        for (const cmd of ['chat', 'sortear', 'resumodogrupo', 'mta', 'painel']) {
             if (menuTxt.includes(cmd) || menusTxt.includes(cmd)) ok(`contrato-menu:${cmd}`)
             else fail(`contrato-menu:${cmd}`, 'ausente nos menus')
         }

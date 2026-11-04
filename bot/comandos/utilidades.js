@@ -1,7 +1,7 @@
 //REQUERINDO MÓDULOS
 import {criarTexto, erroComandoMsg, consoleErro} from '../lib/util.js'
 import {detectarIdioma} from '../lib/idioma.js'
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from '../lib/lbotApi.js'
 import * as socket from '../baileys/socket.js'
 import {tiposMensagem} from '../baileys/mensagem.js'
 import {downloadMediaMessage } from '@whiskeysockets/baileys'
@@ -124,31 +124,19 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
                     }
                     if (/^(padrao|padrão|reset|limpar|default)$/i.test(textoPers)) {
                         await definirPersonalidadeChat(id_chat, '')
-                        // limpa espelho legado no grupo
-                        if (mensagem_grupo && grupo?.id_grupo) {
-                            try {
-                                const { GrupoControle } = await import('../controles/GrupoControle.js')
-                                await new GrupoControle().definirPersonalidade(grupo.id_grupo, '')
-                            } catch { /* ignore */ }
-                        }
                         return await socket.responderTexto(
                             c,
                             id_chat,
-                            `✅ Personalidade ${onde} voltou ao *padrão Ultron* (chat, resumo, automsg…).`,
+                            `✅ Personalidade ${onde} voltou ao *padrão Ultron* (chat/automsg).`,
                             mensagem
                         )
                     }
+                    // Fonte: arquivo em dados/personalidades/ — não afeta !resumodogrupo
                     await definirPersonalidadeChat(id_chat, textoPers)
-                    if (mensagem_grupo && grupo?.id_grupo) {
-                        try {
-                            const { GrupoControle } = await import('../controles/GrupoControle.js')
-                            await new GrupoControle().definirPersonalidade(grupo.id_grupo, textoPers)
-                        } catch { /* ignore */ }
-                    }
                     await socket.responderTexto(
                         c,
                         id_chat,
-                        `✅ Personalidade salva *${onde}* (arquivo individual):\n${textoPers.slice(0, 500)}`,
+                        `✅ Personalidade salva *${onde}* (chat/automsg):\n${textoPers.slice(0, 500)}\n\n_Resumo do grupo: *${prefixo}personalidaderesumo*_`,
                         mensagem
                     )
                 } catch (err) {
@@ -474,7 +462,11 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
 
                     if (!usuarioTexto) return await socket.responderTexto(c, id_chat, comandos_info.utilidades.voz.msgs.texto_vazio , mensagem)
                     if (usuarioTexto.length > 4000) return await socket.responderTexto(c, id_chat, comandos_info.utilidades.voz.msgs.texto_longo, mensagem)
-                    let {resultado: resultadoAudio, mimetype, ptt} = await api.Audios.textoParaVoz(idioma, usuarioTexto)
+                    let {resultado: resultadoAudio, mimetype, ptt} = await api.Audios.textoParaVoz(
+                        idioma,
+                        usuarioTexto,
+                        { preferirEleven: !!mensagemBaileys.mensagem_dono }
+                    )
                     if (ptt !== false) {
                         await socket.responderVozBuffer(c, id_chat, resultadoAudio, mensagem, mimetype || 'audio/ogg; codecs=opus')
                     } else {

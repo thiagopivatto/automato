@@ -1,10 +1,7 @@
-import Datastore from '@seald-io/nedb'
-import { caminhoDados } from '../lib/caminhos.js'
+import { createCollection } from '../db/sqlite.js'
 
-const db = new Datastore({ filename: caminhoDados('mensagens.db'), autoload: true })
+const db = createCollection('mensagens')
 db.ensureIndex({ fieldName: 'chatId' })
-db.ensureIndex({ fieldName: 'mensagemId' })
-db.ensureIndex({ fieldName: 'criado_em' })
 
 const TTL_MS = 48 * 60 * 60 * 1000
 const MAX_DOCS = 8000
@@ -47,15 +44,11 @@ export class Mensagem {
         await db.removeAsync({}, { multi: true })
     }
 
-    /** Remove msgs velhas / excedentes sem apagar o cache inteiro (necessário p/ getMessage). */
     async podarAntigas({ ttlMs = TTL_MS, maxDocs = MAX_DOCS } = {}) {
         const corte = Date.now() - (Number(ttlMs) || TTL_MS)
         await db.removeAsync(
             {
-                $or: [
-                    { criado_em: { $lt: corte } },
-                    { criado_em: { $exists: false } }
-                ]
+                $or: [{ criado_em: { $lt: corte } }, { criado_em: { $exists: false } }]
             },
             { multi: true }
         )
@@ -67,7 +60,9 @@ export class Mensagem {
         const sobra = total - limite
         const antigas = await db.findAsync({}).sort({ criado_em: 1 }).limit(sobra)
         for (const doc of antigas || []) {
-            try { await db.removeAsync({ _id: doc._id }, {}) } catch { /* ignore */ }
+            try {
+                await db.removeAsync({ _id: doc._id }, {})
+            } catch { /* ignore */ }
         }
         return { removidasAntigas: true, total: await db.countAsync({}) }
     }

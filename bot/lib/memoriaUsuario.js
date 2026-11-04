@@ -136,7 +136,7 @@ async function destilarResumo(idUsuario) {
     const d = await ler(idUsuario)
     if (!d.interacoes.length && !d.fatos.length) return
     try {
-        const api = (await import('@victorsouzaleal/lbot-api-comandos')).default
+        const api = (await import('./lbotApi.js')).default
         const material =
             `Nome: ${d.nome || '?'}\n` +
             `Fatos: ${d.fatos.slice(-15).join(' | ')}\n` +

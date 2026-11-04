@@ -1,7 +1,6 @@
 /**
  * TTS unificado (!resumodogrupo, !voz, narrações):
- * ElevenLabs (se houver) → Edge neural gratuito (natural) → OpenAI.
- * Sem Google TTS.
+ * Padrão Edge grátis; ElevenLabs só com preferirEleven (dono).
  */
 import { textoParaVozRobusto, OPCOES_TTS_ULTRON } from '../lib/tts-robusto.js'
 
@@ -11,10 +10,11 @@ export { OPCOES_TTS_ULTRON }
 export const gerarAudioNarrado = async (texto, { maxPalavras = 750, idioma = 'pt', ...extra } = {}) => {
     const lang = String(idioma || 'pt').toLowerCase()
     const ehPt = /^(pt|pt-br|br)$/.test(lang)
-    const base = ehPt ? OPCOES_TTS_ULTRON : {}
+    const base = ehPt ? { ...OPCOES_TTS_ULTRON } : {}
     return textoParaVozRobusto(texto, {
         idioma: lang,
         maxPalavras,
+        somenteEdge: true,
         ...base,
         ...extra
     })

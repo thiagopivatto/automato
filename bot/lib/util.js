@@ -128,13 +128,17 @@ export const obterTempoRespostaSeg = (timestampMensagem) => {
     return (tResposta/1000).toFixed(2)
 }
 
-export const consoleComando = (isGroup, categoria, comando, hex, timestampMsg, nomeUsuario, nomeChat)=>{
+export const consoleComando = (isGroup, categoria, comando, hex, timestampMsg, nomeUsuario, nomeChat, detalheMs = '')=>{
     let tMensagem = timestampParaData(timestampMsg)
     let tResposta = obterTempoRespostaSeg(timestampMsg)
+    void import('./logger.js')
+        .then((m) => m.registrarCmdMs?.(comando, Number(tResposta) * 1000))
+        .catch(() => {})
+    const extra = detalheMs ? ` ${detalheMs}` : ''
     if(isGroup){
-      console.log('\x1b[1;31m~\x1b[1;37m>', corTexto(`[GRUPO - ${categoria}]`, hex), tMensagem, corTexto(comando), 'de', corTexto(nomeUsuario), 'em', corTexto(nomeChat), `(${corTexto(`${tResposta}s`)})`)
+      console.log('\x1b[1;31m~\x1b[1;37m>', corTexto(`[GRUPO - ${categoria}]`, hex), tMensagem, corTexto(comando), 'de', corTexto(nomeUsuario), 'em', corTexto(nomeChat), `(${corTexto(`${tResposta}s`)})${extra}`)
     } else {
-      console.log('\x1b[1;31m~\x1b[1;37m>', corTexto(`[PRIVADO - ${categoria}]`, hex), tMensagem, corTexto(comando), 'de', corTexto(nomeUsuario), `(${corTexto(`${tResposta}s`)})`)
+      console.log('\x1b[1;31m~\x1b[1;37m>', corTexto(`[PRIVADO - ${categoria}]`, hex), tMensagem, corTexto(comando), 'de', corTexto(nomeUsuario), `(${corTexto(`${tResposta}s`)})${extra}`)
     }
 }
 
@@ -176,22 +180,30 @@ export const criacaoEnv = async ()=>{
 
 export const verificarEnv = async ()=>{
     try{
-      const { registrarBootApi } = await import('./boot.js')
+      const { registrarBootApi, bootMarcarFase } = await import('./boot.js')
+      const set = (k) => !!(process.env[k]?.trim() && process.env[k].trim() !== '??????')
       const acrOk = !(
         process.env.acr_host?.trim() == "??????" ||
         process.env.acr_access_key?.trim() == "??????" ||
         process.env.acr_access_secret?.trim() == "??????"
-      )
-      const dgOk = !!(process.env.dg_secret_key?.trim() && process.env.dg_secret_key.trim() != "??????")
-      const elevenOk = !!(process.env.ELEVENLABS_API_KEY?.trim())
-      const rapidOk = !!(process.env.RAPIDAPI_KEY?.trim())
-      const geminiOk = !!(process.env.GEMINI_API_KEY?.trim())
+      ) && set('acr_host') && set('acr_access_key')
+      const dgOk = set('dg_secret_key')
+      const elevenOk = set('ELEVENLABS_API_KEY')
+      const rapidOk = set('RAPIDAPI_KEY')
+      const geminiOk = set('GEMINI_API_KEY')
+      const orOk = set('OPENROUTER_API_KEY')
+      const tavilyOk = set('TAVILY_API_KEY') || /^(1|true|sim|on)$/i.test(process.env.TAVILY_KEYLESS || '')
+      const braveOk = set('BRAVE_SEARCH_API_KEY') || set('BRAVE_API_KEY')
 
-      registrarBootApi('ACRCloud', acrOk)
-      registrarBootApi('Deepgram', dgOk)
-      registrarBootApi('ElevenLabs', elevenOk)
-      registrarBootApi('RapidAPI', rapidOk)
-      registrarBootApi('Gemini', geminiOk)
+      registrarBootApi('Gemini', geminiOk, geminiOk ? 'chat/resumo/visão' : 'GEMINI_API_KEY')
+      registrarBootApi('OpenRouter', orOk, orOk ? 'pago+:free' : 'OPENROUTER_API_KEY')
+      registrarBootApi('RapidAPI', rapidOk, rapidOk ? 'hub (APIs assinadas)' : 'RAPIDAPI_KEY')
+      registrarBootApi('Tavily', tavilyOk, tavilyOk ? 'pesquisa web chat' : 'TAVILY_API_KEY')
+      registrarBootApi('Brave', braveOk, braveOk ? 'pesquisa web' : 'BRAVE_SEARCH_API_KEY')
+      registrarBootApi('ElevenLabs', elevenOk, elevenOk ? 'TTS/música' : 'Edge TTS sem chave')
+      registrarBootApi('Deepgram', dgOk, dgOk ? '!ouvir' : 'dg_secret_key')
+      registrarBootApi('ACRCloud', acrOk, acrOk ? '!qualmusica' : 'acr_*')
+      try { bootMarcarFase('env') } catch { /* */ }
     } catch(err){
         err.message = `verificarEnv - ${err.message}`
         throw err

@@ -3,13 +3,13 @@
  * - Baixa e guarda o buffer assim que a msg chega (quote depois vem sem mediaKey).
  * - Reenvia no chat como mídia normal.
  */
-import Datastore from '@seald-io/nedb'
+import path from 'node:path'
 import { BufferJSON, downloadMediaMessage, getContentType } from '@whiskeysockets/baileys'
 import { tiposMensagem } from '../baileys/mensagem.js'
 import * as socket from '../baileys/socket.js'
-import { caminhoDados } from './caminhos.js'
+import { createCollection } from '../db/sqlite.js'
 
-const db = new Datastore({ filename: caminhoDados('viewonce_cache.db'), autoload: true })
+const db = createCollection('viewonce')
 db.ensureIndex({ fieldName: 'chatId' })
 db.ensureIndex({ fieldName: 'mensagemId' })
 db.ensureIndex({ fieldName: 'criado_em' })
@@ -80,8 +80,31 @@ async function salvarCache(doc) {
     } else {
         await db.insertAsync(doc)
     }
+    await limparViewOnceAntigos()
+}
+
+/** Remove entradas de view-once além do TTL (72h). */
+export async function limparViewOnceAntigos() {
     const corte = Date.now() - TTL_MS
-    await db.removeAsync({ criado_em: { $lt: corte } }, { multi: true }).catch(() => {})
+    const n = await db.removeAsync({ criado_em: { $lt: corte } }, { multi: true }).catch(() => 0)
+    // arquivos em disco órfãos
+    try {
+        const { caminhoDados } = await import('./caminhos.js')
+        const dir = caminhoDados('viewonce')
+        const fs = (await import('fs-extra')).default
+        if (await fs.pathExists(dir)) {
+            const files = await fs.readdir(dir)
+            const agora = Date.now()
+            for (const f of files) {
+                const p = path.join(dir, f)
+                const st = await fs.stat(p).catch(() => null)
+                if (st?.isFile() && agora - st.mtimeMs > TTL_MS) await fs.unlink(p).catch(() => {})
+            }
+        }
+    } catch {
+        /* */
+    }
+    return n || 0
 }
 
 async function baixarBufferVo(sock, waMessage, unwrapped) {

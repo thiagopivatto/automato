@@ -2,39 +2,41 @@
 export function metaIa({ prefixo, nome_adm, nome_bot }) {
     return {
             comofaz: {
-                descricao: '',
-                guia: `Ex: *${prefixo}comofaz* - Busca um artigo aleatório do WikiHow (como fazer algo).\n`,
+                descricao: 'Tutorial aleatório do WikiHow (passos claros)',
+                guia: `Ex: *${prefixo}comofaz* - Busca um artigo aleatório do WikiHow e formata os passos.\n`,
                 msgs: {}
             },
             playlist: {
-                descricao: '',
-                guia: `Ex: *${prefixo}playlist* descrição - Cria uma playlist com pelo menos 20 músicas baseada na descrição.\n`,
+                descricao: 'Playlist curada (20+ faixas) com vibe e justificativa',
+                guia: `Ex: *${prefixo}playlist* rock anos 80 pra churrasco - Lista 20+ músicas reais + por quê.\n`,
                 msgs: {}
             },
             explica: {
-                descricao: '',
-                guia: `Ex: *${prefixo}explica* texto - Explica o texto com IA.\n`+
-                `IA: ChatGPT-42 RapidAPI / Gemini / OpenRouter.\n`,
+                descricao: 'Explica qualquer assunto em linguagem clara (Ultron)',
+                guia:
+                    `Ex: *${prefixo}explica* o que é inflação\n` +
+                    `Ex: Responda um texto com *${prefixo}explica*\n` +
+                    `Saída: resumo em 1 frase + como funciona + exemplo.\n`,
                 msgs: {}
             },
             spoiler: {
-                descricao: '',
-                guia: `Ex: *${prefixo}spoiler* nome do filme - Revela spoiler do filme.\n`,
+                descricao: 'Spoiler completo de filme/série (sem frescura)',
+                guia: `Ex: *${prefixo}spoiler* Interestelar - Premissa, enredo, twists e final.\n`,
                 msgs: {}
             },
             argumentos: {
-                descricao: '',
-                guia: `Ex: *${prefixo}argumentos* tema - Gera argumentos pró e contra.\n`,
+                descricao: 'Argumentos a favor e contra + veredito',
+                guia: `Ex: *${prefixo}argumentos* home office - Pró, contra e veredito direto.\n`,
                 msgs: {}
             },
             proscons: {
-                descricao: '',
-                guia: `Ex: *${prefixo}proscons* produto - Lista prós e contras.\n`,
+                descricao: 'Prós, contras e se vale a pena',
+                guia: `Ex: *${prefixo}proscons* iPhone 16 - Lista concreta + recomendação.\n`,
                 msgs: {}
             },
             comparar: {
-                descricao: '',
-                guia: `Ex: *${prefixo}comparar* item1 vs item2 - Compara dois produtos/tecnologias.\n`,
+                descricao: 'Comparativo lado a lado com recomendação',
+                guia: `Ex: *${prefixo}comparar* Android vs iPhone\nEx: *${prefixo}comparar* item1 vs item2\n`,
                 msgs: {}
             },
             cotacao: {
@@ -44,18 +46,18 @@ export function metaIa({ prefixo, nome_adm, nome_bot }) {
                 msgs: {}
             },
             simulado: {
-                descricao: '',
-                guia: `Ex: *${prefixo}simulado* tema - Gera prova de 10 perguntas com gabarito no final.\n`,
+                descricao: 'Prova de 10 questões com gabarito comentado',
+                guia: `Ex: *${prefixo}simulado* história do Brasil - 10 questões A–D + gabarito.\n`,
                 msgs: {}
             },
             roteiro: {
-                descricao: '',
-                guia: `Ex: *${prefixo}roteiro* tema - Cria roteiro para vídeo.\n`,
+                descricao: 'Roteiro de vídeo com gancho, blocos e CTA',
+                guia: `Ex: *${prefixo}roteiro* review de fone barato - Estrutura pronta pra gravar.\n`,
                 msgs: {}
             },
             resuma: {
-                descricao: '',
-                guia: `Ex: Responda uma mensagem com *${prefixo}resuma* - Resume o texto marcado.\n`+
+                descricao: 'Resume texto longo em bullets + 1 frase',
+                guia: `Ex: Responda uma mensagem com *${prefixo}resuma*\n`+
                 `Ex: *${prefixo}resuma* texto longo...\n`,
                 msgs: {}
             },
@@ -64,9 +66,22 @@ export function metaIa({ prefixo, nome_adm, nome_bot }) {
                 guia: `Ex: Envie/responda uma imagem com *${prefixo}upscale* - Aumenta a resolução.\n`,
                 msgs: {}
             },
+            criarimg: {
+                descricao: 'Gera imagem por IA (Pollinations / HF / Gemini / Horde / Rapid)',
+                guia:
+                    `Ex: *${prefixo}criarimg* gato cyberpunk na chuva\n` +
+                    `Alias: *${prefixo}criarimagem*\n` +
+                    `Fontes: Pollinations → HF Flux → DeepAI → AI Horde → Gemini → Rapid.\n`,
+                msgs: {
+                    espera: '🎨 Gerando imagem…',
+                    sem_prompt: '[❗] Digite o que quer na imagem. Ex: *{p1}criarimg* astronauta no Rio'
+                }
+            },
             musica: {
-                descricao: '',
-                guia: `Ex: *${prefixo}musica* prompt - Gera música por IA (ElevenLabs).\n`,
+                descricao: 'Gera música por IA (ElevenLabs — só dono)',
+                guia:
+                    `Ex: *${prefixo}musica* prompt - Gera música por IA (ElevenLabs).\n` +
+                    `*Só dono do bot* (consome créditos ElevenLabs).\n`,
                 msgs: {}
             },
             resumodogrupo: {
@@ -74,7 +89,7 @@ export function metaIa({ prefixo, nome_adm, nome_bot }) {
                 guia:
                     `Ex: *${prefixo}resumodogrupo* - Nota de voz de *3 a 5 min*, tom rebelde, egocêntrico e com palavrão.\n` +
                     `Na próxima vez, só entra o que foi dito *depois* deste pedido (anti-repetição).\n` +
-                    `Personalidade deste chat: *${prefixo}personalidade*\n` +
+                    `Personalidade só deste resumo: *${prefixo}personalidaderesumo*\n` +
                     `*Requisitos:* grupo; bot coletando mensagens.\n`,
                 msgs: {}
             },
@@ -87,12 +102,13 @@ export function metaIa({ prefixo, nome_adm, nome_bot }) {
                 msgs: {}
             },
             personalidaderesumo: {
-                descricao: 'Define a personalidade do resumodogrupo só neste grupo',
+                descricao: 'Personalidade só do !resumodogrupo (não afeta o chat)',
                 guia:
                     `Ex: *${prefixo}personalidaderesumo* fala como um tiozão fofoqueiro e chato\n` +
                     `Ex: *${prefixo}personalidaderesumo* ver - Mostra a personalidade atual\n` +
-                    `Ex: *${prefixo}personalidaderesumo* reset - Volta ao padrão agressivo/egocêntrico\n` +
+                    `Ex: *${prefixo}personalidaderesumo* reset - Volta ao padrão\n` +
                     `Alias: *${prefixo}resumopersona*\n` +
+                    `Não altera *${prefixo}personalidade* (chat/automsg).\n` +
                     `*Apenas admin do grupo* (ou dono do bot).\n`,
                 msgs: {}
             },

@@ -5,7 +5,8 @@ import * as socket from '../baileys/socket.js'
 import { mencaoNumero } from './util.js'
 
 const cooldownPorChat = new Map()
-const COOLDOWN_MS = 18_000
+/** Cooldown maior = menos gasto de IA / menos spam de retaliação. */
+const COOLDOWN_MS = Number(process.env.OFENSA_COOLDOWN_MS || 45_000)
 
 const PALAVROES_HINT =
     /(porra|caralho|merda|bosta|viado|viadinho|puta|puto|putinha|arrombado|arrombada|filho\s*d[ae]\s*puta|fdp|cuz[aã]o|buceta|pau\s*no\s*cu|vai\s*se\s*foder|vai\s*tomar\s*no\s*cu|vsf|vsfd|ot[aá]rio|idiota|imbecil|burro|lixo|vagabund|corno|corn[oa]|piranha|desgraç|babaca|trouxa|palha[cç]o|in[uú]til|nojent|rid[ií]cul|fracassad|krl|crl|pqp|tnc|foda-?se|se\s*fode|seu\s*lixo|sua\s*merda|vai\s*pro\s*inferno|filho\s*da\s*puta)/i
@@ -19,6 +20,10 @@ const FALLBACKS = [
 ]
 
 export function ofensaAtivaNoGrupo(grupo) {
+    // OFENSA_DEFAULT_OFF=1 → grupos novos/sem flag ficam off até !ofensa on
+    if (/^(1|true|sim|on)$/i.test(String(process.env.OFENSA_DEFAULT_OFF || ''))) {
+        return grupo?.ofensa === true
+    }
     // padrão ON: só desliga com ofensa === false
     return grupo?.ofensa !== false
 }
@@ -61,7 +66,7 @@ function fallbackOfensa() {
 
 async function chamarResponderOfensaIA(texto, contexto) {
     try {
-        const api = (await import('@victorsouzaleal/lbot-api-comandos')).default
+        const api = (await import('./lbotApi.js')).default
         if (typeof api?.IA?.responderOfensaIA === 'function') {
             return await api.IA.responderOfensaIA(texto, contexto)
         }

@@ -1,5 +1,5 @@
 import { criarTexto, erroComandoMsg, consoleErro } from '../lib/util.js'
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from '../lib/lbotApi.js'
 import * as socket from '../baileys/socket.js'
 import { tiposMensagem } from '../baileys/mensagem.js'
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
@@ -182,8 +182,71 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                 }
                 break
 
+            case 'criarimg':
+            case 'criarimagem':
+                try {
+                    if (!textoEntrada) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            criarTexto(
+                                comandos_info.ia.criarimg.msgs.sem_prompt,
+                                prefixo
+                            ),
+                            mensagem
+                        )
+                    }
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        comandos_info.ia.criarimg.msgs.espera,
+                        mensagem
+                    )
+                    const { resultado } = await api.IA.obterImagemIA(textoEntrada)
+                    const legenda = `🖼️ ${textoEntrada.slice(0, 200)}`
+                    if (Buffer.isBuffer(resultado)) {
+                        await socket.responderArquivoBuffer(
+                            c,
+                            tiposMensagem.imagem,
+                            id_chat,
+                            resultado,
+                            legenda,
+                            mensagem
+                        )
+                    } else if (typeof resultado === 'string' && resultado.startsWith('data:image')) {
+                        const b64 = resultado.replace(/^data:image\/\w+;base64,/, '')
+                        await socket.responderArquivoBuffer(
+                            c,
+                            tiposMensagem.imagem,
+                            id_chat,
+                            Buffer.from(b64, 'base64'),
+                            legenda,
+                            mensagem
+                        )
+                    } else {
+                        throw { erro: 'Resposta de imagem em formato inesperado.' }
+                    }
+                } catch (err) {
+                    if (!err.erro) throw err
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.outros.erro_api, comando, err.erro),
+                        mensagem
+                    )
+                }
+                break
+
             case 'musica':
                 try {
+                    if (!mensagemBaileys.mensagem_dono) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            '[❗] *!musica* (ElevenLabs) só o dono do bot pode usar.',
+                            mensagem
+                        )
+                    }
                     if (!textoEntrada) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
                     await socket.responderTexto(c, id_chat, '🎵 Gerando música (~60–70s), aguarde…', mensagem)
                     const { resultado } = await api.IA.gerarMusicaIA(textoEntrada)
@@ -251,17 +314,14 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     )
                     let personalidadeGrupo = ''
                     try {
-                        const { obterPersonalidadeChat } = await import('../lib/personalidadeChat.js')
-                        personalidadeGrupo = (await obterPersonalidadeChat(idGrupo)) || ''
-                        if (!personalidadeGrupo) {
-                            const { GrupoControle } = await import('../controles/GrupoControle.js')
-                            personalidadeGrupo = (await new GrupoControle().obterPersonalidade(idGrupo)) || ''
-                        }
+                        const { obterPersonalidadeResumo } = await import('../lib/personalidadeResumo.js')
+                        personalidadeGrupo = (await obterPersonalidadeResumo(idGrupo)) || ''
                     } catch { /* ignore */ }
                     const { gerado, limiteSuperior, periodoInicio, periodoFim } = await gerarResumoDaJanela(
                         janela,
                         grupo?.nome || 'o grupo',
-                        personalidadeGrupo
+                        personalidadeGrupo,
+                        { preferirEleven: !!mensagemBaileys.mensagem_dono }
                     )
 
                     if (!gerado?.resultado) {
@@ -286,11 +346,11 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         consoleErro(erroMarco, 'RESUMO GRUPO')
                     }
                 } catch (err) {
-                    // Não joga erro técnico de API no grupo quando der pra recuperar áudio no fluxo interno;
-                    // se chegou aqui, o fallback também falhou.
-                    const msg = err?.erro
-                        ? String(err.erro).slice(0, 280)
-                        : 'Não consegui gerar o áudio do resumo agora. Tenta de novo daqui a pouco.'
+                    const msg = criarTexto(
+                        comandos_info.outros.erro_api,
+                        comando,
+                        err?.erro || 'erro de API'
+                    )
                     await socket.responderTexto(c, id_chat, msg, mensagem)
                     if (!err?.erro) {
                         err.message = `${comando} - ${err.message}`
@@ -303,14 +363,64 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
 
             case 'personalidaderesumo':
             case 'resumopersona':
-                // Alias → !personalidade (utilidades)
                 try {
-                    mensagemBaileys.comando = `${prefixo}personalidade`
-                    const { utilidades } = await import('./utilidades.js')
-                    await utilidades(c, mensagemBaileys, botInfo)
+                    if (!mensagem_grupo) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            `O comando *${prefixo}personalidaderesumo* só funciona em *grupos*.`,
+                            mensagem
+                        )
+                    }
+                    if (!grupo?.usuario_admin && !mensagemBaileys.mensagem_dono) {
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            comandos_info.outros.permissao.apenas_admin,
+                            mensagem
+                        )
+                    }
+                    const idGrupoPers = grupo?.id_grupo || id_chat
+                    const {
+                        obterPersonalidadeResumo,
+                        definirPersonalidadeResumo
+                    } = await import('../lib/personalidadeResumo.js')
+                    const textoPers = String(texto_recebido || '').trim()
+                    if (!textoPers || /^ver|atual|mostrar|status$/i.test(textoPers)) {
+                        const atual = (await obterPersonalidadeResumo(idGrupoPers)) || ''
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            atual
+                                ? `🎭 Personalidade do *resumodogrupo*:\n${atual}\n\n_Use *${prefixo}personalidaderesumo reset* pra voltar ao padrão._`
+                                : `🎭 Personalidade do *resumodogrupo*: *padrão*.\nEx: *${prefixo}personalidaderesumo* fala como um tiozão fofoqueiro`,
+                            mensagem
+                        )
+                    }
+                    if (/^(padrao|padrão|reset|limpar|default)$/i.test(textoPers)) {
+                        await definirPersonalidadeResumo(idGrupoPers, '')
+                        return await socket.responderTexto(
+                            c,
+                            id_chat,
+                            '✅ Personalidade do *resumodogrupo* voltou ao padrão.',
+                            mensagem
+                        )
+                    }
+                    await definirPersonalidadeResumo(idGrupoPers, textoPers)
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        `✅ Personalidade do *resumodogrupo* salva:\n${textoPers.slice(0, 500)}`,
+                        mensagem
+                    )
                 } catch (err) {
                     if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.outros.erro_api, comando, err.erro),
+                        mensagem
+                    )
                 }
                 break
         }

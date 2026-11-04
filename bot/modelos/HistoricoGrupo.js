@@ -1,15 +1,13 @@
-import Datastore from '@seald-io/nedb'
-import { caminhoDados } from '../lib/caminhos.js'
+import { createCollection } from '../db/sqlite.js'
 
-const db = new Datastore({ filename: caminhoDados('historico_grupo.db'), autoload: true })
-db.ensureIndex({ fieldName: 'id_grupo' })
-db.ensureIndex({ fieldName: 'timestamp' })
-
-const marcosResumo = new Datastore({ filename: caminhoDados('marco_resumo_grupo.db'), autoload: true })
-marcosResumo.ensureIndex({ fieldName: 'id_grupo', unique: true })
+const db = createCollection('historico_grupo')
+const marcosResumo = createCollection('marco_resumo', { idField: 'id_grupo' })
 
 const TTL_MS = 7 * 24 * 60 * 60 * 1000
 const MAX_TEXTO = 1200
+
+let ultimaPoda = 0
+const INTERVALO_PODA_MS = 60 * 60 * 1000
 
 export class HistoricoGrupo {
     constructor() {}
@@ -30,12 +28,27 @@ export class HistoricoGrupo {
 
     async limparAntigas(id_grupo = null) {
         const corte = Date.now() - TTL_MS
-        const query = id_grupo ? { id_grupo, timestamp: { $lt: corte } } : { timestamp: { $lt: corte } }
-        await db.removeAsync(query, { multi: true })
+        const query = id_grupo
+            ? { id_grupo, timestamp: { $lt: corte } }
+            : { timestamp: { $lt: corte } }
+        const removidos = await db.removeAsync(query, { multi: true })
+        if (removidos > 0) await db.compactDatafileAsync()
+        return removidos
+    }
+
+    async podaPeriodica() {
+        const agora = Date.now()
+        if (agora - ultimaPoda < INTERVALO_PODA_MS) return
+        ultimaPoda = agora
+        try {
+            await this.limparAntigas(null)
+        } catch (err) {
+            console.log(`[historico] poda - ${err?.message || err}`)
+        }
     }
 
     async obterUltimas(id_grupo, limite = 300) {
-        await this.limparAntigas(id_grupo)
+        void this.podaPeriodica()
         const docs = await db
             .findAsync({ id_grupo })
             .sort({ timestamp: -1 })
@@ -43,7 +56,6 @@ export class HistoricoGrupo {
         return (docs || []).reverse()
     }
 
-    /** Atualiza texto de uma msg recente (ex.: após transcrever áudio). */
     async atualizarTextoPorChave({ id_grupo, id_usuario, timestamp, texto }) {
         const body = String(texto || '').trim().slice(0, MAX_TEXTO)
         if (!id_grupo || !body || !timestamp) return
@@ -54,17 +66,13 @@ export class HistoricoGrupo {
         )
     }
 
-    /** Mensagens com timestamp estritamente posterior ao corte (0 = todas ainda no TTL). */
     async obterDesde(id_grupo, timestampExclusivo = 0, limite = 1200) {
-        await this.limparAntigas(id_grupo)
-        const query = { id_grupo }
+        void this.podaPeriodica()
         const corte = Number(timestampExclusivo) || 0
-        if (corte > 0) query.timestamp = { $gt: corte }
-        const docs = await db.findAsync(query).sort({ timestamp: 1 })
-        const lista = docs || []
+        const query = corte > 0 ? { id_grupo, timestamp: { $gt: corte } } : { id_grupo }
         const max = Math.max(1, Number(limite) || 1200)
-        if (lista.length <= max) return lista
-        return lista.slice(-max)
+        const docs = await db.findAsync(query).sort({ timestamp: -1 }).limit(max)
+        return (docs || []).reverse()
     }
 
     async obterMarcoResumo(id_grupo) {
@@ -86,28 +94,28 @@ export class HistoricoGrupo {
     }
 
     async obterUltimas48h(id_grupo, { limite = 400 } = {}) {
-        await this.limparAntigas(id_grupo)
+        void this.podaPeriodica()
         const corte = Date.now() - TTL_MS
-        const docs = await db
-            .findAsync({ id_grupo, timestamp: { $gte: corte } })
-            .sort({ timestamp: 1 })
-            .limit(limite)
-        return docs || []
+        return (
+            (await db
+                .findAsync({ id_grupo, timestamp: { $gte: corte } })
+                .sort({ timestamp: 1 })
+                .limit(limite)) || []
+        )
     }
 
     async contarUltimas48h(id_grupo) {
-        await this.limparAntigas(id_grupo)
+        void this.podaPeriodica()
         const corte = Date.now() - TTL_MS
         return await db.countAsync({ id_grupo, timestamp: { $gte: corte } })
     }
 
     async limparTudo() {
         await db.removeAsync({}, { multi: true })
-        try { await marcosResumo.removeAsync({}, { multi: true }) } catch { /* ignore */ }
         try {
-            if (typeof db.compactDatafile === 'function') await db.compactDatafile()
-            else await db.persistence.compactDatafile()
+            await marcosResumo.removeAsync({}, { multi: true })
         } catch { /* ignore */ }
+        await db.compactDatafileAsync()
     }
 
     async contarTodas() {

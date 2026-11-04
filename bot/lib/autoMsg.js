@@ -1,32 +1,42 @@
 /**
- * Mensagens automáticas humanas — contexto do grupo, sem piadas forçadas.
- * Intervalos longos. Sem madrugada.
+ * AutoMsg — só fala depois de silêncio longo no grupo (~2h+).
+ * Tom de pessoa normal: pergunta a alguém, filosofa leve, puxa assunto.
+ * Sem madrugada (0h–8h).
  */
 import moment from 'moment-timezone'
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from './lbotApi.js'
 import * as socket from '../baileys/socket.js'
 import { GrupoControle } from '../controles/GrupoControle.js'
 import { historicoGrupo } from '../controles/HistoricoGrupoControle.js'
-import { membrosDoGrupo, sortearNomes, listaNomesTexto } from './dramaGrupo.js'
+import { membrosDoGrupo, sortearNomes } from './dramaGrupo.js'
 import { mencaoNumero } from './util.js'
 import { aplicarMencoes } from './mencoes.js'
-import { ULTRON_SYSTEM_AUTOMSG } from './ultronPersona.js'
 
 const TZ = 'America/Sao_Paulo'
-const INTERVALO_TICK_MS = 3 * 60 * 1000
-const COOLDOWN_MIN_MS = 50 * 60 * 1000
-const COOLDOWN_MAX_MS = 3 * 60 * 60 * 1000
-const IDLE_MIN_MS = 2 * 60 * 60 * 1000
-const IDLE_MAX_MS = 6 * 60 * 60 * 1000
-const MAX_HIST_RECENTES = 10
-const DELAY_ENVIO_MIN_MS = 8_000
-const DELAY_ENVIO_MAX_MS = 45_000
+/** Checagem a cada 10 min — não precisa ser frequente. */
+const INTERVALO_TICK_MS = 10 * 60 * 1000
+/** Silêncio mínimo do grupo antes de o bot falar. */
+const SILENCIO_MIN_MS = 2 * 60 * 60 * 1000
+const SILENCIO_MAX_MS = 3.5 * 60 * 60 * 1000
+/** Espaço mínimo entre duas autos do bot no mesmo grupo. */
+const COOLDOWN_AUTO_MIN_MS = 2 * 60 * 60 * 1000
+const COOLDOWN_AUTO_MAX_MS = 4 * 60 * 60 * 1000
+const MAX_HIST_RECENTES = 12
+const DELAY_ENVIO_MIN_MS = 12_000
+const DELAY_ENVIO_MAX_MS = 50_000
+
+const SYSTEM_AUTOMSG =
+    'Você é Ultron, um membro normal de um grupo de WhatsApp (PT-BR). ' +
+    'Fale como pessoa real: espontâneo, curto (1–3 frases), informal. ' +
+    'Pode filosofar de leve ou fazer uma pergunta sincera. ' +
+    'Não soe como assistente, bot ou motivacional corporativo. ' +
+    'Não force piada. Não invente fatos. Nunca diga que é IA.'
 
 let timer = null
 let sockRef = null
 let botInfoRef = null
 
-/** @type {Map<string, { ultimaAuto: number, bomDiaDia: string, boaNoiteDia: string, idleAlvo: number, recentes: string[], ultimoTipo: string }>} */
+/** @type {Map<string, { ultimaAuto: number, silencioAlvo: number, cooldownAlvo: number, recentes: string[] }>} */
 const estado = new Map()
 
 function agora() {
@@ -38,9 +48,6 @@ function hora() {
 function ehMadrugada() {
     const h = hora()
     return h >= 0 && h < 8
-}
-function diaKey() {
-    return agora().format('YYYY-MM-DD')
 }
 function randEntre(a, b) {
     return a + Math.floor(Math.random() * (b - a + 1))
@@ -71,11 +78,9 @@ function getEstado(id) {
     if (!estado.has(id)) {
         estado.set(id, {
             ultimaAuto: 0,
-            bomDiaDia: '',
-            boaNoiteDia: '',
-            idleAlvo: randEntre(IDLE_MIN_MS, IDLE_MAX_MS),
-            recentes: [],
-            ultimoTipo: ''
+            silencioAlvo: randEntre(SILENCIO_MIN_MS, SILENCIO_MAX_MS),
+            cooldownAlvo: randEntre(COOLDOWN_AUTO_MIN_MS, COOLDOWN_AUTO_MAX_MS),
+            recentes: []
         })
     }
     return estado.get(id)
@@ -91,74 +96,79 @@ function jaUsou(st, texto) {
     return st.recentes.includes(hashCurto(texto))
 }
 
-async function obterContextoDia(id_grupo) {
+async function obterUltimoContexto(id_grupo) {
     try {
-        const msgs = await historicoGrupo.obterUltimas(id_grupo, 100)
-        if (!msgs?.length) return { trechos: '', qtd: 0 }
-        const inicioDia = agora().startOf('day').valueOf()
-        const doDia = msgs.filter((m) => Number(m.timestamp) >= inicioDia)
-        const base = (doDia.length ? doDia : msgs).slice(-40)
-        const trechos = base
-            .map((m) => `${m.nome_usuario || 'Alguém'}: ${String(m.texto || '').replace(/\s+/g, ' ').slice(0, 110)}`)
+        const msgs = await historicoGrupo.obterUltimas(id_grupo, 30)
+        if (!msgs?.length) return ''
+        return msgs
+            .slice(-12)
+            .map((m) => `${m.nome_usuario || 'Alguém'}: ${String(m.texto || '').replace(/\s+/g, ' ').slice(0, 100)}`)
             .join('\n')
-            .slice(0, 2800)
-        return { trechos, qtd: base.length }
+            .slice(0, 1200)
     } catch {
-        return { trechos: '', qtd: 0 }
+        return ''
     }
 }
 
 async function gerarTextoHumano(prompt, personalidade = '') {
     try {
-        let system = ULTRON_SYSTEM_AUTOMSG
+        let system = SYSTEM_AUTOMSG
         const persona = String(personalidade || '').trim()
-        if (persona) {
-            system += `\n\n[PERSONALIDADE DESTE CHAT]\n${persona.slice(0, 800)}`
-        }
+        if (persona) system += `\n\n[PERSONALIDADE DESTE CHAT]\n${persona.slice(0, 600)}`
         const { resultado } = await api.IA.gerarTextoIA(prompt, system, {
-            temperature: 0.9,
-            timeout: 45000
+            temperature: 0.95,
+            timeout: 25000,
+            budgetMs: 10000,
+            maxOutputTokens: 180
         })
         return String(resultado || '')
             .trim()
             .replace(/^["']|["']$/g, '')
-            .slice(0, 420)
+            .slice(0, 320)
     } catch {
         return null
     }
 }
 
-async function textoComMembros(txt, alvos, participantes) {
-    const aplicado = aplicarMencoes(txt, alvos, participantes || [])
+async function textoComMembro(txt, alvo, participantes) {
+    if (!alvo) return { texto: txt, mentions: [] }
+    const aplicado = aplicarMencoes(txt, [alvo], participantes || [])
     if (aplicado.mentions.length) return aplicado
-    if (alvos?.length === 1) {
-        return {
-            texto: `@${mencaoNumero(alvos[0].jid)} ${txt}`,
-            mentions: [alvos[0].jid]
-        }
+    return {
+        texto: `@${mencaoNumero(alvo.jid)} ${txt}`,
+        mentions: [alvo.jid]
     }
-    if (alvos?.length > 1) {
-        const tags = alvos.map((a) => `@${mencaoNumero(a.jid)}`).join(' ')
-        return { texto: `${tags} ${txt}`, mentions: alvos.map((a) => a.jid) }
-    }
-    return { texto: txt, mentions: [] }
 }
 
-async function montarMensagem(tipo, grupoInfo, botInfo, st) {
-    const membros = await membrosDoGrupo(grupoInfo.id_grupo, grupoInfo.participantes, botInfo.numero_bot)
-    const nomeGrupo = grupoInfo.nome || 'o grupo'
+const FALLBACKS_PERGUNTA = [
+    'e aí, como tá sendo o dia?',
+    'sumiu ou só de boa aí?',
+    'me responde uma coisa: o que te faz perder tempo de bom jeito?',
+    'tá pensando em quê agora?',
+    'se pudesse sumir por um dia sem explicar, pra onde ia?'
+]
+
+const FALLBACKS_FILO = [
+    'às vezes o silêncio do grupo fala mais alto que o papo. estranho, né?',
+    'fico pensando: a gente conversa tanto e ainda assim se conhece pouco.',
+    'tem dia que o melhor plano é não ter plano. alguém discorda?'
+]
+
+async function montarMensagem(grupoInfo, botInfo, st) {
+    const membros = await membrosDoGrupo(
+        grupoInfo.id_grupo,
+        grupoInfo.participantes,
+        botInfo.numero_bot
+    )
     const participantes = grupoInfo.participantes || []
-    const { trechos, qtd } = await obterContextoDia(grupoInfo.id_grupo)
-    const alvos1 = membros.length ? sortearNomes(membros, 1) : []
-    const alvos2 = membros.length >= 2 ? sortearNomes(membros, randEntre(1, Math.min(2, membros.length))) : alvos1
-    const nomes = listaNomesTexto(membros, 16)
+    const nomeGrupo = grupoInfo.nome || 'o grupo'
+    const contexto = await obterUltimoContexto(grupoInfo.id_grupo)
+    const alvo = membros.length ? sortearNomes(membros, 1)[0] : null
+
     let personalidade = ''
     try {
         const { obterPersonalidadeChat } = await import('./personalidadeChat.js')
         personalidade = (await obterPersonalidadeChat(grupoInfo.id_grupo)) || ''
-        if (!personalidade) {
-            personalidade = (await new GrupoControle().obterPersonalidade(grupoInfo.id_grupo)) || ''
-        }
     } catch { /* ignore */ }
 
     const tentarUnico = async (factory, tentativas = 3) => {
@@ -170,108 +180,39 @@ async function montarMensagem(tipo, grupoInfo, botInfo, st) {
         return factory()
     }
 
-    switch (tipo) {
-        case 'bomdia':
-            return tentarUnico(async () => {
-                const ia = await gerarTextoHumano(
-                    `Grupo "${nomeGrupo}". Escreva um bom dia NATURAL, como alguém do grupo mandando mensagem de manhã.` +
-                        (trechos ? `\nContexto recente:\n${trechos.slice(0, 900)}` : ''),
-                    personalidade
-                )
-                return {
-                    texto: ia || `Bom dia, galera. Como tá o dia aí?`,
-                    mentions: []
-                }
-            })
+    // ~70% pergunta a um membro; ~30% filosofada / reflexão pro grupo
+    const perguntarAlguem = !!alvo && Math.random() < 0.72
 
-        case 'boanoite':
-            return tentarUnico(async () => {
-                const ia = await gerarTextoHumano(
-                    `Grupo "${nomeGrupo}". Boa noite natural, como pessoa do grupo.` +
-                        (trechos ? `\nO que rolou hoje:\n${trechos.slice(0, 900)}` : ''),
-                    personalidade
-                )
-                return {
-                    texto: ia || `Boa noite, pessoal. Descansem aí.`,
-                    mentions: []
-                }
-            })
+    return tentarUnico(async () => {
+        if (perguntarAlguem) {
+            const ia = await gerarTextoHumano(
+                `O grupo "${nomeGrupo}" está quieto há umas 2 horas. ` +
+                    `Escreva UMA mensagem curta e natural falando com ${alvo.nome}, ` +
+                    `fazendo uma pergunta sincera (dia a dia, opinião leve ou curiosidade). ` +
+                    `Pode usar o nome ${alvo.nome} no texto. Sem parecer bot.` +
+                    (contexto ? `\nÚltimo papo (só contexto, não invente):\n${contexto}` : ''),
+                personalidade
+            )
+            const txt =
+                ia ||
+                `${alvo.nome}, ${FALLBACKS_PERGUNTA[Math.floor(Math.random() * FALLBACKS_PERGUNTA.length)]}`
+            return textoComMembro(txt, alvo, participantes)
+        }
 
-        case 'contexto':
-            return tentarUnico(async () => {
-                if (!trechos || qtd < 3) {
-                    return {
-                        texto: 'Tá quieto hoje... alguém conta o que tá fazendo?',
-                        mentions: []
-                    }
-                }
-                const ia = await gerarTextoHumano(
-                    `Com base no chat recente do grupo "${nomeGrupo}", mande UMA mensagem humana comentando algo que realmente apareceu ` +
-                        `(pergunta, opinião ou reação). Não invente fatos.\n\n${trechos}`,
-                    personalidade
-                )
-                if (!ia) return { texto: 'Li o papo de vocês e fiquei curioso: e aí, como ficou isso?', mentions: [] }
-                return textoComMembros(ia, membros.slice(0, 10), participantes)
-            })
-
-        case 'interagir':
-            return tentarUnico(async () => {
-                if (!alvos2.length) return { texto: 'Cadê o povo desse grupo?', mentions: [] }
-                const nomesAlvos = alvos2.map((a) => a.nome).join(', ')
-                const ia = await gerarTextoHumano(
-                    `Fale com ${nomesAlvos} no grupo "${nomeGrupo}" de forma natural (pergunta ou comentário). ` +
-                        `Use o(s) nome(s) no texto.` +
-                        (trechos ? `\nContexto:\n${trechos.slice(0, 800)}` : '') +
-                        `\nOutros membros: ${nomes}`,
-                    personalidade
-                )
-                const txt = ia || `${nomesAlvos}, e aí? Sumiram ou só lendo?`
-                return textoComMembros(txt, alvos2, participantes)
-            })
-
-        case 'idle':
-            return tentarUnico(async () => {
-                const ia = await gerarTextoHumano(
-                    `O grupo "${nomeGrupo}" está parado há um tempo. Mande uma mensagem curta e humana para puxar assunto, ` +
-                        `sem forçar piada.` +
-                        (trechos ? `\nÚltimo contexto:\n${trechos.slice(0, 700)}` : ''),
-                    personalidade
-                )
-                return {
-                    texto: ia || 'Sumiram todos? Alguém aparece aí.',
-                    mentions: []
-                }
-            })
-
-        default:
-            return { texto: 'E aí, pessoal — tudo certo por aí?', mentions: [] }
-    }
-}
-
-function escolherTipo(st, ultimaHumana) {
-    const h = hora()
-    const dia = diaKey()
-    const agoraMs = Date.now()
-
-    if (h >= 8 && h < 11 && st.bomDiaDia !== dia) return 'bomdia'
-    if (h >= 21 && h < 24 && st.boaNoiteDia !== dia) return 'boanoite'
-
-    const idleMs = agoraMs - (Number(ultimaHumana) || 0)
-    if (idleMs >= st.idleAlvo) return 'idle'
-
-    const pesos = [
-        ['contexto', 55],
-        ['interagir', 45]
-    ]
-    const filtrados = pesos.filter(([t]) => t !== st.ultimoTipo)
-    const base = filtrados.length ? filtrados : pesos
-    const total = base.reduce((s, [, p]) => s + p, 0)
-    let r = Math.random() * total
-    for (const [tipo, p] of base) {
-        r -= p
-        if (r <= 0) return tipo
-    }
-    return 'contexto'
+        const ia = await gerarTextoHumano(
+            `O grupo "${nomeGrupo}" está parado. Mande UMA mensagem curta, humana, ` +
+                `filosofando de leve ou puxando um assunto calmo (sem sermão, sem piada forçada).` +
+                (contexto ? `\nÚltimo papo:\n${contexto}` : '') +
+                (alvo ? `\nSe quiser, pode dirigir a ${alvo.nome}.` : ''),
+            personalidade
+        )
+        const txt = ia || FALLBACKS_FILO[Math.floor(Math.random() * FALLBACKS_FILO.length)]
+        // Se a IA citou o nome do alvo, menciona; senão manda pro grupo
+        if (alvo && new RegExp(alvo.nome.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(txt)) {
+            return textoComMembro(txt, alvo, participantes)
+        }
+        return { texto: txt, mentions: [] }
+    })
 }
 
 async function processarGrupo(grupoInfo) {
@@ -282,26 +223,16 @@ async function processarGrupo(grupoInfo) {
     const id = grupoInfo.id_grupo
     const st = getEstado(id)
     const agoraMs = Date.now()
-    const cooldown = randEntre(COOLDOWN_MIN_MS, COOLDOWN_MAX_MS)
+    const silencioMs = agoraMs - (Number(grupoInfo.ultima_msg_humana) || 0)
 
-    if (agoraMs - st.ultimaAuto < cooldown && st.bomDiaDia === diaKey() && st.boaNoiteDia === diaKey()) {
-        const h = hora()
-        const idleMs = agoraMs - (Number(grupoInfo.ultima_msg_humana) || 0)
-        const forcar =
-            (h >= 8 && h < 11 && st.bomDiaDia !== diaKey()) ||
-            (h >= 21 && h < 24 && st.boaNoiteDia !== diaKey()) ||
-            idleMs >= st.idleAlvo
-        if (!forcar) return
-    }
+    // Só fala se o grupo ficou quieto o bastante
+    if (silencioMs < st.silencioAlvo) return
+    // E se o próprio bot já não falou há pouco
+    if (st.ultimaAuto && agoraMs - st.ultimaAuto < st.cooldownAlvo) return
 
-    const tipo = escolherTipo(st, grupoInfo.ultima_msg_humana)
-    // Chance menor de falar em horário "normal" — evita spam
-    if (!['bomdia', 'boanoite', 'idle'].includes(tipo) && Math.random() > 0.28) return
-
-    const msg = await montarMensagem(tipo, grupoInfo, botInfoRef, st)
+    const msg = await montarMensagem(grupoInfo, botInfoRef, st)
     if (!msg?.texto) return
 
-    // Demora humana antes de enviar
     await sleep(randEntre(DELAY_ENVIO_MIN_MS, DELAY_ENVIO_MAX_MS))
 
     try {
@@ -311,12 +242,9 @@ async function processarGrupo(grupoInfo) {
             await socket.enviarTexto(sockRef, id, msg.texto)
         }
         registrarRecente(st, msg.texto)
-
         st.ultimaAuto = Date.now()
-        st.ultimoTipo = tipo
-        if (tipo === 'bomdia') st.bomDiaDia = diaKey()
-        if (tipo === 'boanoite') st.boaNoiteDia = diaKey()
-        if (tipo === 'idle') st.idleAlvo = randEntre(IDLE_MIN_MS, IDLE_MAX_MS)
+        st.silencioAlvo = randEntre(SILENCIO_MIN_MS, SILENCIO_MAX_MS)
+        st.cooldownAlvo = randEntre(COOLDOWN_AUTO_MIN_MS, COOLDOWN_AUTO_MAX_MS)
         await new GrupoControle().atualizarUltimaAutoMsg(id)
     } catch (err) {
         console.log(`AutoMsg ${id} - ${err?.message || err}`)
@@ -328,8 +256,7 @@ async function tick() {
         const grupos = await new GrupoControle().obterGruposAutoMsg()
         for (const g of shuffle(grupos || [])) {
             await processarGrupo(g)
-            // Espaça entre grupos
-            await sleep(randEntre(4000, 12000))
+            await sleep(randEntre(5000, 15000))
         }
     } catch (err) {
         console.log(`AutoMsg tick - ${err?.message || err}`)
@@ -341,7 +268,8 @@ export function iniciarAutoMsg(c, botInfo) {
     botInfoRef = botInfo
     if (timer) clearInterval(timer)
     timer = setInterval(tick, INTERVALO_TICK_MS)
-    setTimeout(tick, 90_000)
+    // Primeira checagem após 2 min (só envia se já houver silêncio de 2h+)
+    setTimeout(tick, 120_000)
 }
 
 export function pararAutoMsg() {

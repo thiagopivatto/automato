@@ -1,7 +1,7 @@
 /**
  * Orquestra !resumoportema: últimas ~1000 msgs (áudio já no histórico quando transcrito).
  */
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from '../lib/lbotApi.js'
 import { obterJanelaResumoPorTema } from '../controles/HistoricoGrupoControle.js'
 
 export async function carregarJanelaResumoPorTema(idGrupo, limite = 1000) {

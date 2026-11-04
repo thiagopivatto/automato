@@ -1,12 +1,20 @@
 /**
  * Fluxo compartilhado do chat (!chat, @menção, resposta citando o bot).
+ * Meta tier B: E2E ≤ ~3–4s com web (Tavily/Brave/DDG/Wiki) + personalidade.
  */
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from './lbotApi.js'
+import { precisaPesquisaWeb } from '../../vendor/lbot-api-comandos/api/ia.js'
 import * as socket from '../baileys/socket.js'
 import { criarTexto, listaContemJid, mencaoNumero } from './util.js'
 import { comandosInfo } from '../comandos/comandos.js'
 import { obterPersonalidadeChat } from './personalidadeChat.js'
 import { obterMemoriaUsuarioTexto, registrarMemoriaUsuario } from './memoriaUsuario.js'
+
+const raceMs = (promessa, ms, fallback = null) =>
+    Promise.race([
+        promessa,
+        new Promise((resolve) => setTimeout(() => resolve(fallback), ms))
+    ])
 
 /** Remove @numero/@lid do bot do texto. */
 export function limparTextoMencaoBot(texto, botInfo = {}) {
@@ -32,7 +40,6 @@ export async function citacaoEhDoBot(mensagemBaileys, botInfo = {}) {
     if (!cit || !mensagemBaileys?.mensagem_citada) return false
     if (cit.do_bot) return true
     if (listaContemJid([cit.remetente], botInfo.numero_bot, botInfo.lid_bot)) return true
-    // Fallback: só o bot grava envios em mensagens.db
     const stanzaId = cit.stanzaId
     if (!stanzaId) return false
     try {
@@ -56,7 +63,9 @@ async function carregarHistoricoGrupo(mensagemBaileys) {
         const historicoGrupoTexto = (msgs || [])
             .map((m) => {
                 const quando = m.timestamp
-                    ? new Date(Number(m.timestamp)).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+                    ? new Date(Number(m.timestamp)).toLocaleString('pt-BR', {
+                          timeZone: 'America/Sao_Paulo'
+                      })
                     : ''
                 return `${quando} ${m.nome_usuario || 'Alguém'}: ${String(m.texto || '').replace(/\s+/g, ' ').slice(0, 100)}`
             })
@@ -68,17 +77,34 @@ async function carregarHistoricoGrupo(mensagemBaileys) {
     }
 }
 
+async function carregarPersonalidade(mensagemBaileys, id_chat) {
+    try {
+        let personalidade = (await obterPersonalidadeChat(id_chat)) || ''
+        if (!personalidade && mensagemBaileys.mensagem_grupo) {
+            const { GrupoControle } = await import('../controles/GrupoControle.js')
+            personalidade =
+                (await new GrupoControle().obterPersonalidade(
+                    mensagemBaileys.grupo?.id_grupo || id_chat
+                )) || ''
+        }
+        return personalidade
+    } catch {
+        return ''
+    }
+}
+
 /**
  * Roda o chat (roteador de comando + IA).
- * @returns {Promise<'comando'|'conversa'>}
+ * @returns {Promise<'comando'|'conversa'|{ tipo: string, timing?: object }>}
  */
 export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario) {
     const comandos_info = comandosInfo(botInfo)
     const { remetente, mensagem, id_chat, nome_usuario, citacao } = mensagemBaileys
+    const timing = { pre: 0, vision: 0, web: 0, cascade: 0 }
+    const t0 = Date.now()
 
     let pergunta = String(textoUsuario || '').trim()
 
-    // Visão: se veio imagem (legenda/citação), analisa e injeta no contexto
     const { contextoImagemParaChat, baixarImagemMensagem } = await import('./visao.js')
     let bufferImg = null
     try {
@@ -87,7 +113,6 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         bufferImg = null
     }
     if (!pergunta && !bufferImg) {
-        // Resposta só citando o bot sem texto → provoca continuidade
         if (await citacaoEhDoBot(mensagemBaileys, botInfo)) {
             pergunta = '…'
         } else {
@@ -104,14 +129,25 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
     try {
         c.presenceSubscribe(id_chat).catch(() => {})
         c.sendPresenceUpdate('composing', id_chat).catch(() => {})
-    } catch { /* */ }
+    } catch {
+        /* */
+    }
 
     if (bufferImg) {
-        const ctxImg = await contextoImagemParaChat(mensagemBaileys, pergunta)
+        const tVis = Date.now()
+        const ctxImg = await raceMs(contextoImagemParaChat(mensagemBaileys, pergunta), 2500, null)
+        timing.vision = Date.now() - tVis
+        try {
+            const { registrarStageMs } = await import('./logger.js')
+            registrarStageMs('vision', timing.vision)
+        } catch {
+            /* */
+        }
         if (ctxImg) {
-            pergunta = pergunta && pergunta !== '…'
-                ? `${pergunta}\n\n${ctxImg}`
-                : `O que tem nessa imagem?\n\n${ctxImg}`
+            pergunta =
+                pergunta && pergunta !== '…'
+                    ? `${pergunta}\n\n${ctxImg}`
+                    : `O que tem nessa imagem?\n\n${ctxImg}`
         } else if (!pergunta || pergunta === '…') {
             pergunta = 'Descreva a imagem que eu enviei.'
         }
@@ -123,70 +159,128 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
     })
 
     if (decisao.tipo === 'comando' && pergunta && pergunta !== '…') {
-        await socket.responderTexto(
-            c,
-            id_chat,
-            `Beleza — vou rodar *${decisao.comando}${decisao.argsTexto ? ' ' + decisao.argsTexto : ''}*.`,
-            mensagem
-        )
+        const { reagirAckInicio, reagirAckOk, reagirAckErro, comandoSemReacaoAck } =
+            await import('./reacoes.js')
+        const comReacao = !comandoSemReacaoAck(decisao.comando, botInfo?.prefixo)
+        if (comReacao) await reagirAckInicio(c, mensagem).catch(() => {})
         aplicarComandoNaMensagem(mensagemBaileys, decisao.comando, decisao.argsTexto)
-        const { executarComandoDireto } = await import('./chamadaComando.js')
-        await executarComandoDireto(c, mensagemBaileys, botInfo)
+        try {
+            const { executarComandoDireto } = await import('./chamadaComando.js')
+            await executarComandoDireto(c, mensagemBaileys, botInfo)
+            if (comReacao) await reagirAckOk(c, mensagem).catch(() => {})
+        } catch (err) {
+            if (comReacao) await reagirAckErro(c, mensagem).catch(() => {})
+            throw err
+        }
         return 'comando'
     }
 
-    const { historicoGrupoTexto, nomeGrupo } = await carregarHistoricoGrupo(mensagemBaileys)
-
-    let personalidade = ''
+    const tPre = Date.now()
+    const [{ historicoGrupoTexto, nomeGrupo }, personalidade, memoriaUsuario, citBot] =
+        await Promise.all([
+            carregarHistoricoGrupo(mensagemBaileys),
+            carregarPersonalidade(mensagemBaileys, id_chat),
+            obterMemoriaUsuarioTexto(remetente)
+                .then((t) => t || '')
+                .catch(() => ''),
+            (async () => {
+                try {
+                    if (!(await citacaoEhDoBot(mensagemBaileys, botInfo))) return ''
+                    let mensagemCitadaBot = String(citacao?.corpo || citacao?.legenda || '').trim()
+                    if (!mensagemCitadaBot) mensagemCitadaBot = '(mensagem sua citada)'
+                    return mensagemCitadaBot
+                } catch {
+                    return ''
+                }
+            })()
+        ])
+    timing.pre = Date.now() - tPre
     try {
-        personalidade = (await obterPersonalidadeChat(id_chat)) || ''
-        // Compat: grupos antigos na DB
-        if (!personalidade && mensagemBaileys.mensagem_grupo) {
-            const { GrupoControle } = await import('../controles/GrupoControle.js')
-            personalidade =
-                (await new GrupoControle().obterPersonalidade(
-                    mensagemBaileys.grupo?.id_grupo || id_chat
-                )) || ''
-        }
-    } catch { /* ignore */ }
+        const { registrarStageMs } = await import('./logger.js')
+        registrarStageMs('pre', timing.pre)
+    } catch {
+        /* */
+    }
 
-    let memoriaUsuario = ''
-    try {
-        memoriaUsuario = (await obterMemoriaUsuarioTexto(remetente)) || ''
-    } catch { /* ignore */ }
+    let mensagemCitadaBot = citBot
+    if (mensagemCitadaBot && (!pergunta || pergunta === '…')) {
+        pergunta = 'Respondendo ao que você falou.'
+    }
 
-    let mensagemCitadaBot = ''
-    try {
-        if (await citacaoEhDoBot(mensagemBaileys, botInfo)) {
-            mensagemCitadaBot = String(citacao?.corpo || citacao?.legenda || '').trim()
-            if (!mensagemCitadaBot) mensagemCitadaBot = '(mensagem sua citada)'
-            if (!pergunta || pergunta === '…') {
-                pergunta = 'Respondendo ao que você falou.'
-            }
-        }
-    } catch { /* ignore */ }
+    // Fatos/atualidade → força web; papo casual não gasta pesquisa
+    let usarPesquisa = 'auto'
+    if (precisaPesquisaWeb(pergunta)) usarPesquisa = true
+    else if (
+        !/\?/.test(pergunta) &&
+        pergunta.length < 40 &&
+        !/\b(noticia|hoje|agora|placar|preço|preco|cotacao)\b/i.test(pergunta)
+    ) {
+        usarPesquisa = false
+    }
 
     const opcoesIa = {
         historicoGrupo: historicoGrupoTexto,
         nomeGrupo,
         nomeUsuario: nome_usuario || '',
         personalidade,
-        memoriaUsuario,
+        memoriaUsuario: memoriaUsuario || '',
         mensagemCitadaBot,
-        usarPesquisa: 'auto'
+        ehDono: !!mensagemBaileys.mensagem_dono,
+        mensagemDono: !!mensagemBaileys.mensagem_dono,
+        usarPesquisa,
+        timeout: 2800,
+        budgetMs: 3000,
+        maxOutputTokens: usarPesquisa === true ? 380 : 280,
+        webRaceMs: 1400,
+        chatRapido: true,
+        incluirPerplexity: false
     }
 
     let resultadoTexto = ''
+    const tIa = Date.now()
     try {
         const resp = await api.IA.obterRespostaIA(pergunta, remetente, id_chat, opcoesIa)
         resultadoTexto = resp?.resultado || ''
+        if (resp?.timing) {
+            timing.web = Number(resp.timing.web) || 0
+            timing.cascade = Number(resp.timing.cascade) || 0
+        }
+        try {
+            const { incrMetrica, registrarIaMs, registrarStageMs } = await import('./logger.js')
+            registrarIaMs(Date.now() - tIa)
+            if (timing.web) registrarStageMs('web', timing.web)
+            if (timing.cascade) registrarStageMs('cascade', timing.cascade)
+            incrMetrica(resultadoTexto ? 'ia_ok' : 'ia_erro')
+        } catch {
+            /* */
+        }
     } catch {
         try {
             const { carregarIaApi } = await import('./iaApi.js')
             const IA = await carregarIaApi()
             const resp = await IA.obterRespostaIA(pergunta, remetente, id_chat, opcoesIa)
             resultadoTexto = resp?.resultado || ''
+            if (resp?.timing) {
+                timing.web = Number(resp.timing.web) || 0
+                timing.cascade = Number(resp.timing.cascade) || 0
+            }
+            try {
+                const { incrMetrica, registrarIaMs, registrarStageMs } = await import('./logger.js')
+                registrarIaMs(Date.now() - tIa)
+                if (timing.web) registrarStageMs('web', timing.web)
+                if (timing.cascade) registrarStageMs('cascade', timing.cascade)
+                incrMetrica(resultadoTexto ? 'ia_ok' : 'ia_erro')
+            } catch {
+                /* */
+            }
         } catch {
+            try {
+                const { incrMetrica, registrarIaMs } = await import('./logger.js')
+                registrarIaMs(Date.now() - tIa)
+                incrMetrica('ia_erro')
+            } catch {
+                /* */
+            }
             resultadoTexto =
                 'Tô online, mas as IAs deram uma engasgada agora. Manda de novo em um minutinho?'
         }
@@ -203,7 +297,6 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         mensagem
     )
 
-    // Memória do usuário (não bloqueia)
     setImmediate(() => {
         registrarMemoriaUsuario({
             idUsuario: remetente,
@@ -214,5 +307,9 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         }).catch(() => {})
     })
 
+    mensagemBaileys._chatTiming = {
+        ...timing,
+        total: Date.now() - t0
+    }
     return 'conversa'
 }

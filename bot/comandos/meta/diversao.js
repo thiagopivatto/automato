@@ -8,28 +8,6 @@ export function metaDiversao({ prefixo, nome_adm, nome_bot }) {
                     resposta: 'WhatsApp Jr.'
                 }
             },
-            simi: {
-                descricao: '',
-                guia: `Ex: *${prefixo}simi* frase  - Envia um texto para o SimSimi responder.\n`,
-                msgs: {
-                    resposta : `{p1}`,
-                }
-            },
-            viadometro: {
-                descricao: '',
-                guia: `Ex: *${prefixo}viadometro* @membro - Mede o nível de viadagem do membro mencionado.\n\n`+
-                `Ex: Responder com *${prefixo}viadometro* - Mede o nível de viadagem do membro respondido.\n`,
-                msgs: {
-                    respostas: [' 0%\n\n - ESSE É MACHO ',
-                    '██                 20% \n\n - HMMMMM ',
-                    '████             40%\n\n - JÁ MAMOU O PRIMO',
-                    '██████         60%\n\n - EITA MAMOU O BONDE',
-                    '████████     80%\n\n - JÁ SENTOU EM ALGUEM',
-                    '██████████ 100%\n\n - BIXONA ALERTA VERMELHO CUIDADO COM SEUS ORGÃOS SEXUAIS'],
-                    apenas_um: "[❗] Erro: Apenas um membro por vez deve ser mencionado.",
-                    resposta: "🧩 *VIADÔMETRO* - {p1}"
-                }
-            },
             detector: {
                 descricao: '',
                 guia: `Ex: Responder com *${prefixo}detector* - Exibe o resultado da máquina da verdade.\n`,
@@ -87,36 +65,6 @@ export function metaDiversao({ prefixo, nome_adm, nome_bot }) {
                     }
                 }
             },
-            gadometro: {
-                descricao: '',
-                guia: `Ex: *${prefixo}gadometro* @membro - Mede o nível de gadisse do membro mencionado.\n\n`+
-                `Ex: Responder com *${prefixo}gadometro* - Mede o nível de gadisse do membro respondido.\n`,
-                msgs: {
-                    respostas : [' 0%\n\n - ESSE NÃO É GADO ',
-                    '🐃 20% \n\n - GADO APRENDIZ, TÁ NO CAMINHO ',
-                    '🐃🐃 40%\n\n - GADO INTERMEDIÁRIO, JÁ INVADE PV DE UMAS E PENSA EM PAGAR PACK DE PEZINHO',
-                    '🐃🐃🐃 60%\n\n - CUIDADO : GADO EXPERIENTE, INVADE PV E FALA LINDA EM TODAS FOTOS',
-                    '🐃🐃🐃🐃 80%\n\n - ALERTA : GADO MASTER, SÓ APARECE COM MULHER ON',
-                    '🐃🐃🐃🐃🐃 100%\n\n - PERIGO : GADO MEGA BLASTER ULTRA PAGA BOLETO DE MULHER QUE TEM NAMORADO'],
-                    apenas_um: "[❗] Erro: Apenas um membro por vez deve ser mencionado.",
-                    resposta: "🧩 *GADÔMETRO* - {p1}"
-                }
-            },
-            bafometro: {
-                descricao: '',
-                guia: `Ex: *${prefixo}bafometro* @membro - Mede o nível de alcool do membro mencionado.\n\n`+
-                `Ex: Responder com *${prefixo}bafometro* - Mede o nível de alcool do membro respondido.\n`,
-                msgs: {
-                    respostas : [' 0%\n\n - ESTÁ SÓBRIO ',
-                    '🍺  20% \n\n - TOMOU UM GORÓZINHO ',
-                    '🍺🍺  40%\n\n - JÁ TÁ FICANDO MEIO CHAPADO E FALANDO BOSTA',
-                    '🍺🍺🍺  60%\n\n - TÁ MAMADO E COMEÇANDO A FAZER MERDA',
-                    '🍺🍺🍺🍺  80%\n\n - TÁ LOUCÃO NEM CONSEGUE DIFERENCIAR MULHER E HOMEM',
-                    '🍺🍺🍺🍺🍺  100%\n\n - ALERTA: ESTÁ FORA DE SI , BEIJANDO MENDIGO E CACHORRO DE RUA'],
-                    apenas_um: "[❗] Erro: Apenas um membro por vez deve ser mencionado.",
-                    resposta: "🧩 *BAFÔMETRO* - {p1}"
-                }
-            },
             top: {
                 descricao: '',
                 guia: `Ex: *${prefixo}top* 5 tema - Ranking com N membros e o tema escolhido.\n`,
@@ -161,63 +109,6 @@ export function metaDiversao({ prefixo, nome_adm, nome_bot }) {
                     resposta: "👩‍❤️‍👨‍👩 Está rolando um clima entre @{p1}, @{p2} e @{p3}"
                 }
             },
-            jacometro: {
-                descricao: '',
-                guia: `Ex: *${prefixo}jacometro* @membro - Mede o nível de jaca.\n`,
-                apenas_um: "[❗] Erro: Apenas um membro por vez deve ser mencionado.",
-                msgs: {
-                    respostas : [' 0%\n\n - ZERO JACA ',
-                    '🥭 20%\n\n - JACINHA ',
-                    '🥭🥭 40%\n\n - JACA MÉDIA ',
-                    '🥭🥭🥭 60%\n\n - JACA FORTE ',
-                    '🥭🥭🥭🥭 80%\n\n - JACA MASTER ',
-                    '🥭🥭🥭🥭🥭 100%\n\n - JACA ABSOLUTA'],
-                    resposta: "🧩 *JACÔMETRO* - {p1}"
-                }
-            },
-            bolometro: {
-                descricao: '',
-                guia: `Ex: *${prefixo}bolometro* @membro - Mede o nível de bolo.\n`,
-                apenas_um: "[❗] Erro: Apenas um membro por vez deve ser mencionado.",
-                msgs: {
-                    respostas : [' 0%\n\n - SEM BOLO ',
-                    '🍰 20%\n\n - FOFINHO ',
-                    '🍰🍰 40%\n\n - BOLO MÉDIO ',
-                    '🍰🍰🍰 60%\n\n - BOLO FORTE ',
-                    '🍰🍰🍰🍰 80%\n\n - BOLO MASTER ',
-                    '🍰🍰🍰🍰🍰 100%\n\n - BOLO ABSOLUTO'],
-                    resposta: "🧩 *BOLÔMETRO* - {p1}"
-                }
-            },
-            fernandometro: {
-                descricao: '',
-                guia: `Ex: *${prefixo}fernandometro* @membro - Mede o nível de fernando.\n`,
-                apenas_um: "[❗] Erro: Apenas um membro por vez deve ser mencionado.",
-                msgs: {
-                    respostas : [' 0%\n\n - ZERO FERNANDO ',
-                    '👨 20%\n\n - FERNANDINHO ',
-                    '👨👨 40%\n\n - FERNANDO MÉDIO ',
-                    '👨👨👨 60%\n\n - FERNANDO FORTE ',
-                    '👨👨👨👨 80%\n\n - FERNANDO MASTER ',
-                    '👨👨👨👨👨 100%\n\n - FERNANDO ABSOLUTO'],
-                    resposta: "🧩 *FERNANDÔMETRO* - {p1}"
-                }
-            },
-            joke: {
-                descricao: '',
-                guia: `Ex: *${prefixo}joke* - Conta uma piada aleatória (alias de *${prefixo}piada*).\n`,
-                msgs: {}
-            },
-            piada: {
-                descricao: '',
-                guia: `Ex: *${prefixo}piada* - Conta uma piada real (banco local + APIs).\n`,
-                msgs: {}
-            },
-            fofoca: {
-                descricao: 'IA inventa fofoca absurda entre membros',
-                guia: `Ex: *${prefixo}fofoca* - Inventa uma fofoca absurda do grupo.\n`,
-                msgs: {}
-            },
             crime: {
                 descricao: 'Inventa um "crime" cômico de um membro',
                 guia: `Ex: *${prefixo}crime* - Inventa um crime ridículo.\nEx: *${prefixo}crime* @membro\n`,
@@ -228,11 +119,6 @@ export function metaDiversao({ prefixo, nome_adm, nome_bot }) {
                 guia: `Ex: *${prefixo}tribunal* - Julga alguém do grupo.\nEx: *${prefixo}tribunal* @membro\n`,
                 msgs: {}
             },
-            prefeito: {
-                descricao: 'Escolhe o prefeito do grupo por 24h',
-                guia: `Ex: *${prefixo}prefeito* - Sorteia o prefeito do dia.\n`,
-                msgs: {}
-            },
             cancelado: {
                 descricao: 'Cancelamento humorístico em áudio',
                 guia: `Ex: *${prefixo}cancelado* - Gera cancelamento engraçado (texto + voz).\nEx: *${prefixo}cancelado* @membro\n`,
@@ -241,16 +127,6 @@ export function metaDiversao({ prefixo, nome_adm, nome_bot }) {
             horoscopo: {
                 descricao: 'Horóscopo engraçado personalizado',
                 guia: `Ex: *${prefixo}horoscopo* - Horóscopo engraçado.\nEx: *${prefixo}horoscopo* @membro\nEx: *${prefixo}horoscopo* leão\n`,
-                msgs: {}
-            },
-            boladocotidiano: {
-                descricao: 'Drama cotidiano em tom épico (voz)',
-                guia: `Ex: *${prefixo}boladocotidiano* - Narra drama banal em tom épico (texto + áudio).\n`,
-                msgs: {}
-            },
-            jornal: {
-                descricao: 'Jornal fictício do grupo (~5 min de áudio)',
-                guia: `Ex: *${prefixo}jornal* - Notícias fictícias do grupo (texto + áudio ~5 min).\n`,
                 msgs: {}
             }
         }

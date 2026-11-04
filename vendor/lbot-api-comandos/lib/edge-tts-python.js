@@ -9,9 +9,11 @@ import { fileURLToPath } from 'node:url'
 import { obterCaminhoTemporario } from './util.js'
 
 const VOZ_POR_IDIOMA = {
-    pt: 'pt-BR-AntonioNeural',
-    'pt-br': 'pt-BR-AntonioNeural',
-    br: 'pt-BR-AntonioNeural',
+    //pt: 'pt-BR-AntonioNeural',
+    //'pt-br': 'pt-BR-AntonioNeural',
+    pt: 'pt-BR-FranciscaNeural',
+    'pt-br': 'pt-BR-FranciscaNeural',
+    br: 'pt-BR-FranciscaNeural',
     en: 'en-US-AndrewNeural',
     es: 'es-ES-AlvaroNeural',
     it: 'it-IT-DiegoNeural',
@@ -20,7 +22,7 @@ const VOZ_POR_IDIOMA = {
     ja: 'ja-JP-KeitaNeural',
     ko: 'ko-KR-InJoonNeural',
     ru: 'ru-RU-DmitryNeural',
-    default: 'pt-BR-AntonioNeural'
+    default: 'pt-BR-FranciscaNeural'
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))

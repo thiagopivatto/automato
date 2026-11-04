@@ -1,7 +1,7 @@
 import {getContentType } from '@whiskeysockets/baileys'
 import {tiposMensagem} from './mensagem.js'
 import {delayAleatorio, listaContemJid, mencaoNumero, sanitizarTextoMencoes} from '../lib/util.js'
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from '../lib/lbotApi.js'
 import { MensagemControle } from '../controles/MensagemControle.js'
 
 const textoLimpo = (t) => sanitizarTextoMencoes(t)

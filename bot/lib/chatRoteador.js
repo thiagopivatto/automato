@@ -2,7 +2,7 @@
  * Detecta se o pedido do !chat corresponde a um comando do bot e devolve
  * { tipo: 'comando', comando, argsTexto } ou { tipo: 'conversa' }.
  */
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from './lbotApi.js'
 import { comandosInfo } from '../comandos/comandos.js'
 
 const BLOQUEADOS = new Set([
@@ -154,7 +154,9 @@ export async function decidirAcaoChat(textoUsuario, botInfo, { mensagemDono = fa
     try {
         const { resultado } = await api.IA.gerarTextoIA(prompt, system, {
             temperature: 0.1,
-            timeout: 12000,
+            timeout: 4000,
+            budgetMs: 4500,
+            chatRapido: true,
             maxOutputTokens: 128
         })
         const json = extrairJson(resultado)

@@ -76,17 +76,6 @@ async function run() {
         fail('limpar', e.message)
     }
 
-    // piadas
-    try {
-        const { tamanhoBancoPiadas, obterPiadaAleatoria } = await import('../bot/lib/piadas.js')
-        const n = tamanhoBancoPiadas()
-        const p = await obterPiadaAleatoria('it')
-        if (n >= 100 && p.texto) ok('piadas', `${n} | ${p.texto.slice(0, 40)}`)
-        else fail('piadas', `${n}`)
-    } catch (e) {
-        fail('piadas', e.message)
-    }
-
     // exports UVR-first
     try {
         if (typeof api.IA.isolarVocais === 'function' && typeof api.IA.isolarInstrumental === 'function') {

@@ -7,6 +7,7 @@ import { metaGrupo } from './meta/grupo.js'
 import { metaDiversao } from './meta/diversao.js'
 import { metaAdmin } from './meta/admin.js'
 import { metaOutros } from './meta/outros.js'
+import { ALIASES_HANDLER } from './meta/registro.js'
 
 export function comandosInfo(botInfo) {
     const { prefixo, nome_adm, nome_bot } = botInfo
@@ -23,10 +24,20 @@ export function comandosInfo(botInfo) {
     }
 }
 
+/** Resolve alias de handler (ex.: criarimagem → criarimg). */
+export function nomeComandoCanonico(comandoOuNome, prefixo = '') {
+    const raw = String(comandoOuNome || '')
+    const sem = prefixo && raw.startsWith(prefixo) ? raw.slice(prefixo.length) : raw.replace(/^[!#.\*\-\+/\$&]/, '')
+    const key = String(sem || '').toLowerCase()
+    return ALIASES_HANDLER[key] || key
+}
+
 export function verificarComandoExiste(botInfo, comando, categoria = null) {
     const { prefixo } = botInfo
     const comandosAtuais = comandosInfo(botInfo) || {}
     const categoriasExistentes = Object.keys(comandosAtuais).filter((key) => key != 'outros')
+    const nome = nomeComandoCanonico(comando, prefixo)
+    const alvo = prefixo + nome
     let comandos
     if (!categoria) {
         comandos = [
@@ -43,13 +54,13 @@ export function verificarComandoExiste(botInfo, comando, categoria = null) {
         if (!categoriasExistentes.includes(categoria)) return false
         comandos = Object.keys(comandosAtuais[categoria] || {}).map((cmd) => prefixo + cmd)
     }
-    return comandos.includes(comando)
+    return comandos.includes(alvo) || comandos.includes(comando)
 }
 
 export function obterGuiaComando(categoria, comando, botInfo) {
     const cabecalho = comandosInfo(botInfo).outros.cabecalho_guia
     const { prefixo } = botInfo
-    comando = comando.replace(prefixo, '')
+    const nome = nomeComandoCanonico(comando, prefixo)
     const comandosCategoria = comandosInfo(botInfo)[categoria] || {}
-    return cabecalho + (comandosCategoria[comando]?.guia ?? '')
+    return cabecalho + (comandosCategoria[nome]?.guia ?? '')
 }

@@ -13,7 +13,30 @@ import {MensagemControle} from '../controles/MensagemControle.js'
 import { carregarEnv } from '../lib/env.js'
 
 /** Histórico append antigo (segundos). Comandos recentes no Linux chegam como append. */
-const MSG_MAX_IDADE_APPEND_S = 300
+const MSG_MAX_IDADE_APPEND_S = Number(process.env.MSG_MAX_IDADE_APPEND_S || 300)
+const MSG_MAX_IDADE_CMD_APPEND_S = Number(process.env.MSG_MAX_IDADE_CMD_APPEND_S || 900)
+/** Limite de msgs sendo processadas em paralelo no ingress (antes da fila de comandos). */
+const INGRESS_MAX = Math.max(2, Number(process.env.ULTRON_INGRESS_MAX || 8))
+let ingressAtivos = 0
+const ingressEspera = []
+
+function adquirirIngress() {
+    if (ingressAtivos < INGRESS_MAX) {
+        ingressAtivos++
+        return Promise.resolve()
+    }
+    return new Promise((resolve) => {
+        ingressEspera.push(() => {
+            ingressAtivos++
+            resolve()
+        })
+    })
+}
+function liberarIngress() {
+    ingressAtivos = Math.max(0, ingressAtivos - 1)
+    const next = ingressEspera.shift()
+    if (next) next()
+}
 
 export const conexaoEncerrada = async(conexao, botInfo)=>{
     const comandos_info = comandosInfo(botInfo)
@@ -40,13 +63,20 @@ export const conexaoEncerrada = async(conexao, botInfo)=>{
 
 export const conexaoAberta = async(c, botInfo)=>{
     try{
-        const { bootBanner, registrarBootAutoMsg, registrarBootConteudo } = await import('../lib/boot.js')
+        const {
+            bootBanner,
+            bootMarcarInicio,
+            bootMarcarFase,
+            registrarBootAutoMsg
+        } = await import('../lib/boot.js')
+        bootMarcarInicio()
         bootBanner()
         await criarArquivosNecessarios()
         carregarEnv()
         await new BotControle().inicializarBot(c, botInfo)
         await verificarEnv()
         await verificarNumeroDono()
+        bootMarcarFase('bot')
         try {
             const { iniciarAutoMsg } = await import('../lib/autoMsg.js')
             iniciarAutoMsg(c, botInfo)
@@ -56,10 +86,10 @@ export const conexaoAberta = async(c, botInfo)=>{
             console.log(corTexto(`  AutoMsg: ${e?.message || e}`, '#d63e3e'))
         }
         try {
-            const { resumoConteudo } = await import('../lib/conteudo.js')
-            registrarBootConteudo(resumoConteudo())
-        } catch {
-            registrarBootConteudo({})
+            const { iniciarLimpezaPeriodica } = await import('../lib/limparCache.js')
+            iniciarLimpezaPeriodica()
+        } catch (e) {
+            console.log(corTexto(`  Limpeza periódica: ${e?.message || e}`, '#eab308'))
         }
     } catch(err){
         consoleErro(err, "Inicialização")
@@ -120,7 +150,7 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
             })()
             // Só reprocessa histórico velho se for comando (ex.: !menu atrasado)
             if (!preview.startsWith(prefixo)) return
-            if (idade > 900) return
+            if (idade > MSG_MAX_IDADE_CMD_APPEND_S) return
         }
     }
 
@@ -194,6 +224,11 @@ async function processarUmaMensagem(c, rawWa, botInfo, tipoUpsert) {
     if(!await grupos.filtroAntiLink(c, mensagemBaileys, botInfo)) return
     if(!await grupos.filtroAntiFlood(c, mensagemBaileys, botInfo)) return
     if(!await checagemMensagem(c, mensagemBaileys, botInfo)) return
+    try {
+        const { incrMetrica } = await import('../lib/logger.js')
+        incrMetrica('recv_ok')
+        incrMetrica('msgs')
+    } catch { /* */ }
     await chamadaComando(c, mensagemBaileys, botInfo)
 }
 
@@ -209,10 +244,23 @@ export const receberMensagem = async (c, mensagem, botInfo)=>{
         // NÃO descartar o lote inteiro: no Linux o 1º upsert (e às vezes os seguintes)
         // vem como append com dezenas/centenas de msgs — o comando do usuário pode estar dentro.
         for (const rawWa of lista) {
+            await adquirirIngress()
+            const msgId = rawWa?.key?.id
             try {
                 await processarUmaMensagem(c, rawWa, botInfo, tipoUpsert)
+                try {
+                    const { marcarMsgDone } = await import('../lib/dedupMsgs.js')
+                    marcarMsgDone(msgId)
+                } catch { /* */ }
             } catch (err) {
                 consoleErro(err, "MESSAGES.UPSERT.ITEM")
+                // Libera id para retentar no próximo upsert (não perde a msg)
+                try {
+                    const { liberarMsgId } = await import('../lib/dedupMsgs.js')
+                    liberarMsgId(msgId)
+                } catch { /* */ }
+            } finally {
+                liberarIngress()
             }
         }
     } catch(err){
@@ -270,7 +318,7 @@ export const atualizacaoParticipantesGrupo = async (c, evento, botInfo)=>{
 }
 
 export const atualizacaoDadosGrupos = async (c, botInfo)=>{
-    const { registrarBootGrupos, bootPronto } = await import('../lib/boot.js')
+    const { registrarBootGrupos, bootPronto, bootMarcarFase } = await import('../lib/boot.js')
     try{
         const dadosGrupos = await socket.obterTodosGrupos(c)
         if(dadosGrupos.length){
@@ -281,6 +329,7 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
             await grupos.atualizarContagemGrupos(dadosGrupos)
         }
         registrarBootGrupos(dadosGrupos?.length || 0)
+        bootMarcarFase('grupos')
         bootPronto()
         return true
     } catch(err){
@@ -298,7 +347,12 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
         } catch {
             registrarBootGrupos(0)
         }
-        try { bootPronto() } catch { console.log(corTexto('Online', false)) }
+        try {
+            bootMarcarFase('grupos')
+            bootPronto()
+        } catch {
+            console.log(corTexto('Online', false))
+        }
         return true
     }
 }

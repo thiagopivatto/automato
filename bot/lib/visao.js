@@ -2,7 +2,7 @@
  * Helpers de visão (Gemini) para comandos e histórico.
  */
 import { downloadMediaMessage } from '@whiskeysockets/baileys'
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from './lbotApi.js'
 import { tiposMensagem } from '../baileys/mensagem.js'
 
 /** Buffer da imagem da msg atual ou da citação. */

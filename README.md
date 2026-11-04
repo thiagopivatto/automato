@@ -4,61 +4,179 @@
 
 # Ultron
 
-Bot de WhatsApp em português — figurinhas, downloads, utilidades, IA e diversão.
+Bot brasileiro de WhatsApp — IA, figurinhas, downloads, administração de grupo e diversão.
+
+Feito com [Baileys](https://github.com/WhiskeySockets/Baileys) (Node.js 20+).
+
+---
+
+## O que faz
+
+| Área | Exemplos |
+|------|----------|
+| **IA** | `!chat`, menção ao bot, resumo do grupo, personalidade por chat |
+| **Mídia** | Figurinhas, downloads (YouTube/Instagram etc.), TTS |
+| **Grupo** | Anti-link, anti-flood, lista negra, boas-vindas, SHH, `!painel` |
+| **Diversão** | Dramas, ofensa automática, sorteios |
+| **Admin** | Limites, bloqueios, cotas de IA, painel do dono |
+
+Lista completa: [docs/COMANDOS.md](docs/COMANDOS.md)
+
+Changelog (pt-BR + EN): [CHANGELOG.md](CHANGELOG.md) — a cada commit o patch sobe sozinho (`npm run hooks:install` se o hook não estiver ativo).
+
+---
 
 ## Requisitos
 
-- Node.js 20+ + WhatsApp para o QR
-- Chaves opcionais no `.env` — veja [docs/CHAVESAPI.md](docs/CHAVESAPI.md)
+- Node.js **20+**
+- Conta WhatsApp (QR no primeiro start)
+- Chaves de API **opcionais** (sem elas a IA/TTS/downloads avançados ficam limitados)
 
-## Instalação
+---
+
+## Instalação (rode no SSD local)
+
+**Não rode o processo a partir de share UNC/NAS** (`\\servidor\...`). Clone ou copie o repo para disco local; use o NAS só como backup opcional.
 
 ```bash
+git clone <seu-repo> automato
+cd automato          # caminho local, ex.: C:\projetos\automato
+cp .env.example .env # edite DONO, chaves e ULTRON_*_DIR
 npm i
 npm start
+# Windows/UNC: powershell -NoProfile -File .\scripts\start.ps1
+# ou: pm2 start ecosystem.config.cjs
 ```
 
-Termux: [docs/TERMUX.md](docs/TERMUX.md)
+Escaneie o QR no terminal. Sessão fica em `ULTRON_SESSAO_DIR` (default `sessao/`).
 
-## Uso rápido
+**Termux:** [docs/TERMUX.md](docs/TERMUX.md)
 
-| Comando | Função |
-|---------|--------|
-| `!menu` | Menus |
-| `!comando guia` | Ajuda de qualquer comando |
-| `!admin` | Painel do dono (1ª vez cadastra você) |
+---
+
+## Configuração (.env)
+
+| Variável | Uso |
+|----------|-----|
+| `DONO` | **Obrigatório** — seu número com DDI (só dígitos) |
+| `ULTRON_DATA_DIR` | Dados SQLite/arquivos (SSD, ex. `C:\ultron-data`) |
+| `ULTRON_SESSAO_DIR` | Auth Baileys |
+| `ULTRON_TEMP_DIR` | Temporários |
+| `GEMINI_API_KEY` | IA principal |
+| `OPENROUTER_API_KEY` | Backup de texto (free + pago) |
+| `OPENROUTER_FREE_MODEL` | Modelo `:free` antes do crédito pago |
+| `RAPIDAPI_KEY` | Rapid chat / Perplexity2 / Flux (APIs assinadas) |
+| `TAVILY_API_KEY` | Pesquisa web no chat (recomendado) |
+| `BRAVE_SEARCH_API_KEY` | Pesquisa web alternativa |
+| `ELEVENLABS_API_KEY` | Voz premium **só dono** (resto = Edge) |
+| `TTS_EDGE_VOICE` | Voz Edge (ex. `pt-BR-FranciscaNeural`) |
+| `ELEVENLABS_VOICE_ID` | ID da voz ElevenLabs (Voice Library pt-BR) |
+| `ULTRON_BACKUP_KEEP` | Quantos backups manter (default 7) |
+| `dg_secret_key` | Transcrição (`!ouvir`) |
+| `YTDLP_PATH` / `YTDLP_COOKIES` | Downloads |
+| `FILA_CONCURRENCY` / `MAX_CHAT_QUEUES` | Escala (~centenas de grupos) |
+
+Detalhes, cascade, TTS e Rapid: [docs/CHAVESAPI.md](docs/CHAVESAPI.md)
+
+Cascade geral: **Gemini → OpenRouter free → Rapid → OpenRouter pago → Pollinations**.  
+Chat: **Gemini → OpenRouter free → OpenRouter** + web (Tavily/Brave/DDG/Wiki), meta ≤3–4s.
+
+Tiers de latência: A local ≤1s · B chat ≤3–4s · C pesado (ack + telemetria). Ver `npm run bench:tiers`.
+
+Opcionais úteis:
+
+```env
+DONO=5511999999999
+ULTRON_DATA_DIR=C:\ultron-data
+ULTRON_SESSAO_DIR=C:\ultron-data\sessao
+TAVILY_API_KEY=
+TTS_EDGE_VOICE=pt-BR-AntonioNeural
+IA_BUDGET_MS=7000
+FILA_CONCURRENCY=12
+MAX_CHAT_QUEUES=500
+LOG_LEVEL=warn
+ULTRON_SKIP_VENDOR_SYNC=1
+```
+
+---
+
+## Uso
 
 Prefixos: `! # . * - + / $ &`
 
-## Publicar no status do grupo
+| Comando | Função |
+|---------|--------|
+| `!menu` | Catálogo de comandos |
+| `!comando guia` | Ajuda de qualquer comando |
+| `!admin` | Painel do dono (1ª vez cadastra você) |
+| `!chat` | Conversa com a IA |
+| `!personalidade` | Tom do bot neste chat (chat/automsg) |
+| `!personalidaderesumo` | Tom só do `!resumodogrupo` |
+| `!painel` | Dump + toggles do grupo (admin) |
+| `!criarimg` | Gera imagem (Pollinations / HF / Gemini / Horde / Rapid) |
+| `!cotasia` | Status das APIs de IA |
+| `!painelbot` / `!infobot` | Painel global + lista de grupos (dono) |
 
-Responda uma mensagem de texto ou imagem com `!statusgrupo`. O bot publica o conteúdo respondido no status daquele grupo. Use `!statusgrupo guia` para ajuda.
+Cite uma mensagem do bot ou marque-o no grupo para falar com a IA sem comando.
 
-O texto e a legenda original da imagem são preservados. O comando segue os bloqueios de comandos, limites e permissões do bot. Outros tipos de mídia ainda não são aceitos. A disponibilidade do status depende do WhatsApp e do grupo; a aparência final precisa ser conferida no aplicativo.
+---
 
-Este recurso usa os campos de protocolo do Baileys **7.0.0-rc14**, fixado nas dependências. Ao atualizar uma instalação existente, execute `npm install` e reinicie o bot. É uma versão prévia: valide também conexão, comandos e eventos de participantes na conta utilizada.
+## Deploy (SSD + PM2)
 
-Se falhar, a resposta identifica a etapa: `SG_DOWNLOAD` (obter a imagem original), `SG_UPLOAD` (preparar/enviar a imagem) ou `SG_ENVIO` (enviar o status ao grupo). O erro técnico fica no terminal, marcado como `STATUS GRUPO`. Citações sem os dados da imagem original precisam ser reenviadas antes de executar o comando.
+```bash
+npm i
+pm2 start ecosystem.config.cjs
+# backup diário (sessão + sqlite + personalidades):
+npm run backup
+```
 
-Na instalação, um patch local corrige a identificação de mídia dentro do pacote de status do Baileys 7.0.0-rc14. Se instalar com `--ignore-scripts`, execute `npm run patch:statusgrupo` antes de iniciar o bot. Ao atualizar o Baileys, revise esse patch.
+A API de IA é importada **direto do `vendor/`** (`bot/lib/lbotApi.js`). `npm run sync:vendor` fica só como fallback legado.
 
-Teste local: `npm run test:statusgrupo` (Node.js 22.3+ para o teste de relay com módulos simulados). A suíte cobre download, criptografia e preparo de uma imagem local, além do envelope produzido pelo relay real do Baileys. O transporte remoto é simulado. Isso não confirma a aceitação do status pelo WhatsApp, que exige validação com conta conectada.
+Health local (opcional): `http://127.0.0.1:3921/health`
 
-## Conteúdo local
+---
 
-Bancos JSON (≥2000 itens cada) em `conteudo/`:
+## Scripts
 
-- Banco local de piadas (`!piada`)
+```bash
+npm start              # sobe o bot
+npm run backup         # copia dados/sessão para ULTRON_BACKUP_DIR
+npm run docs           # regenera docs de comandos
+npm run test:smoke     # checagem rápida
+npm run test:unidade   # testes sem WhatsApp
+npm run bench:tiers    # classifica comandos A/B/C
+npm run setup:tts      # venv Python + edge-tts (voz natural grátis)
+```
 
-Regenerar: `npm run gerar:conteudo`
+---
+
+## Estrutura
+
+```
+app.js                 # entrada / conexão WhatsApp
+bot/                   # comandos, controles, libs, db/, serviços
+vendor/                # API de IA e mídia (fonte única)
+scripts/               # start, testes, docs, backup, patches, Termux
+docs/                  # documentação
+dados/                 # runtime (SQLite, personalidades) — não versionar
+sessao/                # auth Baileys — não versionar
+temp/                  # temporários — não versionar
+ecosystem.config.cjs   # PM2
+```
+
+Não commite `.env` nem `sessao/`.
+
+---
 
 ## Documentação
 
-- [Lista de comandos](docs/COMANDOS.md)
-- [Chaves de API](docs/CHAVESAPI.md)
+- [Comandos](docs/COMANDOS.md)
+- [Chaves de API / TTS](docs/CHAVESAPI.md)
 - [Testes](docs/PLANO_TESTES.md)
-- [Conteúdo / dados](docs/CONTEUDO.md)
+- [Termux](docs/TERMUX.md)
+
+---
 
 ## Licença
 
-MIT
+MIT — Thiago Pivatto

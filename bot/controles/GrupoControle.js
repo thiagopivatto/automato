@@ -181,7 +181,7 @@ export class GrupoControle {
     // Adicionar/Editar/Remover participantes do grupo
     async participanteExiste(id_grupo, id_usuario) {
         let participantes = await this.grupo.obterParticipantes(id_grupo)
-        return (participantes && participantes.includes(id_usuario))
+        return !!(participantes && listaContemJid(participantes, id_usuario))
     }
 
     async adicionarParticipante(id_grupo, id_usuario) {
@@ -204,7 +204,7 @@ export class GrupoControle {
 
     async verificarAdmin(id_grupo, id_usuario) {
         let admins = await this.grupo.obterAdmins(id_grupo)
-        return (admins && admins.includes(id_usuario))
+        return !!(admins && listaContemJid(admins, id_usuario))
     }
 
     async removerParticipante(id_grupo, id_usuario) {
@@ -476,8 +476,23 @@ export class GrupoControle {
             if (!mensagem_grupo) return true
             if (!grupo?.antilink) return true
 
-            if (!bot_admin) {
-                await this.alterarAntiLink(id_grupo, false)
+            // Nunca desliga antilink por cache stale de bot_admin (LID mismatch)
+            let botEhAdmin = !!bot_admin
+            if (!botEhAdmin) {
+                try {
+                    const meta = await c.groupMetadata(id_grupo)
+                    const adminsLive = await socket.obterAdminsGrupoPorMetadata(meta)
+                    const botJids = [botInfo.numero_bot, botInfo.lid_bot].filter(Boolean)
+                    botEhAdmin = listaContemJid(adminsLive || [], ...botJids)
+                } catch {
+                    botEhAdmin = false
+                }
+            }
+            if (!botEhAdmin) {
+                consoleErro(
+                    { message: `antilink: bot sem admin no grupo ${id_grupo} — proteção pausada (não desligada)` },
+                    'ANTI-LINK'
+                )
                 return true
             }
 
@@ -549,12 +564,23 @@ export class GrupoControle {
         return await this.grupo.obterPersonalidade(id_grupo)
     }
 
+    /** Preferir bot/lib/personalidadeResumo.js (arquivo). Estes métodos só leem/limpam NeDB legado. */
+    async obterPersonalidadeResumoLegado(id_grupo) {
+        return await this.grupo.obterPersonalidadeResumoLegado(id_grupo)
+    }
+
+    async limparPersonalidadeResumoLegado(id_grupo) {
+        await this.grupo.limparPersonalidadeResumoLegado(id_grupo)
+    }
+
     async definirPersonalidadeResumo(id_grupo, texto) {
-        await this.grupo.definirPersonalidade(id_grupo, texto)
+        const { definirPersonalidadeResumo } = await import('../lib/personalidadeResumo.js')
+        return await definirPersonalidadeResumo(id_grupo, texto)
     }
 
     async obterPersonalidadeResumo(id_grupo) {
-        return await this.grupo.obterPersonalidade(id_grupo)
+        const { obterPersonalidadeResumo } = await import('../lib/personalidadeResumo.js')
+        return await obterPersonalidadeResumo(id_grupo)
     }
 
     async atualizarUltimaMsgHumana(id_grupo) {
@@ -572,38 +598,6 @@ export class GrupoControle {
     async obterGruposAutoMsg() {
         return await this.grupo.obterGruposAutoMsg()
     }
-
-    //Recurso ANTI-FAKE
-    // async alterarAntiFake(id_grupo, status = true, ddiAutorizados = []) {
-    //     await this.grupo.alterarAntiFake(id_grupo, status, ddiAutorizados)
-    // }
-
-    // async filtroAntiFake(c, evento, grupoInfo, botInfo) {
-    //     try {
-    //         if (grupoInfo.antifake.status) {
-    //             const comandos_info = comandosInfo(botInfo)
-    //             let participante = evento.participants[0]
-    //             let grupoAdmins = grupoInfo.admins
-    //             let botAdmin = grupoAdmins.includes(botInfo.numero_bot)
-
-    //             if (!botAdmin) {
-    //                 await this.alterarAntiFake(evento.id, false)
-    //             } else {
-    //                 for (ddi of grupoInfo.antifake.ddi_liberados) {
-    //                     if (participante.startsWith(ddi)) return true
-    //                 }
-    //                 await socket.enviarTextoComMencoes(c, evento.id, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(participante), comandos_info.grupo.afake.msgs.motivo, botInfo.nome), [participante])
-    //                 await socket.removerParticipante(c, evento.id, participante)
-    //                 return false
-    //             }
-    //         }
-    //         return true
-    //     } catch (err) {
-    //         err.message = `antiFake - ${err.message}`
-    //         consoleErro(err, "ANTI-FAKE")
-    //         return true
-    //     }
-    // }
 
     // Recurso MUTAR GRUPO
     async alterarMutar(id_grupo, status = true) {
@@ -656,22 +650,48 @@ export class GrupoControle {
     async filtroAntiFlood(c, mensagemBaileys, botInfo) {
         try {
             const comandos_info = comandosInfo(botInfo)
-            const { id_chat, remetente, mensagem_grupo, grupo } = mensagemBaileys
+            const { id_chat, remetente, mensagem_grupo, grupo, mensagem } = mensagemBaileys
             const { id_grupo, admins, bot_admin } = { ...grupo }
 
             if (!mensagem_grupo) return true
-            if (!grupo?.antiflood.status) return true
-            if (!bot_admin) {
-                await this.alterarAntiFlood(id_grupo, false)
-            } else {
-                let flood = await this.tratarMensagemAntiFlood(grupo, remetente)
-                if (flood) {
-                    if (!admins.includes(remetente)) {
-                        await socket.removerParticipante(c, id_grupo, remetente)
-                        await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(remetente), comandos_info.grupo.aflood.msgs.motivo, botInfo.nome_bot), [remetente])
-                        return false
-                    }
+            if (!grupo?.antiflood?.status) return true
+
+            let botEhAdmin = !!bot_admin
+            if (!botEhAdmin) {
+                try {
+                    const meta = await c.groupMetadata(id_grupo)
+                    const adminsLive = await socket.obterAdminsGrupoPorMetadata(meta)
+                    const botJids = [botInfo.numero_bot, botInfo.lid_bot].filter(Boolean)
+                    botEhAdmin = listaContemJid(adminsLive || [], ...botJids)
+                } catch {
+                    botEhAdmin = false
                 }
+            }
+            if (!botEhAdmin) {
+                consoleErro(
+                    { message: `antiflood: bot sem admin em ${id_grupo} — pausado (não desligado)` },
+                    'ANTI-FLOOD'
+                )
+                return true
+            }
+
+            let flood = await this.tratarMensagemAntiFlood(grupo, remetente)
+            if (flood) {
+                const key = mensagem?.key || {}
+                const candidatos = [
+                    remetente,
+                    key.participant,
+                    key.participantPn,
+                    key.participantAlt,
+                    key.participantLid,
+                    ...(mensagemBaileys.aliases_remetente || [])
+                ].filter(Boolean)
+                if (listaContemJid(admins || [], ...candidatos)) {
+                    return true
+                }
+                await socket.removerParticipante(c, id_grupo, remetente)
+                await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(remetente), comandos_info.grupo.aflood.msgs.motivo, botInfo.nome_bot), [remetente])
+                return false
             }
             return true
         } catch (err) {
@@ -697,12 +717,16 @@ export class GrupoControle {
     async verificarListaNegraGeral(c, gruposInfo, botInfo) {
         try {
             const comandos_info = comandosInfo(botInfo)
+            const botJids = [botInfo.numero_bot, botInfo.lid_bot].filter(Boolean)
             for (let grupo of gruposInfo) {
-                let grupoAdmins = await socket.obterAdminsGrupoPorMetadata(grupo), botAdmin = grupoAdmins.includes(botInfo.numero_bot)
+                let grupoAdmins = await socket.obterAdminsGrupoPorMetadata(grupo)
+                let botAdmin = listaContemJid(grupoAdmins || [], ...botJids)
                 if (botAdmin) {
-                    let participantesGrupo = await socket.obterMembrosGrupoPorMetadata(grupo), lista_negra = await this.obterListaNegra(grupo.id), usuarios_listados = []
+                    let participantesGrupo = await socket.obterMembrosGrupoPorMetadata(grupo)
+                    let lista_negra = await this.obterListaNegra(grupo.id)
+                    let usuarios_listados = []
                     for (let participante of participantesGrupo) {
-                        if (lista_negra.includes(participante)) usuarios_listados.push(participante)
+                        if (listaContemJid(lista_negra || [], participante)) usuarios_listados.push(participante)
                     }
                     for (let usuario of usuarios_listados) {
                         await socket.removerParticipante(c, grupo.id, usuario)
@@ -719,12 +743,15 @@ export class GrupoControle {
     async verificarListaNegraUsuario(c, evento, botInfo) {
         try {
             const comandos_info = comandosInfo(botInfo)
-            const grupoAdmins = await this.obterAdminsGrupo(evento.id), botAdmin = grupoAdmins.includes(botInfo.numero_bot)
+            const grupoAdmins = await this.obterAdminsGrupo(evento.id)
+            const botJids = [botInfo.numero_bot, botInfo.lid_bot].filter(Boolean)
+            const botAdmin = listaContemJid(grupoAdmins || [], ...botJids)
             if (botAdmin) {
                 let lista_negra = await this.obterListaNegra(evento.id)
-                if (lista_negra.includes(evento.participants[0])) {
-                    await socket.removerParticipante(c, evento.id, evento.participants[0])
-                    await socket.enviarTextoComMencoes(c, evento.id, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(evento.participants[0]), comandos_info.grupo.listanegra.msgs.motivo, botInfo.nome_bot), [evento.participants[0]])
+                const participante = evento.participants[0]
+                if (listaContemJid(lista_negra || [], participante)) {
+                    await socket.removerParticipante(c, evento.id, participante)
+                    await socket.enviarTextoComMencoes(c, evento.id, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(participante), comandos_info.grupo.listanegra.msgs.motivo, botInfo.nome_bot), [participante])
                     return false
                 }
             }

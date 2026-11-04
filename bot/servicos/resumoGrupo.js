@@ -2,7 +2,7 @@
  * Orquestra !resumodogrupo: janela de histórico + memória + adapter TTS/LLM (vendor).
  * Handler só parseia/envia; persistência fica nos controles.
  */
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from '../lib/lbotApi.js'
 import {
     historicoGrupo,
     obterJanelaResumoGrupo,
@@ -38,13 +38,14 @@ export async function carregarJanelaResumo(idGrupo, prefixo) {
     }
 }
 
-export async function gerarResumoDaJanela(janela, nomeGrupo, personalidade = '') {
+export async function gerarResumoDaJanela(janela, nomeGrupo, personalidade = '', { preferirEleven = false } = {}) {
     const gerado = await api.IA.gerarResumoGrupoAudio({
         mensagens: janela.msgs,
         nomeGrupo: nomeGrupo || 'o grupo',
         teveResumoAnterior: janela.teveResumoAnterior,
         memoriaTexto: janela.memoriaTexto,
-        personalidade
+        personalidade,
+        preferirEleven
     })
     return {
         gerado,

@@ -52,7 +52,8 @@ export function metaUtilidades({ prefixo, nome_adm, nome_bot }) {
                     `Ex: *${prefixo}personalidade* fala como um tiozão fofoqueiro e chato\n` +
                     `Ex: *${prefixo}personalidade* ver — Mostra a atual\n` +
                     `Ex: *${prefixo}personalidade* padrão — Volta ao Ultron padrão\n` +
-                    `Salva em arquivo *por chat* (grupo e PV separados). Vale para chat, resumo e automsg.\n` +
+                    `Salva em arquivo *por chat* (grupo e PV separados). Vale para *chat e automsg*.\n` +
+                    `Resumo do grupo: use *${prefixo}personalidaderesumo* (storage separado).\n` +
                     `Em grupo: *apenas admins*. No privado: você controla só o seu PV.\n`,
                 msgs: {}
             },
@@ -191,8 +192,8 @@ export function metaUtilidades({ prefixo, nome_adm, nome_bot }) {
             },
             pesquisa: {
                 descricao: '',
-                guia: `Ex: *${prefixo}pesquisa* tema - Pesquisa com Perplexity (RapidAPI).\n`+
-                `Requer *RAPIDAPI_KEY* no .env (subscribe em perplexity2).\n`,
+                guia: `Ex: *${prefixo}pesquisa* tema - Pesquisa na web (Tavily/Brave/Perplexity + DDG/Wiki).\n`+
+                `Recomendado: *TAVILY_API_KEY* no .env. Opcional: *BRAVE_SEARCH_API_KEY* / *RAPIDAPI_KEY* (Perplexity2).\n`,
                 msgs: {
                     resposta_titulo: "🔎 Resultados da pesquisa de : *{p1}*🔎\n\n",
                     resposta_itens: "🔎 {p1}\n"+

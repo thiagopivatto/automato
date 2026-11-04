@@ -1,6 +1,6 @@
 //REQUERINDO MÓDULOS
 import {criarTexto, erroComandoMsg, consoleErro} from '../lib/util.js'
-import api from '@victorsouzaleal/lbot-api-comandos'
+import api from '../lib/lbotApi.js'
 import * as socket from '../baileys/socket.js'
 import {tiposMensagem} from '../baileys/mensagem.js'
 import {comandosInfo} from '../comandos/comandos.js'

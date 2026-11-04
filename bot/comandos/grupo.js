@@ -7,6 +7,7 @@ import {downloadMediaMessage} from '@whiskeysockets/baileys'
 import {comandosInfo} from '../comandos/comandos.js'
 import { handlersMencoes } from './grupo/mencoes.js'
 import { mensagemErroStatusGrupo } from '../lib/statusGrupo.js'
+import { despacharMapa } from './registro.js'
 
 
 export const grupo = async(c, mensagemBaileys, botInfo) => {
@@ -44,1082 +45,1029 @@ export const grupo = async(c, mensagemBaileys, botInfo) => {
     
     // Comandos de grupo
     try{
-        switch(comandoSemPrefixo){
-            case 'statusgrupo': {
-                try {
-                    const { publicarStatusGrupo } = await import('../lib/statusGrupo.js')
-                    const enviada = await publicarStatusGrupo(c, mensagemBaileys)
-                    try {
-                        const { MensagemControle } = await import('../controles/MensagemControle.js')
-                        await new MensagemControle().armazenarMensagem(enviada)
-                    } catch { /* publicação já enviada; cache de retry é secundário */ }
-                    await socket.responderTexto(c, id_chat, '📤 Solicitação de status enviada ao WhatsApp. Confira se apareceu no status deste grupo.', mensagem)
-                } catch (err) {
-                    consoleErro(err, 'STATUS GRUPO')
-                    const validacao = /^(Esse recurso|Responda|Escolha|O bot ainda|Não consegui baixar|A mensagem respondida|Por enquanto|Atualize as dependências)/.test(err.message || '')
-                    await socket.responderTexto(c, id_chat, mensagemErroStatusGrupo(err) || (validacao ? err.message : 'Não consegui publicar no status do grupo. Confira o erro no terminal do bot. [SG_INTERNO]'), mensagem)
-                }
-                break
-            }
-            case 'regras':
-                try{
-                    let grupoDescricao = grupo.descricao || comandos_info.grupo.regras.msgs.sem_descrição
-                    await socket.obterFotoPerfil(c, id_grupo).then(async (grupoFoto)=>{
-                        await socket.responderArquivoUrl(c, tiposMensagem.imagem, id_chat, grupoFoto, grupoDescricao, mensagem)
-                    }).catch(async ()=>{
-                        await socket.responderTexto(c, id_chat, grupoDescricao, mensagem)
-                    })
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case "fotogrupo":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    if(mensagem_midia || mensagem_citada){
-                        let dadosMensagem = {
-                            tipo : (mensagem_midia) ? tipo : citacao.tipo,
-                            mimetype : (mensagem_midia)? mimetype : citacao.mimetype,
-                            mensagem: (mensagem_midia) ? mensagem : citacao.mensagem
-                        }
-                        if(dadosMensagem.tipo == tiposMensagem.imagem){
-                            let fotoBuffer = await downloadMediaMessage(dadosMensagem.mensagem, "buffer")
-                            await socket.alterarFotoPerfil(c, id_chat, fotoBuffer)
-                            await socket.responderTexto(c, id_chat, comandos_info.grupo.fotogrupo.msgs.sucesso, mensagem)
-                        } else {
-                            return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
-                        }
-                    } else {
-                        return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-                
-            
-            case 'status':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    let resposta = comandos_info.grupo.status.msgs.resposta_titulo
-                    //Bem-vindo
-                    resposta += (grupo.bemvindo.status) ? comandos_info.grupo.status.msgs.resposta_variavel.bemvindo.on : comandos_info.grupo.status.msgs.resposta_variavel.bemvindo.off
-                    //Mutar
-                    resposta += (grupo.mutar) ? comandos_info.grupo.status.msgs.resposta_variavel.mutar.on : comandos_info.grupo.status.msgs.resposta_variavel.mutar.off
-                    //Auto-Sticker
-                    resposta += (grupo.autosticker) ? comandos_info.grupo.status.msgs.resposta_variavel.autosticker.on : comandos_info.grupo.status.msgs.resposta_variavel.autosticker.off
-                    //Auto-Simi
-                    resposta += (grupo.autosimi) ? comandos_info.grupo.status.msgs.resposta_variavel.autosimi.on : comandos_info.grupo.status.msgs.resposta_variavel.autosimi.off
-                    // Ofensa (padrão: ligado)
-                    resposta += (grupo.ofensa !== false) ? comandos_info.grupo.status.msgs.resposta_variavel.ofensa.on : comandos_info.grupo.status.msgs.resposta_variavel.ofensa.off
-                    //Auto-Msg (padrão: ligado)
-                    resposta += (grupo.automsg !== false) ? comandos_info.grupo.status.msgs.resposta_variavel.automsg.on : comandos_info.grupo.status.msgs.resposta_variavel.automsg.off
-                    // Personalidade (arquivo por chat)
-                    try {
-                        const { obterPersonalidadeChat } = await import('../lib/personalidadeChat.js')
-                        const pers =
-                            (await obterPersonalidadeChat(id_grupo)) ||
-                            (await grupos.obterPersonalidade(id_grupo)) ||
-                            ''
-                        resposta += pers
-                            ? `Personalidade : ✅\n- ${pers.slice(0, 80)}${pers.length > 80 ? '…' : ''}\n`
-                            : 'Personalidade : padrão Ultron\n'
-                    } catch { /* ignore */ }
-                    //Anti-Link
-                    resposta += (grupo.antilink) ? comandos_info.grupo.status.msgs.resposta_variavel.antilink.on : comandos_info.grupo.status.msgs.resposta_variavel.antilink.off
-                    //Anti-fake
-                    //   resposta += (grupo.antifake.status) ? criarTexto(comandos_info.grupo.status.msgs.resposta_variavel.antifake.on, grupo.antifake.ddi_liberados.toString()) : comandos_info.grupo.status.msgs.resposta_variavel.antifake.off
-                    //Anti-flood
-                    resposta += (grupo.antiflood.status) ? criarTexto(comandos_info.grupo.status.msgs.resposta_variavel.antiflood.on, grupo.antiflood.max, grupo.antiflood.intervalo) : comandos_info.grupo.status.msgs.resposta_variavel.antiflood.off 
-                    //Contador
-                    resposta += (grupo.contador.status) ? criarTexto(comandos_info.grupo.status.msgs.resposta_variavel.contador.on, grupo.contador.inicio) : comandos_info.grupo.status.msgs.resposta_variavel.contador.off
-                    //Bloqueio de CMDS
-                    let comandosBloqueados = []
-                    for (let comandoBloqueado of grupo.block_cmds){
-                        comandosBloqueados.push(prefixo+comandoBloqueado)
-                    }
-                    resposta += (grupo.block_cmds.length != 0) ? criarTexto(comandos_info.grupo.status.msgs.resposta_variavel.bloqueiocmds.on, comandosBloqueados.toString()) : comandos_info.grupo.status.msgs.resposta_variavel.bloqueiocmds.off
-                    //Lista Negra
-                    resposta += criarTexto(comandos_info.grupo.status.msgs.resposta_variavel.listanegra, grupo.lista_negra.length)
-                    await socket.enviarTexto(c, id_chat, resposta)
-                } catch(err){
-                    throw err
-                }
-                break
-            
-            case 'bv':
-                try{
-                    if (!usuario_admin) return socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    let estadoNovo = !grupo.bemvindo.status
-                    if (estadoNovo) {
-                        let usuarioMensagem = texto_recebido
-                        await grupos.alterarBemVindo(id_grupo, true, usuarioMensagem)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.bv.msgs.ligado, mensagem)
-                    } else {
-                        await grupos.alterarBemVindo(id_grupo, false)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.bv.msgs.desligado, mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                
-                break
-
-            case "addlista":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    let blista_numero
-                    if(mensagem_citada) blista_numero = citacao.remetente
-                    else if(mencionados.length) blista_numero = mencionados[0]
-                    else if(args.length) blista_numero = texto_recebido.replace(/\W+/g,"")+"@s.whatsapp.net"
-                    else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    if(blista_numero == numero_bot) return await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.bot_erro , mensagem)
-                    else if(admins.includes(blista_numero)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.admin_erro , mensagem)
-                    let blista_grupo_lista = await grupos.obterListaNegra(id_grupo)
-                    if(blista_grupo_lista.includes(blista_numero)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.ja_listado, mensagem)
-                    await grupos.adicionarUsuarioListaNegra(id_grupo, blista_numero)
-                    await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.sucesso, mensagem)
-                    if(participantes.includes(blista_numero)) await socket.removerParticipante(c, id_chat, blista_numero)
-                } catch(err){
-                    throw err
-                }
-                break
-            
-            case "remlista":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    let dlista_numero = texto_recebido.replace(/\W+/g,"")+"@s.whatsapp.net"
-                    let dlista_grupo_lista = await grupos.obterListaNegra(id_grupo)
-                    if(!dlista_grupo_lista.includes(dlista_numero)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.remlista.msgs.nao_listado, mensagem)
-                    await grupos.removerUsuarioListaNegra(id_grupo, dlista_numero)
-                    await socket.responderTexto(c, id_chat, comandos_info.grupo.remlista.msgs.sucesso, mensagem)
-                } catch(err){
-                    throw err
-                }
-                break
-            
-            case "listanegra":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    let lista_negra_grupo = await grupos.obterListaNegra(id_grupo), resposta_listanegra = comandos_info.grupo.listanegra.msgs.resposta_titulo
-                    if(lista_negra_grupo.length == 0) return await socket.responderTexto(c, id_chat, comandos_info.grupo.listanegra.msgs.lista_vazia, mensagem)
-                    for(let usuario_lista of lista_negra_grupo){
-                        resposta_listanegra += criarTexto(comandos_info.grupo.listanegra.msgs.resposta_itens, mencaoNumero(usuario_lista))
-                    }
-                    resposta_listanegra += `╠\n╚═〘 ${nome_bot?.trim()}®〙`
-                    await socket.enviarTexto(c, id_chat, resposta_listanegra)
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'alink':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c,id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    let estadoNovo = !grupo.antilink
-                    if (estadoNovo) {
-                        await grupos.alterarAntiLink(id_grupo, true)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.alink.msgs.ligado, mensagem)
-                    } else {
-                        await grupos.alterarAntiLink(id_grupo, false)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.alink.msgs.desligado, mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'autosticker':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    let estadoNovo = !grupo.autosticker
-                    if (estadoNovo) {
-                        await grupos.alterarAutoSticker(id_grupo, true)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.autosticker.msgs.ligado, mensagem)
-                    } else {
-                        await grupos.alterarAutoSticker(id_grupo, false)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.autosticker.msgs.desligado, mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'autosimi':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    let estadoSimi = !grupo.autosimi
-                    if (estadoSimi) {
-                        await grupos.alterarAutoSimi(id_grupo, true)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.autosimi.msgs.ligado, mensagem)
-                    } else {
-                        await grupos.alterarAutoSimi(id_grupo, false)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.autosimi.msgs.desligado, mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'automsg':
-                try {
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    const arg = String(texto_recebido || args[0] || '').toLowerCase().trim()
-                    const atual = grupo.automsg !== false
-                    let ligar
-                    if (arg === 'ativar' || arg === 'on' || arg === 'liga' || arg === 'ligar') ligar = true
-                    else if (arg === 'desativar' || arg === 'off' || arg === 'desliga' || arg === 'desligar') ligar = false
-                    else ligar = !atual
-                    await grupos.alterarAutoMsg(id_grupo, ligar)
-                    await socket.responderTexto(
-                        c,
-                        id_chat,
-                        ligar ? comandos_info.grupo.automsg.msgs.ligado : comandos_info.grupo.automsg.msgs.desligado,
-                        mensagem
-                    )
-                } catch (err) {
-                    throw err
-                }
-                break
-
-            case 'ofensa':
-                try {
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    const argOf = String(texto_recebido || args[0] || '').toLowerCase().trim()
-                    const atualOf = grupo.ofensa !== false
-                    let ligarOf
-                    if (argOf === 'ativar' || argOf === 'on' || argOf === 'liga' || argOf === 'ligar') ligarOf = true
-                    else if (argOf === 'desativar' || argOf === 'off' || argOf === 'desliga' || argOf === 'desligar') ligarOf = false
-                    else {
-                        // Sem on/off: só mostra status (não alterna — evita desligar sem querer)
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            atualOf
-                                ? `🔥 OFENSA está *ligada* neste grupo.\nUse *${prefixo}ofensa off* pra desligar.`
-                                : `🔥 OFENSA está *desligada* neste grupo.\nUse *${prefixo}ofensa on* pra ligar.`,
-                            mensagem
-                        )
-                    }
-                    await grupos.alterarOfensa(id_grupo, ligarOf)
-                    await socket.responderTexto(
-                        c,
-                        id_chat,
-                        ligarOf ? comandos_info.grupo.ofensa.msgs.ligado : comandos_info.grupo.ofensa.msgs.desligado,
-                        mensagem
-                    )
-                } catch (err) {
-                    throw err
-                }
-                break
-
-            case "revelar":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!mensagem_citada) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `Responda uma *visualização única* com *${prefixo}revelar*.\n` +
-                            `Obs: o bot já tenta reenviar sozinho quando a VO chega.`,
-                            mensagem
-                        )
-                    }
-                    const { revelarPorCitacao, ehViewOnce } = await import('../lib/revelar.js')
-                    const pareceVo = !!(
-                        citacao?.mensagem_vunica ||
-                        ehViewOnce(citacao?.quoteOriginal) ||
-                        ehViewOnce(citacao?.conteudo) ||
-                        citacao?.midia?.viewOnce
-                    )
-                    if (!pareceVo && !citacao?.midia) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `Responda uma *visualização única* com *${prefixo}revelar*.`,
-                            mensagem
-                        )
-                    }
-                    const res = await revelarPorCitacao(c, citacao, id_chat, mensagem)
-                    if (!res?.ok) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            'Não consegui revelar essa mídia (quote sem chave/url). Peça pra reenviar a VO.',
-                            mensagem
-                        )
-                    }
-                } catch(err){
-                    consoleErro(err, 'REVELAR')
-                    await socket.responderTexto(
-                        c,
-                        id_chat,
-                        'Não consegui revelar essa mensagem.',
-                        mensagem
-                    )
-                }
-                break
-                    
-            case 'rlink':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat,comandos_info.outros.permissao.bot_admin, mensagem)
-                    await socket.revogarLinkGrupo(c, id_grupo).then(async ()=>{
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.rlink.msgs.sucesso ,mensagem)}
-                    ).catch(async ()=>{
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.rlink.msgs.erro ,mensagem)
-                    })
-                } catch(err){
-                    throw err
-                }
-                break        
-
-            // case 'afake':
-            //     try{
-            //         if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-            //         if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-            //         let estadoNovo = !grupo.antifake.status
-            //         if (estadoNovo) {
-            //             let DDIAutorizados = !args.length ? ["55"] : args
-            //             //await grupos.alterarAntiFake(id_grupo, true, DDIAutorizados)
-            //             await socket.responderTexto(c, id_chat,  comandos_info.grupo.afake.msgs.ligado, mensagem)
-            //         } else {
-            //             //await grupos.alterarAntiFake(id_grupo, false)
-            //             await socket.responderTexto(c, id_chat,  comandos_info.grupo.afake.msgs.desligado, mensagem)
-            //         } 
-            //     } catch(err){
-            //         throw err
-            //     }
-            //     break
-
-            case "mutar":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    let estadoNovo = !grupo.mutar
-                    if (estadoNovo) {
-                        await grupos.alterarMutar(id_grupo)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.mutar.msgs.ligado, mensagem)
-                    } else {
-                        await grupos.alterarMutar(id_grupo,false)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.mutar.msgs.desligado, mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'shh':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-
-                    let alvo = null
-                    if (mencionados?.length) alvo = mencionados[0]
-                    else if (mensagem_citada && citacao?.remetente) alvo = citacao.remetente
-                    if (!alvo) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-
-                    const aliases = await grupos.resolverAliasesShh(
-                        c,
-                        id_grupo,
-                        alvo,
-                        ...(mencionados || []),
-                        citacao?.remetente
-                    )
-
-                    if (listaContemJid(botsJid, ...aliases)) {
-                        return await socket.responderTexto(c, id_chat, comandos_info.grupo.shh.msgs.erro_bot, mensagem)
-                    }
-                    if (dono && listaContemJid([dono], ...aliases)) {
-                        return await socket.responderTexto(c, id_chat, comandos_info.grupo.shh.msgs.erro_dono, mensagem)
-                    }
-
-                    const tokens = (args || []).filter((a) => {
-                        const t = String(a || '').trim()
-                        if (!t) return false
-                        if (t.startsWith('@')) return false
-                        if (listaContemJid(aliases, t) || listaContemJid(aliases, `${t.replace(/\D/g, '')}@s.whatsapp.net`)) return false
-                        return true
-                    })
-                    const acao = String(tokens[0] || '').toLowerCase()
-
-                    if (acao === 'off' || acao === 'desligar' || acao === 'cancelar') {
-                        const removeu = await grupos.dessilenciarMembro(id_grupo, alvo, aliases)
-                        const msg = removeu
-                            ? criarTexto(comandos_info.grupo.shh.msgs.off, mencaoNumero(alvo))
-                            : criarTexto(comandos_info.grupo.shh.msgs.nao_silenciado, mencaoNumero(alvo))
-                        return await socket.enviarTextoComMencoes(c, id_chat, msg, [alvo])
-                    }
-
-                    let minutos = null
-                    if (acao) {
-                        if (!/^\d+$/.test(acao)) {
-                            return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                        }
-                        const n = parseInt(acao, 10)
-                        if (!Number.isFinite(n) || n < 1) {
-                            return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                        }
-                        minutos = n
-                    }
-
-                    const { ate } = await grupos.silenciarMembro(id_grupo, alvo, minutos, aliases)
-                    const tag = mencaoNumero(alvo)
-                    if (ate == null) {
-                        await socket.enviarTextoComMencoes(
-                            c,
-                            id_chat,
-                            criarTexto(comandos_info.grupo.shh.msgs.ligado_eterno, tag),
-                            [alvo]
-                        )
-                    } else {
-                        await socket.enviarTextoComMencoes(
-                            c,
-                            id_chat,
-                            criarTexto(comandos_info.grupo.shh.msgs.ligado_tempo, tag, String(minutos)),
-                            [alvo]
-                        )
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-                    
-            case 'contador':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    let estadoNovo = !grupo.contador.status
-                    let membrosAtuais = grupo.participantes
-                    if (estadoNovo) {
-                        await grupos.alterarContador(id_grupo)
-                        await grupos.registrarContagemGrupo(id_grupo, membrosAtuais)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.contador.msgs.ligado, mensagem)
-                    } else {
-                        await grupos.alterarContador(id_grupo, false)
-                        await grupos.removerContagemGrupo(id_grupo)
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.contador.msgs.desligado, mensagem)
-                    } 
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case "atividade":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.atividade.msgs.erro_contador, mensagem)
-                    let atividadeUsuario
-                    if(mensagem_citada){
-                        atividadeUsuario = await grupos.obterAtividadeParticipante(id_grupo, citacao.remetente)
-                        if(!atividadeUsuario) return await socket.responderTexto(c, id_chat, comandos_info.grupo.atividade.msgs.fora_grupo, mensagem)
-                    } else if (mencionados.length === 1){
-                        atividadeUsuario = await grupos.obterAtividadeParticipante(id_grupo, mencionados[0])
-                        if(!atividadeUsuario) return await socket.responderTexto(c, id_chat, comandos_info.grupo.atividade.msgs.fora_grupo, mensagem)
-                    } else {
-                        return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    }
-                    let atividadeResposta = criarTexto(comandos_info.grupo.atividade.msgs.resposta, atividadeUsuario.msg, atividadeUsuario.texto, atividadeUsuario.imagem, atividadeUsuario.video, atividadeUsuario.sticker, atividadeUsuario.audio, atividadeUsuario.outro)
-                    await socket.responderTexto(c, id_chat, atividadeResposta, mensagem)
-                } catch(err){
-                    throw err
-                }
-                break
-
-                        
-            case 'alterarcont':
-                if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                if(args.length == 1)  return client.reply(from, erroComandoMsg(command), id)
-                // Alterar quantidade de mensagens enviadas pelo membro selecionado
-                let [idUsuario, qtdMensagens] = args
-                if(isNaN(qtdMensagens)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.alterarcont.msgs.erro_qtd, mensagem)
-                await grupos.alterarContagemParticipante(id_grupo, idUsuario, qtdMensagens)
-                await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.alterarcont.msgs.sucesso, qtdMensagens, idUsuario), mensagem)
-                break
-                
-
-            case "imarcar":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
-                    let qtdMensagem = texto_recebido
-                    if(isNaN(qtdMensagem)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.erro_qtd , mensagem)
-                    if(qtdMensagem < 1 || qtdMensagem > 200) return await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.limite_qtd, mensagem)
-                    if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.erro_contador, mensagem)
-                    let usuariosInativos = await grupos.obterParticipantesInativos(id_grupo, qtdMensagem)
-                    let qtdInativos = usuariosInativos.length
-                    if(qtdInativos > 0){
-                        let mencionarUsuarios = []
-                        let inativosResposta = criarTexto(comandos_info.grupo.imarcar.msgs.resposta_titulo, qtdMensagem, qtdInativos)
-                        inativosResposta += `═════════════════\n╠\n`
-                        for(let usuario of usuariosInativos){
-                            inativosResposta += criarTexto(comandos_info.grupo.imarcar.msgs.resposta_itens, mencaoNumero(usuario.id_usuario), usuario.msg)
-                            mencionarUsuarios.push(usuario.id_usuario)
-                        }
-                        inativosResposta += `╠\n╚═〘 ${nome_bot?.trim()}® 〙`
-                        await socket.enviarTextoComMencoes(c, id_chat, inativosResposta, mencionarUsuarios)
-                    } else {
-                        await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.sem_inativo, mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-                
-            case "ibanir":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    let qtdMensagem = texto_recebido
-                    if(isNaN(qtdMensagem)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.erro_qtd , mensagem)
-                    if(qtdMensagem < 1 || qtdMensagem > 200) return await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.limite_qtd, mensagem)
-                    if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.erro_contador , mensagem)
-                    let usuariosInativos = await grupos.obterParticipantesInativos(id_grupo, qtdMensagem), usuariosBanidos = 0
-                    if(usuariosInativos.length){
-                        for(let usuario of usuariosInativos){
-                            if(!admins.includes(usuario.id_usuario) && usuario.id_usuario != numero_bot){
-                                await socket.removerParticipante(c, id_chat, usuario.id_usuario)
-                                usuariosBanidos++
-                            }
-                        }
-                    } 
-                    if(usuariosBanidos) await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.ibanir.msgs.sucesso, usuariosBanidos, qtdMensagem), mensagem)
-                    else await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.sem_inativo, mensagem)
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case "topativos":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
-                    let qtdUsuarios = texto_recebido
-                    if(isNaN(qtdUsuarios)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.topativos.msgs.erro_qtd , mensagem)
-                    if(qtdUsuarios < 1 || qtdUsuarios > 200) return await socket.responderTexto(c, id_chat, comandos_info.grupo.topativos.msgs.limite_qtd , mensagem)
-                    if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.topativos.msgs.erro_contador , mensagem)
-                    let usuariosAtivos = await grupos.obterParticipantesAtivos(id_grupo, qtdUsuarios)
-                    let usuariosMencionados = []
-                    let respostaTop = criarTexto(comandos_info.grupo.topativos.msgs.resposta_titulo, qtdUsuarios)
-                    for (let i = 0 ; i < usuariosAtivos.length ; i++){
-                        let medalha = ''
-                        switch(i+1){
-                            case 1:
-                                medalha = '🥇'
-                            break
-                            case 2:
-                                medalha = '🥈'
-                            break
-                            case 3:
-                                medalha = '🥉'
-                            break
-                            default:
-                                medalha = ''
-                        }
-                        respostaTop += criarTexto(comandos_info.grupo.topativos.msgs.resposta_itens, medalha, i+1, mencaoNumero(usuariosAtivos[i].id_usuario), usuariosAtivos[i].msg)
-                        usuariosMencionados.push(usuariosAtivos[i].id_usuario)   
-                    }
-                    respostaTop += `╠\n╚═〘 ${nome_bot?.trim()}® 〙`
-                    await socket.enviarTextoComMencoes(c, id_chat, respostaTop, usuariosMencionados)
-                } catch(err){
-                    throw err
-                }
-                break
-            
-            case "enquete":
-                try{
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
-                    let [enquetePergunta, ...enqueteOpcoes] = texto_recebido.split(",")
-                    if(enqueteOpcoes.length < 2) return await socket.responderTexto(c, id_chat, comandos_info.grupo.enquete.msgs.min_opcao , mensagem)
-                    await socket.enviarEnquete(c, id_chat, enquetePergunta, enqueteOpcoes)
-                } catch(err){
-                    throw err
-                }
-                break
-          
-            case 'aflood':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    let intervalo = 10, maxMensagem = 10, estadoNovo = !grupo.antiflood.status
-                    
-                    if(args.length == 2) [maxMensagem, intervalo] = args
-                    else if (args.length == 1) [maxMensagem] = args
-
-                    //Filtro - intervalo
-                    if(isNaN(intervalo) || intervalo < 10 || intervalo > 60){
-                        return await socket.responderTexto(c, id_chat, comandos_info.grupo.aflood.msgs.intervalo,mensagem)
-                    }
-                    //Filtro - maxMensagem
-                    if(isNaN(maxMensagem) || maxMensagemInserido < 5 || maxMensagemInserido > 20){
-                        return socket.responderTexto(c, id_chat, comandos_info.grupo.aflood.msgs.max,mensagem)
-                    }
-
-                    if(estadoNovo) {
-                        await grupos.alterarAntiFlood(id_grupo, true, maxMensagem, intervalo)
-                        await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.aflood.msgs.ligado, maxMensagem, intervalo), mensagem)
-                    } else {
-                        await grupos.alterarAntiFlood(id_grupo, false)
-                        await socket.responderTexto(c, id_chat,  comandos_info.grupo.aflood.msgs.desligado, mensagem)
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-            
-            case "bcmd":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) ,mensagem)
-                    let usuarioComandos = args, respostaBloqueio = await grupos.bloquearComandosGrupo(usuarioComandos, id_grupo, botInfo)
-                    await socket.responderTexto(c, id_chat, respostaBloqueio, mensagem)
-                } catch(err){
-                    throw err
-                }   
-                break
-            
-            case "dcmd":
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo),mensagem)
-                    let usuarioComandos = args, respostaDesbloqueio = await grupos.desbloquearComandosGrupo(usuarioComandos, id_grupo, botInfo)
-                    await socket.responderTexto(c, id_chat, respostaDesbloqueio, mensagem)
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'link':
-                try{
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
-                    let linkConvite = await socket.obterLinkGrupo(c, id_grupo)
-                    let nome = grupo.nome
-                    await socket.enviarLinkComPrevia(c, id_chat, criarTexto(comandos_info.grupo.link.msgs.resposta, nome, linkConvite))
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'adms':
-                try{
-                    let usuarioTexto = texto_recebido
-                    let respostaMarcar = criarTexto(comandos_info.grupo.adms.msgs.resposta_titulo, admins.length)
-                    if(usuarioTexto.length > 0) respostaMarcar += criarTexto(comandos_info.grupo.adms.msgs.mensagem, usuarioTexto)
-                    for (let adm of admins) {
-                        respostaMarcar += criarTexto(comandos_info.grupo.adms.msgs.resposta_itens, mencaoNumero(adm))
-                    }
-                    let mensagemAlvo = mensagem_citada ? citacao.mensagem : mensagem
-                    await socket.responderComMencoes(c, id_chat, respostaMarcar, admins, mensagemAlvo)
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case "dono":
-                try{
-                    if(dono) await socket.responderComMencoes(c, id_chat, criarTexto(comandos_info.grupo.dono.msgs.resposta, mencaoNumero(dono)), [dono], mensagem)
-                    else await socket.responderTexto(c, id_chat, comandos_info.grupo.dono.msgs.sem_dono, mensagem)
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'mt':
-            case 'mm':
-            case 'rt':
-            case 'mta':
-                try {
-                    await handlersMencoes[comandoSemPrefixo]({
-                        c,
-                        id_chat,
-                        participantes,
-                        numero_bot: botsJid,
-                        admins,
-                        texto_recebido,
-                        comandos_info,
-                        mensagem,
-                        comandoSemPrefixo,
-                        mensagem_citada,
-                        citacao
-                    })
-                } catch (err) {
-                    throw err
-                }
-                break
-
-            case 'bantodos':
-                try{
-                    let verificarDono = remetente == dono
-                    if (!verificarDono) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_dono_grupo, mensagem)           
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    for(let membro of participantes){
-                        if (!admins.includes(membro)) await socket.removerParticipante(c, id_grupo, membro)
-                    }
-                    await socket.responderTexto(c, id_chat, comandos_info.grupo.bantodos.msgs.sucesso, mensagem)
-                } catch(err){
-                    throw err
-                }
-                break  
-            
-            case 'add':
-                try{
-                    //if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    if (!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    let usuarioNumeros = texto_recebido.split(",")
-                    for(let numero of usuarioNumeros){
-                        let numeroCompleto = numero.trim().replace(/\W+/g,"")+"@s.whatsapp.net"
-                        await socket.adicionarParticipante(c, id_chat, numeroCompleto).then(async (res)=>{
-                            if (res.status != 200) await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.add_erro, mencaoNumero(numeroCompleto)), mensagem)
-                        })
-                        .catch(async ()=>{
-                            await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.numero_invalido, mencaoNumero(numeroCompleto)), mensagem)
-                        })
-                    }
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'ban':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    let usuariosSelecionados = []
-                    if(mencionados.length === 0 && mensagem_citada) usuariosSelecionados.push(citacao.remetente)
-                    else if(mencionados.length > 0) usuariosSelecionados = mencionados
-                    else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    let idParticipantesAtuais = participantes
-                    for(let usuario of usuariosSelecionados){
-                        if(idParticipantesAtuais.includes(usuario)){
-                            if(!admins.includes(usuario)){
-                                await socket.removerParticipante(c, id_grupo, usuario).then(async ()=>{
-                                    if(usuariosSelecionados.length === 1) {
-                                        await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(usuario), comandos_info.grupo.ban.msgs.motivo, nome_usuario))
-                                    }
-                                })
-                            } else {
-                                if(usuariosSelecionados.length === 1) await socket.responderTexto(c, id_chat, comandos_info.grupo.ban.msgs.banir_admin, mensagem)
-                            }
-                        } else {
-                            if(usuariosSelecionados.length === 1) await socket.responderTexto(c, id_chat, comandos_info.grupo.ban.msgs.banir_erro, mensagem)
-                        }
-                    }   
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'voteban':
-            case 'votar':
-                try {
-                    if (!bot_admin) {
-                        return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    }
-                    const {
-                        obterVotoBan,
-                        iniciarVotoBan,
-                        registrarVotoBan,
-                        cancelarVotoBan,
-                        segundosRestantes,
-                        listaVotantes
-                    } = await import('../lib/votoBan.js')
-                    const msgsVb = comandos_info.grupo.voteban.msgs
-                    const arg = String(texto_recebido || '').trim().toLowerCase()
-
-                    if (['cancelar', 'cancel', 'parar', 'stop'].includes(arg)) {
-                        if (!usuario_admin && !mensagem_dono) {
-                            return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                        }
-                        const havia = cancelarVotoBan(id_grupo)
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            havia ? msgsVb.cancelada : msgsVb.sem_votacao,
-                            mensagem
-                        )
-                    }
-
-                    if (['status', 'ver', 'info'].includes(arg)) {
-                        const atual = obterVotoBan(id_grupo)
-                        if (!atual) return await socket.responderTexto(c, id_chat, msgsVb.sem_votacao, mensagem)
-                        return await socket.enviarTextoComMencoes(
-                            c,
-                            id_chat,
-                            criarTexto(
-                                msgsVb.status,
-                                mencaoNumero(atual.alvo),
-                                atual.votos.size,
-                                atual.votosNecessarios,
-                                segundosRestantes(atual)
-                            ),
-                            [atual.alvo, ...listaVotantes(atual)]
-                        )
-                    }
-
-                    // Sem alvo: tenta votar na votação aberta
-                    let alvo = null
-                    if (mencionados.length > 0) alvo = mencionados[0]
-                    else if (mensagem_citada && citacao?.remetente) alvo = citacao.remetente
-
-                    const aberta = obterVotoBan(id_grupo)
-
-                    // Só "!voteban" / "!votar" → registra voto
-                    if (!alvo && comandoSemPrefixo === 'votar') {
-                        if (!aberta) return await socket.responderTexto(c, id_chat, msgsVb.sem_votacao, mensagem)
-                        const res = registrarVotoBan(id_grupo, remetente)
-                        if (!res.ok && res.erro === 'ja_votou') {
-                            return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
-                        }
-                        if (!res.ok && res.erro === 'alvo') {
-                            return await socket.responderTexto(c, id_chat, msgsVb.voto_alvo, mensagem)
-                        }
-                        if (res.atingiu) {
+        {
+        const HANDLERS_GRUPO = {
+    "statusgrupo": async () => {
+        try {
+                            const { publicarStatusGrupo } = await import('../lib/statusGrupo.js')
+                            const enviada = await publicarStatusGrupo(c, mensagemBaileys)
                             try {
-                                await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+                                const { MensagemControle } = await import('../controles/MensagemControle.js')
+                                await new MensagemControle().armazenarMensagem(enviada)
+                            } catch { /* publicação já enviada; cache de retry é secundário */ }
+                            await socket.responderTexto(c, id_chat, '📤 Solicitação de status enviada ao WhatsApp. Confira se apareceu no status deste grupo.', mensagem)
+                        } catch (err) {
+                            consoleErro(err, 'STATUS GRUPO')
+                            const validacao = /^(Esse recurso|Responda|Escolha|O bot ainda|Não consegui baixar|A mensagem respondida|Por enquanto|Atualize as dependências)/.test(err.message || '')
+                            await socket.responderTexto(c, id_chat, mensagemErroStatusGrupo(err) || (validacao ? err.message : 'Não consegui publicar no status do grupo. Confira o erro no terminal do bot. [SG_INTERNO]'), mensagem)
+                        }
+                        return
+    },
+    "regras": async () => {
+        try{
+                            let grupoDescricao = grupo.descricao || comandos_info.grupo.regras.msgs.sem_descrição
+                            await socket.obterFotoPerfil(c, id_grupo).then(async (grupoFoto)=>{
+                                await socket.responderArquivoUrl(c, tiposMensagem.imagem, id_chat, grupoFoto, grupoDescricao, mensagem)
+                            }).catch(async ()=>{
+                                await socket.responderTexto(c, id_chat, grupoDescricao, mensagem)
+                            })
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "fotogrupo": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            if(mensagem_midia || mensagem_citada){
+                                let dadosMensagem = {
+                                    tipo : (mensagem_midia) ? tipo : citacao.tipo,
+                                    mimetype : (mensagem_midia)? mimetype : citacao.mimetype,
+                                    mensagem: (mensagem_midia) ? mensagem : citacao.mensagem
+                                }
+                                if(dadosMensagem.tipo == tiposMensagem.imagem){
+                                    let fotoBuffer = await downloadMediaMessage(dadosMensagem.mensagem, "buffer")
+                                    await socket.alterarFotoPerfil(c, id_chat, fotoBuffer)
+                                    await socket.responderTexto(c, id_chat, comandos_info.grupo.fotogrupo.msgs.sucesso, mensagem)
+                                } else {
+                                    return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
+                                }
+                            } else {
+                                return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "painel": async () => {
+        try {
+                            if (!usuario_admin) {
+                                return await socket.responderTexto(
+                                    c,
+                                    id_chat,
+                                    comandos_info.outros.permissao.apenas_admin,
+                                    mensagem
+                                )
+                            }
+                            const {
+                                montarDumpGrupo,
+                                fatiarPainel,
+                                aplicarTogglePainel
+                            } = await import('../lib/painelGrupo.js')
+                            const argsPainel = String(texto_recebido || '').trim()
+                            if (argsPainel) {
+                                const r = await aplicarTogglePainel(id_grupo, grupo, argsPainel, botInfo)
+                                return await socket.responderTexto(c, id_chat, r.msg, mensagem)
+                            }
+                            const dump = await montarDumpGrupo(grupo, botInfo)
+                            for (const parte of fatiarPainel(dump)) {
+                                await socket.enviarTexto(c, id_chat, parte)
+                            }
+                        } catch (err) {
+                            throw err
+                        }
+                        return
+    },
+    "bv": async () => {
+        try{
+                            if (!usuario_admin) return socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            let estadoNovo = !grupo.bemvindo.status
+                            if (estadoNovo) {
+                                let usuarioMensagem = texto_recebido
+                                await grupos.alterarBemVindo(id_grupo, true, usuarioMensagem)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.bv.msgs.ligado, mensagem)
+                            } else {
+                                await grupos.alterarBemVindo(id_grupo, false)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.bv.msgs.desligado, mensagem)
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        
+                        return
+    },
+    "addlista": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            let blista_numero
+                            if(mensagem_citada) blista_numero = citacao.remetente
+                            else if(mencionados.length) blista_numero = mencionados[0]
+                            else if(args.length) blista_numero = texto_recebido.replace(/\W+/g,"")+"@s.whatsapp.net"
+                            else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            if(blista_numero == numero_bot) return await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.bot_erro , mensagem)
+                            else if(admins.includes(blista_numero)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.admin_erro , mensagem)
+                            let blista_grupo_lista = await grupos.obterListaNegra(id_grupo)
+                            if(blista_grupo_lista.includes(blista_numero)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.ja_listado, mensagem)
+                            await grupos.adicionarUsuarioListaNegra(id_grupo, blista_numero)
+                            await socket.responderTexto(c, id_chat, comandos_info.grupo.addlista.msgs.sucesso, mensagem)
+                            if(participantes.includes(blista_numero)) await socket.removerParticipante(c, id_chat, blista_numero)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "remlista": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            let dlista_numero = texto_recebido.replace(/\W+/g,"")+"@s.whatsapp.net"
+                            let dlista_grupo_lista = await grupos.obterListaNegra(id_grupo)
+                            if(!dlista_grupo_lista.includes(dlista_numero)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.remlista.msgs.nao_listado, mensagem)
+                            await grupos.removerUsuarioListaNegra(id_grupo, dlista_numero)
+                            await socket.responderTexto(c, id_chat, comandos_info.grupo.remlista.msgs.sucesso, mensagem)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "listanegra": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            let lista_negra_grupo = await grupos.obterListaNegra(id_grupo), resposta_listanegra = comandos_info.grupo.listanegra.msgs.resposta_titulo
+                            if(lista_negra_grupo.length == 0) return await socket.responderTexto(c, id_chat, comandos_info.grupo.listanegra.msgs.lista_vazia, mensagem)
+                            for(let usuario_lista of lista_negra_grupo){
+                                resposta_listanegra += criarTexto(comandos_info.grupo.listanegra.msgs.resposta_itens, mencaoNumero(usuario_lista))
+                            }
+                            resposta_listanegra += `╠\n╚═〘 ${nome_bot?.trim()}®〙`
+                            await socket.enviarTexto(c, id_chat, resposta_listanegra)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "alink": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c,id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            let estadoNovo = !grupo.antilink
+                            if (estadoNovo) {
+                                await grupos.alterarAntiLink(id_grupo, true)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.alink.msgs.ligado, mensagem)
+                            } else {
+                                await grupos.alterarAntiLink(id_grupo, false)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.alink.msgs.desligado, mensagem)
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "autosticker": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            let estadoNovo = !grupo.autosticker
+                            if (estadoNovo) {
+                                await grupos.alterarAutoSticker(id_grupo, true)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.autosticker.msgs.ligado, mensagem)
+                            } else {
+                                await grupos.alterarAutoSticker(id_grupo, false)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.autosticker.msgs.desligado, mensagem)
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "automsg": async () => {
+        try {
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            const arg = String(texto_recebido || args[0] || '').toLowerCase().trim()
+                            const atual = grupo.automsg !== false
+                            let ligar
+                            if (arg === 'ativar' || arg === 'on' || arg === 'liga' || arg === 'ligar') ligar = true
+                            else if (arg === 'desativar' || arg === 'off' || arg === 'desliga' || arg === 'desligar') ligar = false
+                            else ligar = !atual
+                            await grupos.alterarAutoMsg(id_grupo, ligar)
+                            await socket.responderTexto(
+                                c,
+                                id_chat,
+                                ligar ? comandos_info.grupo.automsg.msgs.ligado : comandos_info.grupo.automsg.msgs.desligado,
+                                mensagem
+                            )
+                        } catch (err) {
+                            throw err
+                        }
+                        return
+    },
+    "ofensa": async () => {
+        try {
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            const argOf = String(texto_recebido || args[0] || '').toLowerCase().trim()
+                            const atualOf = grupo.ofensa !== false
+                            let ligarOf
+                            if (argOf === 'ativar' || argOf === 'on' || argOf === 'liga' || argOf === 'ligar') ligarOf = true
+                            else if (argOf === 'desativar' || argOf === 'off' || argOf === 'desliga' || argOf === 'desligar') ligarOf = false
+                            else {
+                                // Sem on/off: só mostra status (não alterna — evita desligar sem querer)
+                                return await socket.responderTexto(
+                                    c,
+                                    id_chat,
+                                    atualOf
+                                        ? `🔥 OFENSA está *ligada* neste grupo.\nUse *${prefixo}ofensa off* pra desligar.`
+                                        : `🔥 OFENSA está *desligada* neste grupo.\nUse *${prefixo}ofensa on* pra ligar.`,
+                                    mensagem
+                                )
+                            }
+                            await grupos.alterarOfensa(id_grupo, ligarOf)
+                            await socket.responderTexto(
+                                c,
+                                id_chat,
+                                ligarOf ? comandos_info.grupo.ofensa.msgs.ligado : comandos_info.grupo.ofensa.msgs.desligado,
+                                mensagem
+                            )
+                        } catch (err) {
+                            throw err
+                        }
+                        return
+    },
+    "revelar": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!mensagem_citada) {
+                                return await socket.responderTexto(
+                                    c,
+                                    id_chat,
+                                    `Responda uma *visualização única* com *${prefixo}revelar*.\n` +
+                                    `Obs: o bot já tenta reenviar sozinho quando a VO chega.`,
+                                    mensagem
+                                )
+                            }
+                            const { revelarPorCitacao, ehViewOnce } = await import('../lib/revelar.js')
+                            const pareceVo = !!(
+                                citacao?.mensagem_vunica ||
+                                ehViewOnce(citacao?.quoteOriginal) ||
+                                ehViewOnce(citacao?.conteudo) ||
+                                citacao?.midia?.viewOnce
+                            )
+                            if (!pareceVo && !citacao?.midia) {
+                                return await socket.responderTexto(
+                                    c,
+                                    id_chat,
+                                    `Responda uma *visualização única* com *${prefixo}revelar*.`,
+                                    mensagem
+                                )
+                            }
+                            const res = await revelarPorCitacao(c, citacao, id_chat, mensagem)
+                            if (!res?.ok) {
+                                return await socket.responderTexto(
+                                    c,
+                                    id_chat,
+                                    'Não consegui revelar essa mídia (quote sem chave/url). Peça pra reenviar a VO.',
+                                    mensagem
+                                )
+                            }
+                        } catch(err){
+                            consoleErro(err, 'REVELAR')
+                            await socket.responderTexto(
+                                c,
+                                id_chat,
+                                'Não consegui revelar essa mensagem.',
+                                mensagem
+                            )
+                        }
+                        return
+    },
+    "rlink": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat,comandos_info.outros.permissao.bot_admin, mensagem)
+                            await socket.revogarLinkGrupo(c, id_grupo).then(async ()=>{
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.rlink.msgs.sucesso ,mensagem)}
+                            ).catch(async ()=>{
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.rlink.msgs.erro ,mensagem)
+                            })
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "mutar": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            let estadoNovo = !grupo.mutar
+                            if (estadoNovo) {
+                                await grupos.alterarMutar(id_grupo)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.mutar.msgs.ligado, mensagem)
+                            } else {
+                                await grupos.alterarMutar(id_grupo,false)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.mutar.msgs.desligado, mensagem)
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "shh": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+        
+                            let alvo = null
+                            if (mencionados?.length) alvo = mencionados[0]
+                            else if (mensagem_citada && citacao?.remetente) alvo = citacao.remetente
+                            if (!alvo) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+        
+                            const aliases = await grupos.resolverAliasesShh(
+                                c,
+                                id_grupo,
+                                alvo,
+                                ...(mencionados || []),
+                                citacao?.remetente
+                            )
+        
+                            if (listaContemJid(botsJid, ...aliases)) {
+                                return await socket.responderTexto(c, id_chat, comandos_info.grupo.shh.msgs.erro_bot, mensagem)
+                            }
+                            if (dono && listaContemJid([dono], ...aliases)) {
+                                return await socket.responderTexto(c, id_chat, comandos_info.grupo.shh.msgs.erro_dono, mensagem)
+                            }
+        
+                            const tokens = (args || []).filter((a) => {
+                                const t = String(a || '').trim()
+                                if (!t) return false
+                                if (t.startsWith('@')) return false
+                                if (listaContemJid(aliases, t) || listaContemJid(aliases, `${t.replace(/\D/g, '')}@s.whatsapp.net`)) return false
+                                return true
+                            })
+                            const acao = String(tokens[0] || '').toLowerCase()
+        
+                            if (acao === 'off' || acao === 'desligar' || acao === 'cancelar') {
+                                const removeu = await grupos.dessilenciarMembro(id_grupo, alvo, aliases)
+                                const msg = removeu
+                                    ? criarTexto(comandos_info.grupo.shh.msgs.off, mencaoNumero(alvo))
+                                    : criarTexto(comandos_info.grupo.shh.msgs.nao_silenciado, mencaoNumero(alvo))
+                                return await socket.enviarTextoComMencoes(c, id_chat, msg, [alvo])
+                            }
+        
+                            let minutos = null
+                            if (acao) {
+                                if (!/^\d+$/.test(acao)) {
+                                    return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                                }
+                                const n = parseInt(acao, 10)
+                                if (!Number.isFinite(n) || n < 1) {
+                                    return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                                }
+                                minutos = n
+                            }
+        
+                            const { ate } = await grupos.silenciarMembro(id_grupo, alvo, minutos, aliases)
+                            const tag = mencaoNumero(alvo)
+                            if (ate == null) {
+                                await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(comandos_info.grupo.shh.msgs.ligado_eterno, tag),
+                                    [alvo]
+                                )
+                            } else {
+                                await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(comandos_info.grupo.shh.msgs.ligado_tempo, tag, String(minutos)),
+                                    [alvo]
+                                )
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "contador": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            let estadoNovo = !grupo.contador.status
+                            let membrosAtuais = grupo.participantes
+                            if (estadoNovo) {
+                                await grupos.alterarContador(id_grupo)
+                                await grupos.registrarContagemGrupo(id_grupo, membrosAtuais)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.contador.msgs.ligado, mensagem)
+                            } else {
+                                await grupos.alterarContador(id_grupo, false)
+                                await grupos.removerContagemGrupo(id_grupo)
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.contador.msgs.desligado, mensagem)
+                            } 
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "atividade": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.atividade.msgs.erro_contador, mensagem)
+                            let atividadeUsuario
+                            if(mensagem_citada){
+                                atividadeUsuario = await grupos.obterAtividadeParticipante(id_grupo, citacao.remetente)
+                                if(!atividadeUsuario) return await socket.responderTexto(c, id_chat, comandos_info.grupo.atividade.msgs.fora_grupo, mensagem)
+                            } else if (mencionados.length === 1){
+                                atividadeUsuario = await grupos.obterAtividadeParticipante(id_grupo, mencionados[0])
+                                if(!atividadeUsuario) return await socket.responderTexto(c, id_chat, comandos_info.grupo.atividade.msgs.fora_grupo, mensagem)
+                            } else {
+                                return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            }
+                            let atividadeResposta = criarTexto(comandos_info.grupo.atividade.msgs.resposta, atividadeUsuario.msg, atividadeUsuario.texto, atividadeUsuario.imagem, atividadeUsuario.video, atividadeUsuario.sticker, atividadeUsuario.audio, atividadeUsuario.outro)
+                            await socket.responderTexto(c, id_chat, atividadeResposta, mensagem)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "alterarcont": async () => {
+        if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                        if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                        if(args.length == 1)  return client.reply(from, erroComandoMsg(command), id)
+                        // Alterar quantidade de mensagens enviadas pelo membro selecionado
+                        let [idUsuario, qtdMensagens] = args
+                        if(isNaN(qtdMensagens)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.alterarcont.msgs.erro_qtd, mensagem)
+                        await grupos.alterarContagemParticipante(id_grupo, idUsuario, qtdMensagens)
+                        await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.alterarcont.msgs.sucesso, qtdMensagens, idUsuario), mensagem)
+                        return
+    },
+    "imarcar": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
+                            let qtdMensagem = texto_recebido
+                            if(isNaN(qtdMensagem)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.erro_qtd , mensagem)
+                            if(qtdMensagem < 1 || qtdMensagem > 200) return await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.limite_qtd, mensagem)
+                            if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.erro_contador, mensagem)
+                            let usuariosInativos = await grupos.obterParticipantesInativos(id_grupo, qtdMensagem)
+                            let qtdInativos = usuariosInativos.length
+                            if(qtdInativos > 0){
+                                let mencionarUsuarios = []
+                                let inativosResposta = criarTexto(comandos_info.grupo.imarcar.msgs.resposta_titulo, qtdMensagem, qtdInativos)
+                                inativosResposta += `═════════════════\n╠\n`
+                                for(let usuario of usuariosInativos){
+                                    inativosResposta += criarTexto(comandos_info.grupo.imarcar.msgs.resposta_itens, mencaoNumero(usuario.id_usuario), usuario.msg)
+                                    mencionarUsuarios.push(usuario.id_usuario)
+                                }
+                                inativosResposta += `╠\n╚═〘 ${nome_bot?.trim()}® 〙`
+                                await socket.enviarTextoComMencoes(c, id_chat, inativosResposta, mencionarUsuarios)
+                            } else {
+                                await socket.responderTexto(c, id_chat, comandos_info.grupo.imarcar.msgs.sem_inativo, mensagem)
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "ibanir": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            let qtdMensagem = texto_recebido
+                            if(isNaN(qtdMensagem)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.erro_qtd , mensagem)
+                            if(qtdMensagem < 1 || qtdMensagem > 200) return await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.limite_qtd, mensagem)
+                            if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.erro_contador , mensagem)
+                            let usuariosInativos = await grupos.obterParticipantesInativos(id_grupo, qtdMensagem), usuariosBanidos = 0
+                            if(usuariosInativos.length){
+                                for(let usuario of usuariosInativos){
+                                    if(!admins.includes(usuario.id_usuario) && usuario.id_usuario != numero_bot){
+                                        await socket.removerParticipante(c, id_chat, usuario.id_usuario)
+                                        usuariosBanidos++
+                                    }
+                                }
+                            } 
+                            if(usuariosBanidos) await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.ibanir.msgs.sucesso, usuariosBanidos, qtdMensagem), mensagem)
+                            else await socket.responderTexto(c, id_chat, comandos_info.grupo.ibanir.msgs.sem_inativo, mensagem)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "topativos": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
+                            let qtdUsuarios = texto_recebido
+                            if(isNaN(qtdUsuarios)) return await socket.responderTexto(c, id_chat, comandos_info.grupo.topativos.msgs.erro_qtd , mensagem)
+                            if(qtdUsuarios < 1 || qtdUsuarios > 200) return await socket.responderTexto(c, id_chat, comandos_info.grupo.topativos.msgs.limite_qtd , mensagem)
+                            if(!grupo.contador.status) return await socket.responderTexto(c, id_chat, comandos_info.grupo.topativos.msgs.erro_contador , mensagem)
+                            let usuariosAtivos = await grupos.obterParticipantesAtivos(id_grupo, qtdUsuarios)
+                            let usuariosMencionados = []
+                            let respostaTop = criarTexto(comandos_info.grupo.topativos.msgs.resposta_titulo, qtdUsuarios)
+                            for (let i = 0 ; i < usuariosAtivos.length ; i++){
+                                let medalha = ''
+                                switch(i+1){
+                                    case 1:
+                                        medalha = '🥇'
+                                    break
+                                    case 2:
+                                        medalha = '🥈'
+                                    break
+                                    case 3:
+                                        medalha = '🥉'
+                                    break
+                                    default:
+                                        medalha = ''
+                                }
+                                respostaTop += criarTexto(comandos_info.grupo.topativos.msgs.resposta_itens, medalha, i+1, mencaoNumero(usuariosAtivos[i].id_usuario), usuariosAtivos[i].msg)
+                                usuariosMencionados.push(usuariosAtivos[i].id_usuario)   
+                            }
+                            respostaTop += `╠\n╚═〘 ${nome_bot?.trim()}® 〙`
+                            await socket.enviarTextoComMencoes(c, id_chat, respostaTop, usuariosMencionados)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "enquete": async () => {
+        try{
+                            if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) , mensagem)
+                            let [enquetePergunta, ...enqueteOpcoes] = texto_recebido.split(",")
+                            if(enqueteOpcoes.length < 2) return await socket.responderTexto(c, id_chat, comandos_info.grupo.enquete.msgs.min_opcao , mensagem)
+                            await socket.enviarEnquete(c, id_chat, enquetePergunta, enqueteOpcoes)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "aflood": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            let intervalo = 10, maxMensagem = 10, estadoNovo = !grupo.antiflood.status
+                            
+                            if(args.length == 2) [maxMensagem, intervalo] = args
+                            else if (args.length == 1) [maxMensagem] = args
+        
+                            //Filtro - intervalo
+                            if(isNaN(intervalo) || intervalo < 10 || intervalo > 60){
+                                return await socket.responderTexto(c, id_chat, comandos_info.grupo.aflood.msgs.intervalo,mensagem)
+                            }
+                            //Filtro - maxMensagem
+                            if(isNaN(maxMensagem) || maxMensagemInserido < 5 || maxMensagemInserido > 20){
+                                return socket.responderTexto(c, id_chat, comandos_info.grupo.aflood.msgs.max,mensagem)
+                            }
+        
+                            if(estadoNovo) {
+                                await grupos.alterarAntiFlood(id_grupo, true, maxMensagem, intervalo)
+                                await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.aflood.msgs.ligado, maxMensagem, intervalo), mensagem)
+                            } else {
+                                await grupos.alterarAntiFlood(id_grupo, false)
+                                await socket.responderTexto(c, id_chat,  comandos_info.grupo.aflood.msgs.desligado, mensagem)
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "bcmd": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo) ,mensagem)
+                            let usuarioComandos = args, respostaBloqueio = await grupos.bloquearComandosGrupo(usuarioComandos, id_grupo, botInfo)
+                            await socket.responderTexto(c, id_chat, respostaBloqueio, mensagem)
+                        } catch(err){
+                            throw err
+                        }   
+                        return
+    },
+    "dcmd": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            if(!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo),mensagem)
+                            let usuarioComandos = args, respostaDesbloqueio = await grupos.desbloquearComandosGrupo(usuarioComandos, id_grupo, botInfo)
+                            await socket.responderTexto(c, id_chat, respostaDesbloqueio, mensagem)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "link": async () => {
+        try{
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin , mensagem)
+                            let linkConvite = await socket.obterLinkGrupo(c, id_grupo)
+                            let nome = grupo.nome
+                            await socket.enviarLinkComPrevia(c, id_chat, criarTexto(comandos_info.grupo.link.msgs.resposta, nome, linkConvite))
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "adms": async () => {
+        try{
+                            let usuarioTexto = texto_recebido
+                            let respostaMarcar = criarTexto(comandos_info.grupo.adms.msgs.resposta_titulo, admins.length)
+                            if(usuarioTexto.length > 0) respostaMarcar += criarTexto(comandos_info.grupo.adms.msgs.mensagem, usuarioTexto)
+                            for (let adm of admins) {
+                                respostaMarcar += criarTexto(comandos_info.grupo.adms.msgs.resposta_itens, mencaoNumero(adm))
+                            }
+                            let mensagemAlvo = mensagem_citada ? citacao.mensagem : mensagem
+                            await socket.responderComMencoes(c, id_chat, respostaMarcar, admins, mensagemAlvo)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "dono": async () => {
+        try{
+                            if(dono) await socket.responderComMencoes(c, id_chat, criarTexto(comandos_info.grupo.dono.msgs.resposta, mencaoNumero(dono)), [dono], mensagem)
+                            else await socket.responderTexto(c, id_chat, comandos_info.grupo.dono.msgs.sem_dono, mensagem)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "mt": async () => {
+        try {
+                            await handlersMencoes[comandoSemPrefixo]({
+                                c,
+                                id_chat,
+                                participantes,
+                                numero_bot: botsJid,
+                                admins,
+                                texto_recebido,
+                                comandos_info,
+                                mensagem,
+                                comandoSemPrefixo,
+                                mensagem_citada,
+                                citacao
+                            })
+                        } catch (err) {
+                            throw err
+                        }
+                        return
+    },
+    "bantodos": async () => {
+        try{
+                            let verificarDono = remetente == dono
+                            if (!verificarDono) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_dono_grupo, mensagem)           
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            for(let membro of participantes){
+                                if (!admins.includes(membro)) await socket.removerParticipante(c, id_grupo, membro)
+                            }
+                            await socket.responderTexto(c, id_chat, comandos_info.grupo.bantodos.msgs.sucesso, mensagem)
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "add": async () => {
+        try{
+                            //if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            if (!args.length) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            let usuarioNumeros = texto_recebido.split(",")
+                            for(let numero of usuarioNumeros){
+                                let numeroCompleto = numero.trim().replace(/\W+/g,"")+"@s.whatsapp.net"
+                                await socket.adicionarParticipante(c, id_chat, numeroCompleto).then(async (res)=>{
+                                    if (res.status != 200) await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.add_erro, mencaoNumero(numeroCompleto)), mensagem)
+                                })
+                                .catch(async ()=>{
+                                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.grupo.add.msgs.numero_invalido, mencaoNumero(numeroCompleto)), mensagem)
+                                })
+                            }
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "ban": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            let usuariosSelecionados = []
+                            if(mencionados.length === 0 && mensagem_citada) usuariosSelecionados.push(citacao.remetente)
+                            else if(mencionados.length > 0) usuariosSelecionados = mencionados
+                            else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            let idParticipantesAtuais = participantes
+                            for(let usuario of usuariosSelecionados){
+                                if(idParticipantesAtuais.includes(usuario)){
+                                    if(!admins.includes(usuario)){
+                                        await socket.removerParticipante(c, id_grupo, usuario).then(async ()=>{
+                                            if(usuariosSelecionados.length === 1) {
+                                                await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.outros.resposta_ban, mencaoNumero(usuario), comandos_info.grupo.ban.msgs.motivo, nome_usuario))
+                                            }
+                                        })
+                                    } else {
+                                        if(usuariosSelecionados.length === 1) await socket.responderTexto(c, id_chat, comandos_info.grupo.ban.msgs.banir_admin, mensagem)
+                                    }
+                                } else {
+                                    if(usuariosSelecionados.length === 1) await socket.responderTexto(c, id_chat, comandos_info.grupo.ban.msgs.banir_erro, mensagem)
+                                }
+                            }   
+                        } catch(err){
+                            throw err
+                        }
+                        return
+    },
+    "voteban": async () => {
+        try {
+                            if (!bot_admin) {
+                                return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            }
+                            const {
+                                obterVotoBan,
+                                iniciarVotoBan,
+                                registrarVotoBan,
+                                cancelarVotoBan,
+                                segundosRestantes,
+                                listaVotantes
+                            } = await import('../lib/votoBan.js')
+                            const msgsVb = comandos_info.grupo.voteban.msgs
+                            const arg = String(texto_recebido || '').trim().toLowerCase()
+        
+                            if (['cancelar', 'cancel', 'parar', 'stop'].includes(arg)) {
+                                if (!usuario_admin && !mensagem_dono) {
+                                    return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                                }
+                                const havia = cancelarVotoBan(id_grupo)
+                                return await socket.responderTexto(
+                                    c,
+                                    id_chat,
+                                    havia ? msgsVb.cancelada : msgsVb.sem_votacao,
+                                    mensagem
+                                )
+                            }
+        
+                            if (['status', 'ver', 'info'].includes(arg)) {
+                                const atual = obterVotoBan(id_grupo)
+                                if (!atual) return await socket.responderTexto(c, id_chat, msgsVb.sem_votacao, mensagem)
                                 return await socket.enviarTextoComMencoes(
                                     c,
                                     id_chat,
-                                    criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                    criarTexto(
+                                        msgsVb.status,
+                                        mencaoNumero(atual.alvo),
+                                        atual.votos.size,
+                                        atual.votosNecessarios,
+                                        segundosRestantes(atual)
+                                    ),
+                                    [atual.alvo, ...listaVotantes(atual)]
+                                )
+                            }
+        
+                            // Sem alvo: tenta votar na votação aberta
+                            let alvo = null
+                            if (mencionados.length > 0) alvo = mencionados[0]
+                            else if (mensagem_citada && citacao?.remetente) alvo = citacao.remetente
+        
+                            const aberta = obterVotoBan(id_grupo)
+        
+                            // Só "!voteban" / "!votar" → registra voto
+                            if (!alvo && comandoSemPrefixo === 'votar') {
+                                if (!aberta) return await socket.responderTexto(c, id_chat, msgsVb.sem_votacao, mensagem)
+                                const res = registrarVotoBan(id_grupo, remetente)
+                                if (!res.ok && res.erro === 'ja_votou') {
+                                    return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
+                                }
+                                if (!res.ok && res.erro === 'alvo') {
+                                    return await socket.responderTexto(c, id_chat, msgsVb.voto_alvo, mensagem)
+                                }
+                                if (res.atingiu) {
+                                    try {
+                                        await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+                                        return await socket.enviarTextoComMencoes(
+                                            c,
+                                            id_chat,
+                                            criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                            [res.voto.alvo]
+                                        )
+                                    } catch {
+                                        return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
+                                    }
+                                }
+                                return await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(
+                                        msgsVb.voto_ok,
+                                        mencaoNumero(res.voto.alvo),
+                                        res.voto.votos.size,
+                                        res.voto.votosNecessarios,
+                                        segundosRestantes(res.voto)
+                                    ),
                                     [res.voto.alvo]
                                 )
-                            } catch {
-                                return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
                             }
-                        }
-                        return await socket.enviarTextoComMencoes(
-                            c,
-                            id_chat,
-                            criarTexto(
-                                msgsVb.voto_ok,
-                                mencaoNumero(res.voto.alvo),
-                                res.voto.votos.size,
-                                res.voto.votosNecessarios,
-                                segundosRestantes(res.voto)
-                            ),
-                            [res.voto.alvo]
-                        )
-                    }
-
-                    // Inicia ou vota na mesma pessoa
-                    if (!alvo) {
-                        if (aberta) {
-                            // !voteban sem menção = votar na aberta
-                            const res = registrarVotoBan(id_grupo, remetente)
-                            if (!res.ok && res.erro === 'ja_votou') {
-                                return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
-                            }
-                            if (res.atingiu) {
-                                try {
-                                    await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+        
+                            // Inicia ou vota na mesma pessoa
+                            if (!alvo) {
+                                if (aberta) {
+                                    // !voteban sem menção = votar na aberta
+                                    const res = registrarVotoBan(id_grupo, remetente)
+                                    if (!res.ok && res.erro === 'ja_votou') {
+                                        return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
+                                    }
+                                    if (res.atingiu) {
+                                        try {
+                                            await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+                                            return await socket.enviarTextoComMencoes(
+                                                c,
+                                                id_chat,
+                                                criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                                [res.voto.alvo]
+                                            )
+                                        } catch {
+                                            return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
+                                        }
+                                    }
                                     return await socket.enviarTextoComMencoes(
                                         c,
                                         id_chat,
-                                        criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                        criarTexto(
+                                            msgsVb.voto_ok,
+                                            mencaoNumero(res.voto.alvo),
+                                            res.voto.votos.size,
+                                            res.voto.votosNecessarios,
+                                            segundosRestantes(res.voto)
+                                        ),
                                         [res.voto.alvo]
                                     )
-                                } catch {
-                                    return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
                                 }
+                                return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            }
+        
+                            if (listaContemJid(botsJid, alvo) || alvo === numero_bot) {
+                                return await socket.responderTexto(c, id_chat, msgsVb.alvo_bot, mensagem)
+                            }
+                            if (listaContemJid(admins, alvo)) {
+                                return await socket.responderTexto(c, id_chat, msgsVb.alvo_admin, mensagem)
+                            }
+                            if (!listaContemJid(participantes, alvo)) {
+                                return await socket.responderTexto(c, id_chat, msgsVb.nao_membro, mensagem)
+                            }
+        
+                            // Já existe votação para outro alvo
+                            if (aberta && aberta.alvo !== alvo && !listaContemJid([aberta.alvo], alvo)) {
+                                return await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(
+                                        msgsVb.ja_ativa,
+                                        mencaoNumero(aberta.alvo),
+                                        aberta.votos.size,
+                                        aberta.votosNecessarios
+                                    ),
+                                    [aberta.alvo]
+                                )
+                            }
+        
+                            // Mesmo alvo aberto → só registra voto
+                            if (aberta && (aberta.alvo === alvo || listaContemJid([aberta.alvo], alvo))) {
+                                const res = registrarVotoBan(id_grupo, remetente)
+                                if (!res.ok && res.erro === 'ja_votou') {
+                                    return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
+                                }
+                                if (res.atingiu) {
+                                    try {
+                                        await socket.removerParticipante(c, id_grupo, res.voto.alvo)
+                                        return await socket.enviarTextoComMencoes(
+                                            c,
+                                            id_chat,
+                                            criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
+                                            [res.voto.alvo]
+                                        )
+                                    } catch {
+                                        return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
+                                    }
+                                }
+                                return await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(
+                                        msgsVb.voto_ok,
+                                        mencaoNumero(res.voto.alvo),
+                                        res.voto.votos.size,
+                                        res.voto.votosNecessarios,
+                                        segundosRestantes(res.voto)
+                                    ),
+                                    [res.voto.alvo]
+                                )
+                            }
+        
+                            // Novo: votos necessários = min(5, max(3, ceil(membros/4)))
+                            const membros = Math.max(1, (participantes || []).length)
+                            const neces = Math.min(5, Math.max(3, Math.ceil(membros / 4)))
+                            const ini = iniciarVotoBan({
+                                idGrupo: id_grupo,
+                                alvo,
+                                iniciador: remetente,
+                                votosNecessarios: neces,
+                                duracaoMs: 2 * 60 * 1000
+                            })
+                            if (!ini.ok) {
+                                return await socket.enviarTextoComMencoes(
+                                    c,
+                                    id_chat,
+                                    criarTexto(
+                                        msgsVb.ja_ativa,
+                                        mencaoNumero(ini.voto.alvo),
+                                        ini.voto.votos.size,
+                                        ini.voto.votosNecessarios
+                                    ),
+                                    [ini.voto.alvo]
+                                )
                             }
                             return await socket.enviarTextoComMencoes(
                                 c,
                                 id_chat,
                                 criarTexto(
-                                    msgsVb.voto_ok,
-                                    mencaoNumero(res.voto.alvo),
-                                    res.voto.votos.size,
-                                    res.voto.votosNecessarios,
-                                    segundosRestantes(res.voto)
+                                    msgsVb.iniciada,
+                                    mencaoNumero(alvo),
+                                    ini.voto.votosNecessarios,
+                                    segundosRestantes(ini.voto),
+                                    prefixo
                                 ),
-                                [res.voto.alvo]
+                                [alvo]
                             )
+                        } catch (err) {
+                            consoleErro(err, 'VOTEBAN')
+                            await socket.responderTexto(c, id_chat, 'Não consegui processar a votação agora.', mensagem)
                         }
-                        return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    }
-
-                    if (listaContemJid(botsJid, alvo) || alvo === numero_bot) {
-                        return await socket.responderTexto(c, id_chat, msgsVb.alvo_bot, mensagem)
-                    }
-                    if (listaContemJid(admins, alvo)) {
-                        return await socket.responderTexto(c, id_chat, msgsVb.alvo_admin, mensagem)
-                    }
-                    if (!listaContemJid(participantes, alvo)) {
-                        return await socket.responderTexto(c, id_chat, msgsVb.nao_membro, mensagem)
-                    }
-
-                    // Já existe votação para outro alvo
-                    if (aberta && aberta.alvo !== alvo && !listaContemJid([aberta.alvo], alvo)) {
-                        return await socket.enviarTextoComMencoes(
-                            c,
-                            id_chat,
-                            criarTexto(
-                                msgsVb.ja_ativa,
-                                mencaoNumero(aberta.alvo),
-                                aberta.votos.size,
-                                aberta.votosNecessarios
-                            ),
-                            [aberta.alvo]
-                        )
-                    }
-
-                    // Mesmo alvo aberto → só registra voto
-                    if (aberta && (aberta.alvo === alvo || listaContemJid([aberta.alvo], alvo))) {
-                        const res = registrarVotoBan(id_grupo, remetente)
-                        if (!res.ok && res.erro === 'ja_votou') {
-                            return await socket.responderTexto(c, id_chat, msgsVb.ja_votou, mensagem)
-                        }
-                        if (res.atingiu) {
-                            try {
-                                await socket.removerParticipante(c, id_grupo, res.voto.alvo)
-                                return await socket.enviarTextoComMencoes(
-                                    c,
-                                    id_chat,
-                                    criarTexto(msgsVb.banido, mencaoNumero(res.voto.alvo), res.voto.votosNecessarios),
-                                    [res.voto.alvo]
-                                )
-                            } catch {
-                                return await socket.responderTexto(c, id_chat, msgsVb.banir_erro, mensagem)
+                        return
+    },
+    "promover": async () => {
+        try{
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            if (!usuario_admin && !dono) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            let usuariosSelecionados = [], respostaUsuarios = ''
+                            if(mencionados.length > 0) usuariosSelecionados = mencionados
+                            else if(mensagem_citada) usuariosSelecionados.push(citacao.remetente)
+                            else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            if(usuariosSelecionados.includes(numero_bot)) usuariosSelecionados.splice(usuariosSelecionados.indexOf(numero_bot),1)
+                            for(let usuario of usuariosSelecionados){
+                                if(!admins.includes(usuario)) {
+                                    await socket.promoverParticipante(c, id_grupo, usuario)
+                                    respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.sucesso_usuario, mencaoNumero(usuario))
+                                } else {
+                                    respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.erro_usuario, mencaoNumero(usuario))
+                                }
                             }
+                            if(!usuariosSelecionados.length) return await socket.responderTexto(c, id_chat, comandos_info.grupo.promover.msgs.erro_bot, mensagem)
+                            await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.grupo.promover.msgs.resposta, respostaUsuarios), usuariosSelecionados)
+                        } catch(err){
+                            throw err
                         }
-                        return await socket.enviarTextoComMencoes(
-                            c,
-                            id_chat,
-                            criarTexto(
-                                msgsVb.voto_ok,
-                                mencaoNumero(res.voto.alvo),
-                                res.voto.votos.size,
-                                res.voto.votosNecessarios,
-                                segundosRestantes(res.voto)
-                            ),
-                            [res.voto.alvo]
-                        )
-                    }
-
-                    // Novo: votos necessários = min(5, max(3, ceil(membros/4)))
-                    const membros = Math.max(1, (participantes || []).length)
-                    const neces = Math.min(5, Math.max(3, Math.ceil(membros / 4)))
-                    const ini = iniciarVotoBan({
-                        idGrupo: id_grupo,
-                        alvo,
-                        iniciador: remetente,
-                        votosNecessarios: neces,
-                        duracaoMs: 2 * 60 * 1000
-                    })
-                    if (!ini.ok) {
-                        return await socket.enviarTextoComMencoes(
-                            c,
-                            id_chat,
-                            criarTexto(
-                                msgsVb.ja_ativa,
-                                mencaoNumero(ini.voto.alvo),
-                                ini.voto.votos.size,
-                                ini.voto.votosNecessarios
-                            ),
-                            [ini.voto.alvo]
-                        )
-                    }
-                    return await socket.enviarTextoComMencoes(
-                        c,
-                        id_chat,
-                        criarTexto(
-                            msgsVb.iniciada,
-                            mencaoNumero(alvo),
-                            ini.voto.votosNecessarios,
-                            segundosRestantes(ini.voto),
-                            prefixo
-                        ),
-                        [alvo]
-                    )
-                } catch (err) {
-                    consoleErro(err, 'VOTEBAN')
-                    await socket.responderTexto(c, id_chat, 'Não consegui processar a votação agora.', mensagem)
-                }
-                break
-
-            case 'promover':
-                try{
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    if (!usuario_admin && !dono) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    let usuariosSelecionados = [], respostaUsuarios = ''
-                    if(mencionados.length > 0) usuariosSelecionados = mencionados
-                    else if(mensagem_citada) usuariosSelecionados.push(citacao.remetente)
-                    else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    if(usuariosSelecionados.includes(numero_bot)) usuariosSelecionados.splice(usuariosSelecionados.indexOf(numero_bot),1)
-                    for(let usuario of usuariosSelecionados){
-                        if(!admins.includes(usuario)) {
-                            await socket.promoverParticipante(c, id_grupo, usuario)
-                            respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.sucesso_usuario, mencaoNumero(usuario))
-                        } else {
-                            respostaUsuarios += criarTexto(comandos_info.grupo.promover.msgs.erro_usuario, mencaoNumero(usuario))
+                        return
+    },
+    "rebaixar": async () => {
+        try{
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            let usuariosSelecionados = [], respostaUsuarios = ''
+                            if(mencionados.length > 0) usuariosSelecionados = mencionados
+                            else if(mensagem_citada) usuariosSelecionados.push(citacao.remetente)
+                            else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            if(usuariosSelecionados.includes(numero_bot)) usuariosSelecionados.splice(usuariosSelecionados.indexOf(numero_bot),1)
+                            for(let usuario of usuariosSelecionados){
+                                if(admins.includes(usuario)) {
+                                    await socket.rebaixarParticipante(c, id_grupo, usuario)
+                                    respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.sucesso_usuario, mencaoNumero(usuario))
+                                } else {
+                                    respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.erro_usuario, mencaoNumero(usuario))
+                                }
+                            }
+                            if(!usuariosSelecionados.length) return await socket.responderTexto(c, id_chat, comandos_info.grupo.rebaixar.msgs.erro_bot, mensagem)
+                            await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.grupo.rebaixar.msgs.resposta, respostaUsuarios), usuariosSelecionados)
+                        } catch(err){
+                            throw err
                         }
-                    }
-                    if(!usuariosSelecionados.length) return await socket.responderTexto(c, id_chat, comandos_info.grupo.promover.msgs.erro_bot, mensagem)
-                    await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.grupo.promover.msgs.resposta, respostaUsuarios), usuariosSelecionados)
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'rebaixar':
-                try{
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    let usuariosSelecionados = [], respostaUsuarios = ''
-                    if(mencionados.length > 0) usuariosSelecionados = mencionados
-                    else if(mensagem_citada) usuariosSelecionados.push(citacao.remetente)
-                    else return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    if(usuariosSelecionados.includes(numero_bot)) usuariosSelecionados.splice(usuariosSelecionados.indexOf(numero_bot),1)
-                    for(let usuario of usuariosSelecionados){
-                        if(admins.includes(usuario)) {
-                            await socket.rebaixarParticipante(c, id_grupo, usuario)
-                            respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.sucesso_usuario, mencaoNumero(usuario))
-                        } else {
-                            respostaUsuarios += criarTexto(comandos_info.grupo.rebaixar.msgs.erro_usuario, mencaoNumero(usuario))
+                        return
+    },
+    "apg": async () => {
+        try{
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            if (!mensagem_citada) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
+                            await socket.deletarMensagem(c, mensagem, mensagem_citada)
+                        } catch (err){
+                            throw err
                         }
-                    }
-                    if(!usuariosSelecionados.length) return await socket.responderTexto(c, id_chat, comandos_info.grupo.rebaixar.msgs.erro_bot, mensagem)
-                    await socket.enviarTextoComMencoes(c, id_chat, criarTexto(comandos_info.grupo.rebaixar.msgs.resposta, respostaUsuarios), usuariosSelecionados)
-                } catch(err){
-                    throw err
-                }
-                break
-
-            case 'apg':
-                try{
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    if (!mensagem_citada) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)
-                    await socket.deletarMensagem(c, mensagem, mensagem_citada)
-                } catch (err){
-                    throw err
-                }
-                break
-
-            case 'restrito':
-                try {
-                    // Checa permissões sem interromper o fluxo
-                    if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
-                    if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
-                    // Alterna o estado de restrição sem necessidade de argumentos adicionais
-                    let estadoNovo = !grupo.restrito_msg;
-                    await socket.alterarRestricaoGrupo(c, id_grupo, estadoNovo);
-            
-                    // Confirmação para o usuário
-                    await socket.responderTexto(c, id_chat, `Restrição de grupo agora está: ${estadoNovo ? 'Ativada' : 'Desativada'}`, mensagem || { fromMe: false });
-            
-                } catch (err) {
-                    console.error("Erro ao executar o comando restrito:", err);
-                }
-                break
-                
+                        return
+    },
+    "restrito": async () => {
+        try {
+                            // Checa permissões sem interromper o fluxo
+                            if (!bot_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.bot_admin, mensagem)
+                            if (!usuario_admin) return await socket.responderTexto(c, id_chat, comandos_info.outros.permissao.apenas_admin, mensagem)
+                            // Alterna o estado de restrição sem necessidade de argumentos adicionais
+                            let estadoNovo = !grupo.restrito_msg;
+                            await socket.alterarRestricaoGrupo(c, id_grupo, estadoNovo);
+                    
+                            // Confirmação para o usuário
+                            await socket.responderTexto(c, id_chat, `Restrição de grupo agora está: ${estadoNovo ? 'Ativada' : 'Desativada'}`, mensagem || { fromMe: false });
+                    
+                        } catch (err) {
+                            console.error("Erro ao executar o comando restrito:", err);
+                        }
+                        return
+    }
+        }
+        HANDLERS_GRUPO["status"] = HANDLERS_GRUPO["painel"]
+        HANDLERS_GRUPO["mm"] = HANDLERS_GRUPO["mt"]
+        HANDLERS_GRUPO["rt"] = HANDLERS_GRUPO["mt"]
+        HANDLERS_GRUPO["mta"] = HANDLERS_GRUPO["mt"]
+        HANDLERS_GRUPO["votar"] = HANDLERS_GRUPO["voteban"]
+        await despacharMapa(HANDLERS_GRUPO, comandoSemPrefixo, {})
         }
     } catch(err){
         await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_comando_codigo, comando), mensagem)

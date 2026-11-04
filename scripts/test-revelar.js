@@ -159,7 +159,7 @@ try {
 
 try {
     // monkey: usar downloadFn e enviarComoNormal com sock que só implementa sendMessage
-    const { default: api } = await import('@victorsouzaleal/lbot-api-comandos').catch(() => ({ default: null }))
+    const { default: api } = await import('../bot/lib/lbotApi.js').catch(() => ({ default: null }))
     // Força caminho imagem (não chama ffmpeg)
     const wa = {
         key: { remoteJid: '120363@g.us', id: 'IMG999', fromMe: false },

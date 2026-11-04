@@ -1,7 +1,6 @@
-import Datastore from '@seald-io/nedb'
-import { caminhoDados } from '../lib/caminhos.js'
+import { createCollection } from '../db/sqlite.js'
 
-const db = new Datastore({ filename: caminhoDados('sugestoes.db'), autoload: true })
+const db = createCollection('sugestoes')
 db.ensureIndex({ fieldName: 'timestamp' })
 db.ensureIndex({ fieldName: 'status' })
 

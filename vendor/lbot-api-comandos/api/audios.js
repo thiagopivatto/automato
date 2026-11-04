@@ -17,15 +17,17 @@ async function obterChavesApi() {
     }
 }
 
-export const textoParaVoz = async (idioma, texto) => {
+export const textoParaVoz = async (idioma, texto, opts = {}) => {
     try {
-        // Mesma pipeline do !resumodogrupo: ElevenLabs → Edge neural (grátis) — sem Google
+        // Padrão Edge; ElevenLabs só se preferirEleven (dono)
         const lang = String(idioma || 'pt').toLowerCase()
         const ehPt = /^(pt|pt-br|br)$/.test(lang)
         const { resultado, mimetype, ptt, fonte } = await textoParaVozRobusto(texto, {
             idioma: lang,
             maxPalavras: 1200,
-            ...(ehPt ? OPCOES_TTS_ULTRON : {})
+            somenteEdge: true,
+            ...(ehPt ? { ...OPCOES_TTS_ULTRON } : {}),
+            ...opts
         })
         if (fonte) console.log(`API textoParaVoz fonte=${fonte}`)
         return { resultado, mimetype, ptt: ptt !== false }

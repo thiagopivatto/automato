@@ -9,6 +9,9 @@ import {comandosInfo, verificarComandoExiste} from '../comandos/comandos.js'
 
 export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
     try {
+        // Eco fromMe: não processa como comando/usuário
+        if (mensagemBaileys?.mensagem_bot || mensagemBaileys?.fromMe) return false
+
         //Atribuição de valores
         const bot = new BotControle()
         const usuarios = new UsuarioControle()
@@ -132,25 +135,25 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
                 await socket.responderTexto(c,id_chat,criarTexto(comandos_info.grupo.bcmd.msgs.resposta_cmd_bloqueado, comando), mensagem)
                 return false
             }
-            //SE O RECURSO DE LIMITADOR DIARIO DE COMANDOS ESTIVER ATIVADO E O COMANDO NÃO ESTIVER NA LISTA DE EXCEÇÔES/INFO/GRUPO/ADMIN
+            // Contadores só após sucesso do handler (fila). Aqui só valida limite diário.
             if(botInfo.limite_diario.status){
                 await bot.verificarExpiracaoLimite(botInfo)
                 if(!verificarComandoExiste(botInfo, comando, 'admin') && !verificarComandoExiste(botInfo, comando, 'grupo') && !verificarComandoExiste(botInfo, comando, 'info') && !msgGuia){
                     let ultrapassou = await usuarios.verificarUltrapassouLimiteComandos(remetente, botInfo)
-                    if(!ultrapassou) {
-                        await usuarios.adicionarContagemDiariaComandos(remetente) 
-                    } else {
+                    if(ultrapassou) {
                         await socket.responderTexto(c, id_chat, criarTexto(comandos_info.admin.limitediario.msgs.resposta_excedeu_limite, nome_usuario, mencaoNumero(numero_dono)), mensagem)
                         return false
-                    }   
+                    }
+                    mensagemBaileys._contarPosSucesso = true
+                    mensagemBaileys._contagemDiaria = true
                 } else {
-                    await usuarios.adicionarContagemTotalComandos(remetente)
+                    mensagemBaileys._contarPosSucesso = true
+                    mensagemBaileys._contagemDiaria = false
                 }
             } else {
-                await usuarios.adicionarContagemTotalComandos(remetente)
+                mensagemBaileys._contarPosSucesso = true
+                mensagemBaileys._contagemDiaria = false
             }
-            //ADICIONA A CONTAGEM DE COMANDOS EXECUTADOS PELO BOT
-            await bot.atualizarComandosFeitos()
         }
 
         return true

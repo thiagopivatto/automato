@@ -7,7 +7,7 @@ let cache = null
 export async function carregarIaApi() {
     if (cache) return cache
     try {
-        const api = (await import('@victorsouzaleal/lbot-api-comandos')).default
+        const api = (await import('./lbotApi.js')).default
         if (api?.IA?.consultarCotasIA && api?.IA?.obterRespostaIA) {
             cache = api.IA
             return cache

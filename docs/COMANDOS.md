@@ -168,7 +168,8 @@ Pesquisa na web só em perguntas de fato/atualidade.
 Ex: *!personalidade* fala como um tiozão fofoqueiro e chato
 Ex: *!personalidade* ver — Mostra a atual
 Ex: *!personalidade* padrão — Volta ao Ultron padrão
-Salva em arquivo *por chat* (grupo e PV separados). Vale para chat, resumo e automsg.
+Salva em arquivo *por chat* (grupo e PV separados). Vale para *chat e automsg*.
+Resumo do grupo: use *!personalidaderesumo* (storage separado).
 Em grupo: *apenas admins*. No privado: você controla só o seu PV.
 
 ---
@@ -304,8 +305,8 @@ Ex: *!calc* 1mm em 1km - Exibe o resultado do conversão de medidas.
 
 **Como usar / exemplos:**
 
-Ex: *!pesquisa* tema - Pesquisa com Perplexity (RapidAPI).
-Requer *RAPIDAPI_KEY* no .env (subscribe em perplexity2).
+Ex: *!pesquisa* tema - Pesquisa na web (Tavily/Brave/Perplexity + DDG/Wiki).
+Recomendado: *TAVILY_API_KEY* no .env. Opcional: *BRAVE_SEARCH_API_KEY* / *RAPIDAPI_KEY* (Perplexity2).
 
 ---
 
@@ -353,58 +354,74 @@ Ex: Envie/responda um audio/video com *!qualmusica* - Procura a música tocada n
 
 ### `!comofaz`
 
+**Descrição:** Tutorial aleatório do WikiHow (passos claros)
+
 **Como usar / exemplos:**
 
-Ex: *!comofaz* - Busca um artigo aleatório do WikiHow (como fazer algo).
+Ex: *!comofaz* - Busca um artigo aleatório do WikiHow e formata os passos.
 
 ---
 
 ### `!playlist`
 
+**Descrição:** Playlist curada (20+ faixas) com vibe e justificativa
+
 **Como usar / exemplos:**
 
-Ex: *!playlist* descrição - Cria uma playlist com pelo menos 20 músicas baseada na descrição.
+Ex: *!playlist* rock anos 80 pra churrasco - Lista 20+ músicas reais + por quê.
 
 ---
 
 ### `!explica`
 
+**Descrição:** Explica qualquer assunto em linguagem clara (Ultron)
+
 **Como usar / exemplos:**
 
-Ex: *!explica* texto - Explica o texto com IA.
-IA: ChatGPT-42 RapidAPI / Gemini / OpenRouter.
+Ex: *!explica* o que é inflação
+Ex: Responda um texto com *!explica*
+Saída: resumo em 1 frase + como funciona + exemplo.
 
 ---
 
 ### `!spoiler`
 
+**Descrição:** Spoiler completo de filme/série (sem frescura)
+
 **Como usar / exemplos:**
 
-Ex: *!spoiler* nome do filme - Revela spoiler do filme.
+Ex: *!spoiler* Interestelar - Premissa, enredo, twists e final.
 
 ---
 
 ### `!argumentos`
 
+**Descrição:** Argumentos a favor e contra + veredito
+
 **Como usar / exemplos:**
 
-Ex: *!argumentos* tema - Gera argumentos pró e contra.
+Ex: *!argumentos* home office - Pró, contra e veredito direto.
 
 ---
 
 ### `!proscons`
 
+**Descrição:** Prós, contras e se vale a pena
+
 **Como usar / exemplos:**
 
-Ex: *!proscons* produto - Lista prós e contras.
+Ex: *!proscons* iPhone 16 - Lista concreta + recomendação.
 
 ---
 
 ### `!comparar`
 
+**Descrição:** Comparativo lado a lado com recomendação
+
 **Como usar / exemplos:**
 
-Ex: *!comparar* item1 vs item2 - Compara dois produtos/tecnologias.
+Ex: *!comparar* Android vs iPhone
+Ex: *!comparar* item1 vs item2
 
 ---
 
@@ -420,25 +437,31 @@ Ex: *!cotacao* AAPL
 
 ### `!simulado`
 
+**Descrição:** Prova de 10 questões com gabarito comentado
+
 **Como usar / exemplos:**
 
-Ex: *!simulado* tema - Gera prova de 10 perguntas com gabarito no final.
+Ex: *!simulado* história do Brasil - 10 questões A–D + gabarito.
 
 ---
 
 ### `!roteiro`
 
+**Descrição:** Roteiro de vídeo com gancho, blocos e CTA
+
 **Como usar / exemplos:**
 
-Ex: *!roteiro* tema - Cria roteiro para vídeo.
+Ex: *!roteiro* review de fone barato - Estrutura pronta pra gravar.
 
 ---
 
 ### `!resuma`
 
+**Descrição:** Resume texto longo em bullets + 1 frase
+
 **Como usar / exemplos:**
 
-Ex: Responda uma mensagem com *!resuma* - Resume o texto marcado.
+Ex: Responda uma mensagem com *!resuma*
 Ex: *!resuma* texto longo...
 
 ---
@@ -451,11 +474,26 @@ Ex: Envie/responda uma imagem com *!upscale* - Aumenta a resolução.
 
 ---
 
+### `!criarimg`
+
+**Descrição:** Gera imagem por IA (Pollinations / HF / Gemini / Horde / Rapid)
+
+**Como usar / exemplos:**
+
+Ex: *!criarimg* gato cyberpunk na chuva
+Alias: *!criarimagem*
+Fontes: Pollinations → HF Flux → DeepAI → AI Horde → Gemini → Rapid.
+
+---
+
 ### `!musica`
+
+**Descrição:** Gera música por IA (ElevenLabs — só dono)
 
 **Como usar / exemplos:**
 
 Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
+*Só dono do bot* (consome créditos ElevenLabs).
 
 ---
 
@@ -467,7 +505,7 @@ Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
 
 Ex: *!resumodogrupo* - Nota de voz de *3 a 5 min*, tom rebelde, egocêntrico e com palavrão.
 Na próxima vez, só entra o que foi dito *depois* deste pedido (anti-repetição).
-Personalidade deste chat: *!personalidade*
+Personalidade só deste resumo: *!personalidaderesumo*
 *Requisitos:* grupo; bot coletando mensagens.
 
 ---
@@ -486,14 +524,15 @@ Cita membros e separa tópicos (futebol, cinema, conversas aleatórias, etc).
 
 ### `!personalidaderesumo`
 
-**Descrição:** Define a personalidade do resumodogrupo só neste grupo
+**Descrição:** Personalidade só do !resumodogrupo (não afeta o chat)
 
 **Como usar / exemplos:**
 
 Ex: *!personalidaderesumo* fala como um tiozão fofoqueiro e chato
 Ex: *!personalidaderesumo* ver - Mostra a personalidade atual
-Ex: *!personalidaderesumo* reset - Volta ao padrão agressivo/egocêntrico
+Ex: *!personalidaderesumo* reset - Volta ao padrão
 Alias: *!resumopersona*
+Não altera *!personalidade* (chat/automsg).
 *Apenas admin do grupo* (ou dono do bot).
 
 ---
@@ -582,11 +621,27 @@ Imagens mantêm a legenda original. A publicação é feita no status do grupo d
 
 ---
 
-### `!status`
+### `!painel`
+
+**Descrição:** Painel completo do grupo (flags, listas, personalidades) + toggles
 
 **Como usar / exemplos:**
 
-Ex: *!status* - Exibe as configurações atuais do grupo
+Ex: *!painel* — Dump completo das configs do grupo.
+Ex: *!painel* ofensa|automsg|alink|autosticker|mutar|bv|contador — Alterna.
+Ex: *!painel* ofensa on|off
+Ex: *!painel* aflood [máx] [intervalo]
+*Apenas admins.* Alias: *!status*
+
+---
+
+### `!status`
+
+**Descrição:** Alias de !painel (dump completo do grupo)
+
+**Como usar / exemplos:**
+
+Ex: *!status* - Mesmo que *!painel* (dump completo).
 
 ---
 
@@ -834,14 +889,6 @@ Ex: *!autosticker* - Liga/desliga a criação automatica de stickers sem precisa
 
 ---
 
-### `!autosimi`
-
-**Como usar / exemplos:**
-
-Ex: *!autosimi* - Liga/desliga respostas automáticas do Simi (sem comando). *Apenas admins*.
-
----
-
 ### `!ofensa`
 
 **Descrição:** Rebate ofensas com resposta bem mais pesada (ligado por padrão)
@@ -875,18 +922,6 @@ Comenta o papo como pessoa real, com intervalos longos. *Apenas admins.* Sem mad
 Ex: *!bv*  - Liga/desliga a mensagem de bem-vindo para novos membros.
 
 Ex: *!bv* mensagem - Liga a mensagem de bem-vindo com uma mensagem da sua escolha.
-
----
-
-### `!afake`
-
-**Como usar / exemplos:**
-
-Ex: *!afake* - Liga/desliga o anti-fake em grupos. - *DESATIVADO!*
-Ex: *!afake* DDI - Configura o anti-fake para que todos números com o DDI exterior seja banido, exceto o que você escolheu.
-Ex: *!afake* DDI1 DDI2 DDI3 - Configura o anti-fake para que todos números com DDI exterior sejam banidos, excetos o que você escolheu.
-
-*Obs*: A ativação do anti-fake bane pessoas com DDI do exterior (que não sejam 55 - Brasil).
 
 ---
 
@@ -1038,24 +1073,6 @@ Ex: *!mascote* - Exibe o inigualável e onipotente WhatsApp Jr.
 
 ---
 
-### `!simi`
-
-**Como usar / exemplos:**
-
-Ex: *!simi* frase  - Envia um texto para o SimSimi responder.
-
----
-
-### `!viadometro`
-
-**Como usar / exemplos:**
-
-Ex: *!viadometro* @membro - Mede o nível de viadagem do membro mencionado.
-
-Ex: Responder com *!viadometro* - Mede o nível de viadagem do membro respondido.
-
----
-
 ### `!detector`
 
 **Como usar / exemplos:**
@@ -1104,26 +1121,6 @@ Ex: *!ppt* tesoura - Escolhe tesoura, para jogar pedra, papel ou tesoura.
 
 ---
 
-### `!gadometro`
-
-**Como usar / exemplos:**
-
-Ex: *!gadometro* @membro - Mede o nível de gadisse do membro mencionado.
-
-Ex: Responder com *!gadometro* - Mede o nível de gadisse do membro respondido.
-
----
-
-### `!bafometro`
-
-**Como usar / exemplos:**
-
-Ex: *!bafometro* @membro - Mede o nível de alcool do membro mencionado.
-
-Ex: Responder com *!bafometro* - Mede o nível de alcool do membro respondido.
-
----
-
 ### `!top`
 
 **Como usar / exemplos:**
@@ -1164,56 +1161,6 @@ Ex: *!trisal* - Escolhe 3 pessoas aleatórias do grupo.
 
 ---
 
-### `!jacometro`
-
-**Como usar / exemplos:**
-
-Ex: *!jacometro* @membro - Mede o nível de jaca.
-
----
-
-### `!bolometro`
-
-**Como usar / exemplos:**
-
-Ex: *!bolometro* @membro - Mede o nível de bolo.
-
----
-
-### `!fernandometro`
-
-**Como usar / exemplos:**
-
-Ex: *!fernandometro* @membro - Mede o nível de fernando.
-
----
-
-### `!joke`
-
-**Como usar / exemplos:**
-
-Ex: *!joke* - Conta uma piada aleatória (alias de *!piada*).
-
----
-
-### `!piada`
-
-**Como usar / exemplos:**
-
-Ex: *!piada* - Conta uma piada real (banco local + APIs).
-
----
-
-### `!fofoca`
-
-**Descrição:** IA inventa fofoca absurda entre membros
-
-**Como usar / exemplos:**
-
-Ex: *!fofoca* - Inventa uma fofoca absurda do grupo.
-
----
-
 ### `!crime`
 
 **Descrição:** Inventa um "crime" cômico de um membro
@@ -1233,16 +1180,6 @@ Ex: *!crime* @membro
 
 Ex: *!tribunal* - Julga alguém do grupo.
 Ex: *!tribunal* @membro
-
----
-
-### `!prefeito`
-
-**Descrição:** Escolhe o prefeito do grupo por 24h
-
-**Como usar / exemplos:**
-
-Ex: *!prefeito* - Sorteia o prefeito do dia.
 
 ---
 
@@ -1266,26 +1203,6 @@ Ex: *!cancelado* @membro
 Ex: *!horoscopo* - Horóscopo engraçado.
 Ex: *!horoscopo* @membro
 Ex: *!horoscopo* leão
-
----
-
-### `!boladocotidiano`
-
-**Descrição:** Drama cotidiano em tom épico (voz)
-
-**Como usar / exemplos:**
-
-Ex: *!boladocotidiano* - Narra drama banal em tom épico (texto + áudio).
-
----
-
-### `!jornal`
-
-**Descrição:** Jornal fictício do grupo (~5 min de áudio)
-
-**Como usar / exemplos:**
-
-Ex: *!jornal* - Notícias fictícias do grupo (texto + áudio ~5 min).
 
 ---
 
@@ -1356,11 +1273,28 @@ Ex: *!sairgrupos* - Sai de todos os grupos.
 
 ---
 
-### `!infobot`
+### `!painelbot`
+
+**Descrição:** Painel global do bot + lista de grupos + dump por grupo
 
 **Como usar / exemplos:**
 
-Ex: *!infobot* - Exibe as informações completas do bot, inclusive as configurações atuais.
+Ex: *!painelbot* — Dump global + lista de todos os grupos.
+Ex: *!painelbot grupo* 3 — Dump completo do 3º grupo da lista.
+Ex: *!painelbot grupo* <id> — Dump por id.
+Ex: *!painelbot* pv|autosticker|autorevelar|limitediario — Alterna.
+Ex: *!painelbot cotas* — Cotas das IAs.
+*Só dono.* Alias: *!infobot*
+
+---
+
+### `!infobot`
+
+**Descrição:** Alias de !painelbot (dump global)
+
+**Como usar / exemplos:**
+
+Ex: *!infobot* - Mesmo que *!painelbot*.
 
 ---
 
@@ -1667,10 +1601,13 @@ Ex: *!ping* - Exibe as informações do sistema do BOT e o tempo de resposta del
 
 ### `!limpar`
 
+**Descrição:** Limpeza de cache/temp (leve por padrão)
+
 **Como usar / exemplos:**
 
-Ex: *!limpar* - Limpa cache, mídias temporárias e mensagens guardadas.
-*Mantém* dados de usuários, grupos, contador e sessão.
+Ex: *!limpar* — Limpeza leve: temp antigo, TTL de msgs/histórico, arquivos .bak.
+Ex: *!limpar tudo* — Wipe completo (inclui histórico de grupos / memória de resumo).
+*Mantém* usuários, grupos, contador, sessão e bot.json.
 *Só dono do bot.*
 
 ---
@@ -1690,18 +1627,9 @@ Ex: *!sugestoes limpar* - Apaga sugestões já lidas.
 
 **Como usar / exemplos:**
 
-Ex: *!cotasia* - Consulta saldo/status de Gemini, OpenRouter, Groq, RapidAPI, ElevenLabs.
+Ex: *!cotasia* - Consulta saldo/status de Gemini, OpenRouter, Tavily, Brave, RapidAPI, ElevenLabs.
 *Só dono do bot.*
 
----
-
-### `!devtest`
-
-**Descrição:** Testes
-
-**Como usar / exemplos:**
-
-Testes
 ---
 
 ## Restrições gerais
@@ -1710,12 +1638,11 @@ Testes
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure `.env` (`ELEVENLABS_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, `RAPIDAPI_KEY`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: `yt-dlp` recomendado no PATH (ou `YTDLP_PATH`).
-- `!resumodogrupo`: nota de voz; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
+- `!resumodogrupo`: nota de voz; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias. TTS: ElevenLabs → Edge neural (ver docs/CHAVESAPI.md).
 - `!resumoportema`: resumo textual por temas das últimas ~1000 msgs (inclui áudios transcritos).
-- Banco local de piadas: `conteudo/piadas.json` — veja docs/CONTEUDO.md
 - `!automsg`: ligado por padrão; só admins ligam/desligam; interações humanas com intervalo longo.
 - `!chat`: memória + histórico do grupo + busca na web quando necessário (Gemini gratuito).
 
 ---
 
-*Gerado a partir de `bot/comandos/comandos.js` — 169 comandos.*
+*Gerado a partir de `bot/comandos/comandos.js` — 156 comandos.*

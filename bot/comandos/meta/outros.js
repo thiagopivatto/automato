@@ -13,8 +13,8 @@ export function metaOutros({ prefixo, nome_adm, nome_bot }) {
             entrada_grupo: "Saudações *{p1}* , se tiverem alguma dúvida só digitar "+`*${prefixo}menu*`,
             cmd_erro: "[❗] Ops, parece que você usou o comando *{p1}* incorretamente ou não sabe como utilizá-lo. Quer aprender a usar?\n\n Digite :\n  - Ex: *{p2} guia* para ver o guia.",
             erro_comando_codigo: "[❗] Houve um erro no comando *{p1}*, relate ao administrador ou tente novamente mais tarde.",
-            erro_api : "[❗] Houve um erro no comando *{p1}*.\n\n"+
-            "Motivo: *{p2}*\n",
+            erro_api:
+                '[❗] Não consegui completar *{p1}* por erro de API. Tenta de novo em instantes.\n',
             resposta_ban : "🤖✅ Entendido, +{p1} será banido.\n\n"+
             "Motivo : {p2}\n"+
             "Quem baniu : {p3}",

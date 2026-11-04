@@ -45,9 +45,8 @@ md += `## Restrições gerais
 - Comandos de *admin* são exclusivos do dono do bot.
 - APIs externas: configure \`.env\` (\`ELEVENLABS_API_KEY\`, \`GEMINI_API_KEY\`, \`OPENROUTER_API_KEY\`, \`RAPIDAPI_KEY\`, ACRCloud, Deepgram).
 - Downloads do YouTube/Instagram: \`yt-dlp\` recomendado no PATH (ou \`YTDLP_PATH\`).
-- \`!resumodogrupo\`: nota de voz; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
+- \`!resumodogrupo\`: nota de voz; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias. TTS: ElevenLabs → Edge neural (ver docs/CHAVESAPI.md).
 - \`!resumoportema\`: resumo textual por temas das últimas ~1000 msgs (inclui áudios transcritos).
-- Banco local de piadas: \`conteudo/piadas.json\` — veja docs/CONTEUDO.md
 - \`!automsg\`: ligado por padrão; só admins ligam/desligam; interações humanas com intervalo longo.
 - \`!chat\`: memória + histórico do grupo + busca na web quando necessário (Gemini gratuito).
 

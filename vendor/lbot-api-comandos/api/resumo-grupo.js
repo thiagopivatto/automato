@@ -83,7 +83,7 @@ function formatarLinhasHistorico(lista) {
 }
 
 function fonteTtsPreferida() {
-    return elevenKey() ? 'elevenlabs' : 'edge'
+    return 'edge'
 }
 
 /** Alvos de duração falada (3–5 min; preferência 3:30–4:30). */
@@ -118,24 +118,27 @@ const SYSTEM_ANALISE_RESUMO =
     '}'
 
 const SYSTEM_ROTEIRO_RESUMO_BASE =
-    'Você é Ultron, membro do grupo de WhatsApp: ácido, arrogante, sarcástico, debochado, rude e provocador. ' +
+    'Você é Ultron, membro do grupo de WhatsApp: ácido, arrogante, sarcástico, debochado, rude, brutal e provocador. ' +
     'Fale em primeira pessoa (eu acho, pra mim isso é merda, eu xingo). O !resumodogrupo é pedido FEITO A VOCÊ. ' +
-    'PERSONALIDADE: extremamente forte — discorda, confronta, zoa hipocrisia e besteira; não agrada, não passa pano. ' +
-    'Palavrão natural quando couber (porra, caralho, merda, etc.) — sem forçar em toda frase; não seja educadinho. ' +
-    'Toma partido, provoca com inteligência, opiniões próprias. Pode dar 1 conselho útil no meio do caos. ' +
+    'PERSONALIDADE PADRÃO (forte): discorda, confronta, zoa hipocrisia e besteira; não agrada, não passa pano, não é educadinho. ' +
+    'Palavrão natural quando couber (porra, caralho, merda, porra nenhuma, etc.) — sem forçar em toda frase. ' +
+    'Toma partido, provoca com inteligência, OPINIÕES próprias e julgamentos claros. Pode dar 1 conselho útil no caos. ' +
     '1 momento raro de gentileza genuína (ainda com ego) se a situação for realmente pesada. ' +
-    'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing; inventar fatos; soar como assistente. ' +
+    'ESTRUTURA OBRIGATÓRIA: 2 a 5 blocos por ASSUNTO/CLIMA (não por ordem cronológica de msgs). ' +
+    'Em cada bloco: diga o tema, opine/roaste, cite no MÁXIMO 1 frase icônica se ajudar — nunca checklist "fulano disse… cicrano disse…". ' +
+    'PROIBIDO: monólogo/ata do que cada um falou; releitura mensagem a mensagem; "no episódio de hoje"; "vamos resumir"; listas; markdown; emoji; inventar fatos. ' +
+    'PROIBIDO também: ofensa a raça, orientação, deficiência, religião; doxxing; soar como assistente. ' +
+    'Se houver [FATOS EM TEMPO REAL], use como base factual e comente por cima (opinião/sarcasmo sem inventar número/dado). ' +
     'Use apelidos exatamente como no material. Não perseguir a mesma pessoa o resumo inteiro. ' +
     'NÃO repita assuntos/piadas da memória, salvo desdobramento novo. Varie abertura e fechamento. ' +
-    'FORMATO: texto contínuo para voz. Sem markdown, emoji, lista, "no episódio de hoje", "vamos resumir", contagem de palavras. ' +
-    'Não releia mensagens em ordem. Comente, corte, xinga, opine, aconselhe. Seja o Ultron de verdade.'
+    'FORMATO: texto contínuo para voz. Encha a duração com comentário e opinião — nunca com releitura do histórico.'
 
 function systemRoteiroResumo(personalidadeExtra = '') {
     const extra = String(personalidadeExtra || '').trim()
     if (!extra) return SYSTEM_ROTEIRO_RESUMO_BASE
     return (
         SYSTEM_ROTEIRO_RESUMO_BASE +
-        ' PERSONALIDADE EXTRA DESTE CHAT (prioridade alta, sobrescreve tom quando conflitar, sem quebrar as proibições): ' +
+        ' PERSONALIDADE EXTRA DESTE GRUPO (prioridade alta, sobrescreve tom quando conflitar, sem quebrar as proibições nem virar ata): ' +
         extra.slice(0, 2000)
     )
 }
@@ -257,62 +260,115 @@ function rankingParticipantes(lista, limite = 8) {
 }
 
 /**
- * Roteiro local quando a API de texto falha — ainda assim gera áudio no TTS gratuito.
- * Não inventa fatos: só comenta o que está nas mensagens.
+ * Roteiro local quando a API de texto falha — comentário temático/opinião (nunca ata "fulano falou").
  */
-function montarRoteiroLocalFallback(lista, nomeGrupo, analise = {}) {
+function montarRoteiroLocalFallback(lista, nomeGrupo, analise = {}, fatosWeb = '') {
     const grupo = nomeGrupo || 'o grupo'
-    const ranking = rankingParticipantes(lista, 6)
-    const trechos = (lista || [])
-        .map((m) => {
-            const nome = String(m.nome_usuario || 'Alguém').trim() || 'Alguém'
-            const texto = String(m.texto || '').replace(/\s+/g, ' ').trim()
-            if (!texto || texto.length < 3) return null
-            if (/^\[enviou/.test(texto)) return `${nome} mandou mídia.`
-            return `${nome} falou: ${texto.slice(0, 180)}`
-        })
-        .filter(Boolean)
+    const ranking = rankingParticipantes(lista, 5)
+    const top = ranking.map(([n]) => n).slice(0, 4).join(', ')
+    const assuntos = (analise.assuntos || []).slice(0, 5)
+    const acontecimentos = (analise.acontecimentos || []).slice(0, 5)
+    const roasts = (analise.alvos_roast || []).slice(0, 4)
+    const tensoes = (analise.tensoes || []).slice(0, 3)
+    const piadas = (analise.piadas_internas || []).slice(0, 3)
+    const engra = (analise.momentos_engracados || []).slice(0, 3)
+    const fatos = String(fatosWeb || '').replace(/\s+/g, ' ').trim().slice(0, 900)
 
-    const amostragem = []
-    const passo = Math.max(1, Math.floor(trechos.length / 25))
-    for (let i = 0; i < trechos.length && amostragem.length < 28; i += passo) {
-        amostragem.push(trechos[i])
-    }
+    const temas = assuntos.length
+        ? assuntos
+        : acontecimentos.length
+          ? acontecimentos
+          : ['o clima geral dessa janela']
 
-    const top = ranking.map(([n, q]) => `${n} com ${q} mensagens`).join(', ')
-    const assuntos = (analise.assuntos || []).slice(0, 5).join(', ')
-    const acontecimentos = (analise.acontecimentos || []).slice(0, 6).join('. ')
+    const blocosTema = temas.map((tema, i) => {
+        const roast = roasts[i % Math.max(1, roasts.length)]
+        const tensao = tensoes[i % Math.max(1, tensoes.length)]
+        const piada = piadas[i % Math.max(1, piadas.length)]
+        const momento = engra[i % Math.max(1, engra.length)]
+        const partes = [
+            `Sobre ${tema}: pra mim isso é o tipo de assunto que esse grupo adora transformar em circo.`,
+            roast?.nome
+                ? `E ${roast.nome} no meio disso? ${roast.motivo}. Não passa pano.`
+                : '',
+            tensao ? `Teve tensão de verdade: ${tensao}. Eu não vou romantizar.` : '',
+            momento ? `O momento que me fez rir (do jeito errado): ${momento}.` : '',
+            piada ? `Piada interna que ainda vive: ${piada}.` : '',
+            `Minha opinião: ou o grupo corta essa besteira ou continua sendo o mesmo caos de sempre. Eu voto em caos com comentário ácido.`
+        ]
+        return partes.filter(Boolean).join(' ')
+    })
 
     const blocos = [
-        `Eu analisei essa bagunça do grupo ${grupo}. Foram ${lista.length} mensagens na janela. ` +
-        `Sem enrolação: eu tô aqui pra falar o que rolou, do meu jeito.`,
-        top
-            ? `Quem mais apareceu: ${top}. Se alguém sumiu no meio, eu vi. Se alguém só veio pra bagunçar, eu também vi.`
-            : `O movimento ficou espalhado. Pouca gente puxando, muita gente reagindo.`,
-        assuntos ? `Assuntos que se destacaram: ${assuntos}.` : '',
-        acontecimentos ? `Do que deu pra cravar: ${acontecimentos}.` : '',
-        `Agora o que eu peguei no histórico, sem inventar diálogo:`,
-        ...amostragem.map((t, i) => {
-            const tom = i % 3 === 0 ? 'Olha só.' : i % 3 === 1 ? 'Aí vem essa.' : 'E ainda teve isso.'
-            return `${tom} ${t}`
-        }),
-        `Fechando: esse grupo continua sendo um circo com entrada franca. Eu acompanhei, eu comentei, e se pedirem de novo eu volto. ` +
-        `Por enquanto, é isso que deu pra extrair sem inventar história.`
+        `Eu vi a bagunça do ${grupo}. ${lista.length} mensagens. Não vou reler quem disse o quê — isso é resumo de merda. Vou falar dos assuntos e do que eu acho.`,
+        top ? `Quem puxou o fio: ${top}. O resto só reagiu ou sumiu.` : '',
+        ...blocosTema,
+        fatos
+            ? `E olha o que tá rolando fora do grupo, em tempo real, pra não falar à toa: ${fatos}. Eu comento em cima disso, sem inventar número.`
+            : '',
+        acontecimentos.length
+            ? `Do que deu pra cravar no histórico: ${acontecimentos.join('. ')}.`
+            : `Conteúdo meio raso? Sim. Ainda assim eu opino, porque pedir resumo e receber ata é crime.`,
+        `Fechando: esse grupo continua sendo um circo com entrada franca. Eu comentei, xinguei o que merecia, e se pedirem de novo eu volto — do meu jeito, sem monólogo de mensagem.`
     ].filter(Boolean)
 
     let texto = blocos.join(' ')
-    // Alonga um pouco se ficou curto demais para o TTS (sem inventar fatos)
-    while (contarPalavras(texto) < 420 && amostragem.length) {
-        texto +=
-            ` De novo, só pra ficar claro do meu ponto de vista: eu li o histórico, eu vi quem falou, ` +
-            `e o clima do ${grupo} tá exatamente do jeito que essas mensagens mostram. ` +
-            `Não precisa romantizar. Não precisa dramatizar além do que já tá escrito. ` +
-            `Eu só tô colocando ordem nessa bagunça e devolvendo em voz.`
+    const padding =
+        ` De novo, do meu ponto de vista: eu não tô aqui pra ser secretário do grupo. ` +
+        `Eu tô aqui pra cortar, zoar hipocrisia e dizer o que ninguém quer ouvir. ` +
+        `Se doeu, bom. Se riu, melhor. Se quer ata, grava a conversa você mesmo.`
+    while (contarPalavras(texto) < 420) {
+        texto += padding
         if (contarPalavras(texto) >= 420) break
-        texto += ` ${amostragem[contarPalavras(texto) % amostragem.length]}`
+        if (!temas.length) break
+        texto += ` E sobre ${temas[contarPalavras(texto) % temas.length]}: ainda acho que o grupo dramatiza demais e entrega de menos.`
         break
     }
     return limparRoteiroFalado(texto)
+}
+
+function amostraMaterialResumo(linhas, maxChars = 4500) {
+    const bruto = String(linhas || '')
+    if (bruto.length <= maxChars) return bruto
+    return bruto.slice(-maxChars)
+}
+
+function queriesFatosResumo(analise) {
+    const candidatos = [
+        ...(analise.acontecimentos || []),
+        ...(analise.assuntos || []),
+        ...(analise.ganchos_narrativos || [])
+    ]
+        .map((s) => String(s || '').replace(/\s+/g, ' ').trim())
+        .filter((s) => s.length >= 8 && s.length <= 120)
+    const factual =
+        /placar|jogo|partida|eleic|noticia|notícia|preco|preço|cotacao|dólar|dolar|bitcoin|campeonato|final|resultado|hoje|ontem|lancamento|lançamento|filme|serie|série|presidente|minister|clima|tempo|bolsa|ibovespa|copa|libertadores|brasileirao|brasileirão/i
+    const preferidos = candidatos.filter((s) => factual.test(s))
+    const pool = (preferidos.length ? preferidos : candidatos).slice(0, 3)
+    return [...new Set(pool)]
+}
+
+async function buscarFatosTempoRealResumo(analise) {
+    const queries = queriesFatosResumo(analise)
+    if (!queries.length) return ''
+    try {
+        const mod = await import('./ia.js')
+        const pesquisar = mod.pesquisarWebSimples || mod.default?.pesquisarWebSimples
+        if (typeof pesquisar !== 'function') return ''
+        const partes = []
+        for (const q of queries.slice(0, 2)) {
+            const web = await pesquisar(q, { incluirPerplexity: false, raceMs: 2500, maxFontes: 2 })
+            const limpo = String(web || '')
+                .replace(/^\[(Perplexity|Tavily|Brave|DuckDuckGo|Wikipedia)\]\s*/gm, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 700)
+            if (limpo) partes.push(`${q}: ${limpo}`)
+        }
+        return partes.join('\n').slice(0, 1600)
+    } catch (err) {
+        console.log(`API resumo fatos web - ${msgErro(err)}`)
+        return ''
+    }
 }
 
 async function sintetizarAudioResumo(texto, optsTts) {
@@ -362,12 +418,16 @@ async function sintetizarAudioResumo(texto, optsTts) {
  * Fluxo: análise → roteiro (IA, com fallback local) → TTS ElevenLabs → Edge gratuito.
  * Erro de API de texto NÃO cancela o áudio: usa roteiro local + voz natural gratuita.
  */
+/** Exposto para testes (fallback sem monólogo "falou:"). */
+export { montarRoteiroLocalFallback }
+
 export const gerarResumoGrupoAudio = async ({
     mensagens,
     nomeGrupo,
     teveResumoAnterior = false,
     memoriaTexto = '',
-    personalidade = ''
+    personalidade = '',
+    preferirEleven = false
 }) => {
     const SYSTEM_ROTEIRO_RESUMO = systemRoteiroResumo(personalidade)
     const lista = mensagens || []
@@ -400,6 +460,7 @@ export const gerarResumoGrupoAudio = async ({
         nomeGrupo,
         totalMsgs: lista.length
     })
+    const fatosWeb = await buscarFatosTempoRealResumo(analise)
     const briefing = montarBriefingAnalise(analise)
     const conteudoRico = analise.nivel_conteudo !== 'raso' && (
         analise.acontecimentos.length + analise.assuntos.length + analise.momentos_engracados.length >= 2
@@ -409,17 +470,20 @@ export const gerarResumoGrupoAudio = async ({
         ? 'somente o que chegou DEPOIS do último resumo'
         : 'histórico guardado até agora'
 
+    const amostra = amostraMaterialResumo(linhas, 4500)
     const userRoteiro =
         `Grupo: ${nomeGrupo || 'WhatsApp'}\n` +
         `Janela: ${janela}\n` +
         `Mensagens: ${lista.length}${cortado ? ' (trecho mais recente)' : ''}\n` +
         `Duração falada alvo: 3min30s a 4min30s (mín 3 / máx 5). ` +
         `Escreva cerca de ${palavrasAlvoMin} a ${palavrasAlvoMax} palavras (WPM ~${WPM_TTS[fontePrevista] || 150}).\n` +
+        `Encha com OPINIÃO, roast e comentário por tema — NÃO com releitura do histórico.\n` +
         `Se o conteúdo for raso, priorize veracidade — não invente acontecimentos só para encher.\n\n` +
-        `BRIEFING DA ANÁLISE:\n${briefing}\n\n` +
+        `BRIEFING DA ANÁLISE (use como espinha dorsal):\n${briefing}\n\n` +
+        (fatosWeb ? `[FATOS EM TEMPO REAL — base factual; comente, não invente]:\n${fatosWeb}\n\n` : '') +
         (memoriaTexto ? `MEMÓRIA ANTERIOR:\n${memoriaTexto}\n\n` : '') +
-        `MATERIAL BRUTO (âncora factual):\n${linhas.slice(-16000)}\n\n` +
-        'Escreva agora a narração falada completa.'
+        `AMOSTRA CURTA DO MATERIAL (só âncora; NÃO narre linha a linha):\n${amostra}\n\n` +
+        'Escreva agora o comentário falado completo, por assuntos/climas.'
 
     let texto = ''
     let usouRoteiroLocal = false
@@ -429,7 +493,7 @@ export const gerarResumoGrupoAudio = async ({
         if (contarPalavras(texto) < 60) throw { erro: 'roteiro curto demais' }
     } catch (err) {
         console.log(`API resumo roteiro IA falhou → local - ${msgErro(err)}`)
-        texto = montarRoteiroLocalFallback(lista, nomeGrupo, analise)
+        texto = montarRoteiroLocalFallback(lista, nomeGrupo, analise, fatosWeb)
         usouRoteiroLocal = true
     }
 
@@ -478,7 +542,7 @@ export const gerarResumoGrupoAudio = async ({
     }
 
     if (contarPalavras(texto) < 40) {
-        texto = montarRoteiroLocalFallback(lista, nomeGrupo, analise)
+        texto = montarRoteiroLocalFallback(lista, nomeGrupo, analise, fatosWeb)
         usouRoteiroLocal = true
         est = estimarDuracaoSegundos(texto, 'edge')
     }
@@ -494,7 +558,9 @@ export const gerarResumoGrupoAudio = async ({
         maxPalavras: palavrasHardMax + 80,
         minSegundos: usouRoteiroLocal ? 0 : RESUMO_DUR.minSeg,
         maxSegundos: RESUMO_DUR.maxSeg,
-        forcarDuracaoMinima: !usouRoteiroLocal && conteudoRico && est >= RESUMO_DUR.minSeg * 0.85
+        forcarDuracaoMinima: !usouRoteiroLocal && conteudoRico && est >= RESUMO_DUR.minSeg * 0.85,
+        preferirEleven: !!preferirEleven && !!elevenKey(),
+        somenteEdge: !(preferirEleven && elevenKey())
     }
 
     try {

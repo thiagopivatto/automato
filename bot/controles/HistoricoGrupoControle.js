@@ -26,7 +26,7 @@ function placeholderMidia(tipo) {
 async function descreverImagemEmBackground({ id_grupo, id_usuario, timestamp, mensagemWa, legenda }) {
     try {
         const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
-        const api = (await import('@victorsouzaleal/lbot-api-comandos')).default
+        const api = (await import('../lib/lbotApi.js')).default
         const buffer = await downloadMediaMessage(mensagemWa, 'buffer')
         if (!buffer?.length) return
         const pergunta = legenda
@@ -53,7 +53,7 @@ async function descreverImagemEmBackground({ id_grupo, id_usuario, timestamp, me
 async function transcreverAudioEmBackground({ id_grupo, id_usuario, timestamp, mensagemWa }) {
     try {
         const { downloadMediaMessage } = await import('@whiskeysockets/baileys')
-        const api = (await import('@victorsouzaleal/lbot-api-comandos')).default
+        const api = (await import('../lib/lbotApi.js')).default
         const buffer = await downloadMediaMessage(mensagemWa, 'buffer')
         if (!buffer?.length) return
         const { resultado } = await api.Audios.obterTranscricaoAudio(buffer, {
@@ -115,8 +115,12 @@ export async function registrarHistoricoGrupo(mensagemBaileys) {
             timestamp
         })
 
-        // Áudio: ouve em background e troca o placeholder pela transcrição
-        if (tipo === tiposMensagem.audio && mensagemBaileys.mensagem) {
+        // Visão/STT automático OFF por padrão (custo Gemini/Deepgram).
+        // Ative com HISTORICO_AUTO_VISAO=1 / HISTORICO_AUTO_STT=1 no .env
+        const autoVisao = /^(1|true|sim|on)$/i.test(String(process.env.HISTORICO_AUTO_VISAO || ''))
+        const autoStt = /^(1|true|sim|on)$/i.test(String(process.env.HISTORICO_AUTO_STT || ''))
+
+        if (autoStt && tipo === tiposMensagem.audio && mensagemBaileys.mensagem) {
             setImmediate(() => {
                 transcreverAudioEmBackground({
                     id_grupo,
@@ -127,8 +131,7 @@ export async function registrarHistoricoGrupo(mensagemBaileys) {
             })
         }
 
-        // Imagem: descreve em background (alimenta resumodogrupo / chat)
-        if (tipo === tiposMensagem.imagem && mensagemBaileys.mensagem) {
+        if (autoVisao && tipo === tiposMensagem.imagem && mensagemBaileys.mensagem) {
             const legenda = String(mensagemBaileys.legenda || corpoTxt || '').trim()
             setImmediate(() => {
                 descreverImagemEmBackground({

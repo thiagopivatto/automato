@@ -28,25 +28,28 @@ export function chavesIa() {
     return {
         gemini: env('GEMINI_API_KEY'),
         openrouter: env('OPENROUTER_API_KEY'),
-        groq: env('GROQ_API_KEY'),
         rapid: env('RAPIDAPI_KEY', 'X_RAPIDAPI_KEY'),
-        eleven: env('ELEVENLABS_API_KEY', 'XI_API_KEY')
+        eleven: env('ELEVENLABS_API_KEY', 'XI_API_KEY'),
+        tavily: env('TAVILY_API_KEY'),
+        brave: env('BRAVE_SEARCH_API_KEY', 'BRAVE_API_KEY')
     }
 }
 
 /** Obrigatórias vs opcionais (documentação / boot). */
 export const ENV_MATRIZ = {
-    obrigatorias_basicas: [],
-    recomendadas_ia: ['GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'RAPIDAPI_KEY'],
+    obrigatorias_basicas: ['DONO'],
+    recomendadas_ia: ['GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'TAVILY_API_KEY', 'RAPIDAPI_KEY'],
     opcionais: [
-        'DONO',
         'DONO_JID',
         'NUMERO_DONO',
         'ELEVENLABS_API_KEY',
         'OPENROUTER_MODEL',
         'OPENROUTER_FREE_MODEL',
-        'GROQ_API_KEY',
-        'GROQ_MODEL',
+        'TAVILY_KEYLESS',
+        'BRAVE_SEARCH_API_KEY',
+        'BRAVE_API_KEY',
+        'PERPLEXITY_RAPIDAPI_KEY',
+        'DEEPAI_API_KEY',
         'YTDLP_PATH',
         'YTDLP_COOKIES',
         'YTDLP_BROWSER_COOKIES',

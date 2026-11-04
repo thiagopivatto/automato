@@ -1,8 +1,7 @@
-﻿import Datastore from '@seald-io/nedb'
-import { caminhoDados } from '../lib/caminhos.js'
+﻿import { createCollection } from '../db/sqlite.js'
 const db = {
-    grupos : new Datastore({filename : caminhoDados('grupos.db'), autoload: true}),
-    contador : new Datastore({filename : caminhoDados('contador.db'), autoload: true})
+    grupos: createCollection('grupos', { idField: 'id_grupo' }),
+    contador: createCollection('contador')
 }
 
 export class Grupo{
@@ -115,32 +114,30 @@ export class Grupo{
         await db.grupos.updateAsync({id_grupo}, {$set:{automsg: !!status}})
     }
 
-    /**
-     * Personalidade do bot neste grupo (chat, resumo, automsg…).
-     * Mantém personalidade_resumo espelhado por compatibilidade.
-     */
+    /** Personalidade de chat legada (NeDB) — preferir arquivo em personalidadeChat.js. */
     async definirPersonalidade(id_grupo, texto){
         const limpo = String(texto || '').trim().slice(0, 1200)
         await db.grupos.updateAsync(
             { id_grupo },
             limpo
-                ? { $set: { personalidade: limpo, personalidade_resumo: limpo } }
-                : { $unset: { personalidade: true, personalidade_resumo: true } }
+                ? { $set: { personalidade: limpo } }
+                : { $unset: { personalidade: true } }
         )
     }
 
     async obterPersonalidade(id_grupo){
         const g = await db.grupos.findOneAsync({ id_grupo })
-        return g?.personalidade || g?.personalidade_resumo || ''
+        return g?.personalidade || ''
     }
 
-    /** Alias legado → mesma personalidade do grupo. */
-    async definirPersonalidadeResumo(id_grupo, texto){
-        await this.definirPersonalidade(id_grupo, texto)
+    /** Campo NeDB legado só do resumo (migração → arquivo personalidades-resumo/). */
+    async obterPersonalidadeResumoLegado(id_grupo){
+        const g = await db.grupos.findOneAsync({ id_grupo })
+        return g?.personalidade_resumo || ''
     }
 
-    async obterPersonalidadeResumo(id_grupo){
-        return await this.obterPersonalidade(id_grupo)
+    async limparPersonalidadeResumoLegado(id_grupo){
+        await db.grupos.updateAsync({ id_grupo }, { $unset: { personalidade_resumo: true } })
     }
 
     async atualizarUltimaMsgHumana(id_grupo, ts = Date.now()){
