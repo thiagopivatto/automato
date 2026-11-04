@@ -25,8 +25,8 @@ Aliases de dono: `DONO`, `DONO_JID` ou `NUMERO_DONO`. Sem `DONO` no `.env`, o bo
 
 Geral: **Gemini → OpenRouter free → Rapid → OpenRouter pago → Pollinations**.
 
-**Chat (`!chat` / menção / reply):** hot path **Gemini → OpenRouter `:free` → Pollinations** (sem crédito pago). Race web ~2.8s. Meta E2E ≤ **3–4s**.  
-Para reativar pago no chat: `OPENROUTER_CHAT_PAGO=1`.
+**Chat (`!chat` / menção / reply):** hot path **OpenRouter `:free` → OpenRouter pago barato → Pollinations → Gemini**. Race web first-hit ~1.6s.  
+Pago usa `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`; nunca `openrouter/auto`). Nunca responde “pane/engasgada”.
 
 ### Metas de latência (tiers)
 

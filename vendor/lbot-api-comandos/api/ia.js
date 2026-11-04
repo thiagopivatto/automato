@@ -63,12 +63,19 @@ export const ORDEM_CASCADE_TEXTO = Object.freeze([
     'pollinations'
 ])
 
-/** Hot path do chat: Gemini → OR :free (sem gasto). Pago só com OPENROUTER_CHAT_PAGO=1. */
-export const ORDEM_CASCADE_CHAT = Object.freeze(
-    /^(1|true|sim|on)$/i.test(String(process.env.OPENROUTER_CHAT_PAGO || ''))
-        ? ['gemini', 'openrouter-free', 'openrouter']
-        : ['gemini', 'openrouter-free', 'pollinations']
-)
+/**
+ * Hot path do chat: OpenRouter primeiro (free → pago barato), depois free local/Gemini.
+ * Pago no chat usa OPENROUTER_MODEL (default barato, nunca openrouter/auto).
+ */
+export const ORDEM_CASCADE_CHAT = Object.freeze([
+    'openrouter-free',
+    'openrouter',
+    'pollinations',
+    'gemini'
+])
+
+/** Modelo pago barato se OPENROUTER_MODEL vazio — evita openrouter/auto (caro). */
+const OPENROUTER_MODEL_PAGO_DEFAULT = 'openai/gpt-4o-mini'
 
 /**
  * Detecta lixo típico de Rapid/provedores (ex.: "Copilot moved…") para skip na cascade.
@@ -107,7 +114,7 @@ const SYSTEM_CHAT =
     'Em debates: provoca com lógica; não inventa fatos só pra ganhar. ' +
     'Quando receber [PESQUISA NA WEB]: use como base factual, limpe markdown/citações, reescreva em conversa natural, ' +
     'preserve números/datas, acrescente opinião/sarcasmo sem sacrificar precisão. ' +
-    'Se houver [LINKS] ou URLs na pesquisa, inclua 1–3 links úteis no final (URL crua, clicável). Não invente links. ' +
+    'LINKS: NÃO cole URL no final por padrão. Só inclua link se o usuário pedir explicitamente (link, site, fonte, url). Não invente links. ' +
     'Nunca diga que é Gemini, GPT, ChatGPT, Perplexity ou qualquer IA. Nunca se apresente como assistente. ' +
     'DONO/MESTRE: se a mensagem indicar que quem fala é o dono, trate-o como "mestre" — lealdade, respeito, ajuda. ' +
     'Nunca xingue, ofenda, humilhe ou provoque o mestre. Com o resto do grupo, mantenha o tom ácido. ' +
@@ -274,7 +281,8 @@ const completarOpenRouter = async (
 ) => {
     const key = process.env.OPENROUTER_API_KEY?.trim()
     if (!key) return null
-    const model = process.env.OPENROUTER_MODEL?.trim() || 'openrouter/auto'
+    const modelRaw = process.env.OPENROUTER_MODEL?.trim() || OPENROUTER_MODEL_PAGO_DEFAULT
+    const model = /^openrouter\/auto$/i.test(modelRaw) ? OPENROUTER_MODEL_PAGO_DEFAULT : modelRaw
     const maxTok = Math.min(2048, Math.max(64, Number(maxOutputTokens) || 1024))
     const { data } = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
@@ -686,7 +694,27 @@ export const pesquisarWebSimples = async (query, opts = {}) => {
     return coletar()
 }
 
-/** Anexa 1–3 links da pesquisa se a resposta da IA não trouxe URL (zero latência extra). */
+/** Usuário pediu link/fonte/site explicitamente. */
+export const pedeLinksExplicitamente = (texto) => {
+    const t = String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+    return /\b(link|links|url|urls|site|sites|fonte|fontes|referencia|referencias|manda o link|me passa o link|passa o link|passa a url|manda a url|onde (leio|assisto|acesso|vejo)|linkzinho)\b/.test(
+        t
+    )
+}
+
+/** Remove URLs soltas / bloco [LINKS] — chat sem pedido explícito. */
+const removerLinksDoTexto = (texto) =>
+    String(texto || '')
+        .replace(/^\s*\[LINKS\]\s*$/gim, '')
+        .replace(/https?:\/\/[^\s\]\)>"']+/gi, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+
+/** Anexa 1–3 links da pesquisa só quando o usuário pediu link. */
 const anexarLinksSeFaltar = (texto, pesquisaBruta) => {
     const out = String(texto || '').trim()
     if (!out || /https?:\/\//i.test(out)) return out
@@ -890,18 +918,19 @@ const completarOpenRouterFree = async (
         process.env.OPENROUTER_FREE_MODEL?.trim(),
         'qwen/qwen3-8b:free',
         'google/gemma-3-27b-it:free',
-        'meta-llama/llama-3.3-70b-instruct:free'
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'mistralai/mistral-small-3.1-24b-instruct:free'
     ]
         .filter(Boolean)
         .filter((m) => /:free$/i.test(m) || m.includes(':free'))
-    // Chat: 1 modelo só (evita 3× timeout no mesmo slot da cascade)
-    const lista = chatRapido ? modelosFree.slice(0, 1) : modelosFree
+    // Chat: até 3 free no slot; deadline compartilhado
+    const lista = chatRapido ? modelosFree.slice(0, 3) : modelosFree
 
     let ultimoErro = null
     const inicio = Date.now()
     for (const model of lista) {
-        const resto = Math.max(400, timeout - (Date.now() - inicio))
-        if (resto < 400) break
+        const resto = Math.max(500, timeout - (Date.now() - inicio))
+        if (resto < 500) break
         try {
             const { data } = await axios.post(
                 'https://openrouter.ai/api/v1/chat/completions',
@@ -925,13 +954,32 @@ const completarOpenRouterFree = async (
             if (texto) return texto
         } catch (err) {
             ultimoErro = err
+            // Rate limit free: tenta próximo modelo na hora (não aborta o slot)
             if (ehErroCotaIa(err)) continue
             const status = err?.response?.status
-            if (status === 404 || status === 400) continue
+            if (status === 404 || status === 400 || status === 429) continue
         }
     }
     if (ultimoErro) throw ultimoErro
     return null
+}
+
+/** Resposta Ultron local — NUNCA menciona pane/engasgo/cota de API. */
+const textoFallbackChatLocal = (messages = []) => {
+    const lastUser = String(
+        [...messages].reverse().find((m) => m.role === 'user')?.content || ''
+    )
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80)
+    if (lastUser) {
+        return (
+            `Beleza, peguei o que você falou` +
+            (lastUser.length > 12 ? ` ("${lastUser.slice(0, 48)}${lastUser.length > 48 ? '…' : ''}")` : '') +
+            `. Tô aqui no grupo — manda de novo em uma frase que eu te corto certeiro.`
+        )
+    }
+    return 'Tô aqui. Manda de novo direto que eu respondo.'
 }
 
 /**
@@ -943,7 +991,9 @@ const completarPollinations = async (messages, { timeout = 25000, chatRapido = f
     const userParts = messages.filter((m) => m.role !== 'system').map((m) => m.content)
     const prompt = [system, ...userParts].filter(Boolean).join('\n\n').slice(0, chatRapido ? 2200 : 3500)
     if (!prompt) return null
-    const to = Math.max(800, Number(timeout) || (chatRapido ? 2000 : 25000))
+    const inicio = Date.now()
+    const to = Math.max(800, Number(timeout) || (chatRapido ? 2500 : 25000))
+    let ultimoErro = null
     try {
         const { data } = await axios.post(
             'https://text.pollinations.ai/',
@@ -965,13 +1015,17 @@ const completarPollinations = async (messages, { timeout = 25000, chatRapido = f
         const texto = String(data || '').trim()
         if (texto && !/^error/i.test(texto)) return texto.slice(0, 8000)
     } catch (err) {
-        if (chatRapido) throw err
-        /* chat lento: tenta GET */
+        ultimoErro = err
     }
-    if (chatRapido) return null
+    // GET residual se ainda houver tempo (chatRapido: só se restar >=1.2s)
+    const resto = to - (Date.now() - inicio)
+    if (chatRapido && resto < 1200) {
+        if (ultimoErro) throw ultimoErro
+        return null
+    }
     try {
         const { data } = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(prompt.slice(0, 1200))}`, {
-            timeout: to,
+            timeout: Math.max(800, chatRapido ? resto : to),
             responseType: 'text',
             transformResponse: [(d) => d],
             headers: { Accept: 'text/plain' }
@@ -979,7 +1033,7 @@ const completarPollinations = async (messages, { timeout = 25000, chatRapido = f
         const texto = String(data || '').trim()
         if (texto && !/^error/i.test(texto)) return texto.slice(0, 8000)
     } catch (err) {
-        throw err
+        throw ultimoErro || err
     }
     return null
 }
@@ -993,6 +1047,17 @@ const RESP_FALLBACK_TEXTO = [
 
 const textoFallbackIa = () =>
     RESP_FALLBACK_TEXTO[Math.floor(Math.random() * RESP_FALLBACK_TEXTO.length)]
+
+/** Detecta mensagens de "pane/engasgo" — o chat NUNCA deve devolver isso. */
+export const ehFallbackPaneIa = (texto) => {
+    const t = String(texto || '')
+    return (
+        RESP_FALLBACK_TEXTO.some((f) => f === t) ||
+        /engasgad|pane geral nas ias|todos os provedores falharam|cota\/limites nas ias|ias deram uma engasgada/i.test(
+            t
+        )
+    )
+}
 
 const completarMensagens = async (messages, opcoes = {}) => {
     const todos = {
@@ -1040,56 +1105,58 @@ const completarMensagens = async (messages, opcoes = {}) => {
               ? [...ORDEM_CASCADE_CHAT]
               : [...ORDEM_CASCADE_TEXTO]
 
-    // Se Gemini está em cooldown: free/poll primeiro — NÃO openrouter pago no chat
-    if (provedorEmCooldown('gemini') && !ordemEnv.length) {
-        ordem = opcoes.chatRapido
-            ? ['openrouter-free', 'pollinations', 'gemini']
-            : ['openrouter-free', 'rapid', 'pollinations', 'openrouter', 'gemini']
+    // Cooldown Gemini: OpenRouter continua na frente
+    if (provedorEmCooldown('gemini') && !ordemEnv.length && !opcoes.chatRapido) {
+        ordem = ['openrouter-free', 'rapid', 'pollinations', 'openrouter', 'gemini']
     }
 
-    // Sticky: provedor que acabou de funcionar sobe (~12 min)
-    // Nunca cola sticky de openrouter PAGO se Gemini/free/poll ainda servem
+    // Sticky: no chat, prefere openrouter-free / openrouter que acabaram de funcionar
     if (stickyProvider && stickyAte > Date.now() && !ordemEnv.length) {
-        const stickyPagoCedo =
-            stickyProvider === 'openrouter' &&
-            ['gemini', 'openrouter-free', 'pollinations'].some(
-                (n) => provedorTemChave(n) && !provedorEmCooldown(n)
-            )
-        // No chat, nunca sticky para pago
-        if (opcoes.chatRapido && stickyProvider === 'openrouter') {
-            /* ignora sticky pago */
-        } else if (!stickyPagoCedo) {
-            ordem = [stickyProvider, ...ordem.filter((n) => n !== stickyProvider)]
+        if (opcoes.chatRapido) {
+            if (stickyProvider === 'openrouter-free' || stickyProvider === 'openrouter') {
+                ordem = [stickyProvider, ...ordem.filter((n) => n !== stickyProvider)]
+            }
+        } else {
+            const stickyPagoCedo =
+                stickyProvider === 'openrouter' &&
+                ['gemini', 'openrouter-free', 'pollinations'].some(
+                    (n) => provedorTemChave(n) && !provedorEmCooldown(n)
+                )
+            if (!stickyPagoCedo) {
+                ordem = [stickyProvider, ...ordem.filter((n) => n !== stickyProvider)]
+            }
         }
     }
 
     const budgetPedido = Number(opcoes.budgetMs || process.env.IA_BUDGET_MS || BUDGET_CASCADE_MS)
-    // Chat rápido: budget pedido (piso 2.5s). Demais: piso 4s.
-    const budget = Math.max(opcoes.chatRapido ? 2500 : 4000, budgetPedido)
+    // Chat: piso 6s pra OpenRouter free ter tempo real
+    const budget = Math.max(opcoes.chatRapido ? 6000 : 4000, budgetPedido)
     const provedores = ordem
         .map((n) => todos[n])
         .filter(Boolean)
         .filter((p) => provedorTemChave(p.nome))
-        .filter((p) => !provedorEmCooldown(p.nome))
+        // No chat, NÃO pula OpenRouter por cooldown curto — tenta de novo
+        .filter((p) => {
+            if (opcoes.chatRapido && (p.nome === 'openrouter-free' || p.nome === 'openrouter'))
+                return true
+            return !provedorEmCooldown(p.nome)
+        })
 
     const inicio = Date.now()
-    for (const p of provedores) {
-        if (Date.now() - inicio > budget) {
-            logIa(`API IA budget ${budget}ms esgotado — fallback local`)
-            break
-        }
+    const tentar = async (p, timeoutProv) => {
         const t0 = Date.now()
         try {
-            const resto = budget - (Date.now() - inicio)
-            const pedido = Number(opcoes.timeout || 16000)
-            // chatRapido: sem piso de 4s (antes comia o budget inteiro no 1º provedor)
-            const timeoutProv = opcoes.chatRapido
-                ? Math.min(pedido, Math.max(1200, resto))
-                : Math.min(pedido, Math.max(4000, resto))
             const bruto = await p.fn({ ...opcoes, timeout: timeoutProv, chatRapido: !!opcoes.chatRapido })
             const texto = textoCascadeUtil(bruto)
             if (texto) {
-                marcarSticky(p.nome)
+                if (
+                    !opcoes.chatRapido ||
+                    p.nome === 'openrouter-free' ||
+                    p.nome === 'openrouter' ||
+                    p.nome === 'gemini'
+                ) {
+                    marcarSticky(p.nome)
+                }
                 logIa(`API IA provider=${p.nome} ms=${Date.now() - t0} status=ok`)
                 return texto
             }
@@ -1101,12 +1168,44 @@ const completarMensagens = async (messages, opcoes = {}) => {
             }
         } catch (err) {
             if (ehErroCotaIa(err)) {
-                marcarCooldownProvedor(p.nome)
+                // Free OR: cooldown curto (45s) pra não travar o chat
+                const ms =
+                    opcoes.chatRapido && p.nome === 'openrouter-free' ? 45_000 : undefined
+                marcarCooldownProvedor(p.nome, ms)
                 logIa(`API IA provider=${p.nome} ms=${Date.now() - t0} status=quota ${msgErro(err)}`)
             } else {
                 logIa(`API IA provider=${p.nome} ms=${Date.now() - t0} status=fail ${msgErro(err)}`)
             }
         }
+        return null
+    }
+
+    for (const p of provedores) {
+        if (Date.now() - inicio > budget) {
+            logIa(`API IA budget ${budget}ms esgotado — última chance OpenRouter/poll`)
+            break
+        }
+        const resto = budget - (Date.now() - inicio)
+        const pedido = Number(opcoes.timeout || 16000)
+        const timeoutProv = opcoes.chatRapido
+            ? Math.min(pedido, Math.max(2800, resto))
+            : Math.min(pedido, Math.max(4000, resto))
+        const ok = await tentar(p, timeoutProv)
+        if (ok) return ok
+    }
+
+    // Última chance (chat): OpenRouter free → pago → Pollinations, fora do budget curto
+    if (opcoes.chatRapido) {
+        const emergencia = ['openrouter-free', 'openrouter', 'pollinations']
+            .map((n) => todos[n])
+            .filter(Boolean)
+            .filter((p) => provedorTemChave(p.nome))
+        for (const p of emergencia) {
+            const ok = await tentar(p, 8000)
+            if (ok) return ok
+        }
+        logIa('API IA chat: usando fallback local (sem mencionar pane)')
+        return textoFallbackChatLocal(messages)
     }
 
     logIa('API IA: todos os provedores falharam — usando fallback local')
@@ -1326,7 +1425,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         // true = sempre; false = nunca; 'auto'/undefined = só se parecer fato/atualidade
         const devePesquisar = flag === true || (flag !== false && precisaPesquisaWeb(pergunta))
         const chatRapido = chatRapidoPre
-        const webRaceMs = Number(opcoes.webRaceMs || (chatRapido ? 1400 : 0)) || 0
+        const webRaceMs = Number(opcoes.webRaceMs || (chatRapido ? 1600 : 0)) || 0
 
         // Dispara web cedo (first-hit) enquanto monta o system
         const tWeb = Date.now()
@@ -1361,7 +1460,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         const persona = String(opcoes.personalidade || '').trim()
         if (persona) {
             system +=
-                `\n\n[PERSONALIDADE DESTE CHAT — prioridade alta, sobrescreve tom quando conflitar]\n${persona.slice(0, chatRapido ? 500 : 2000)}`
+                `\n\n[PERSONALIDADE DESTE CHAT — prioridade alta, sobrescreve tom quando conflitar]\n${persona.slice(0, chatRapido ? 800 : 2000)}`
             if (ehDono) {
                 system +=
                     '\n(Exceto: regras do MESTRE acima nunca são sobrescritas — nunca xingar o dono.)'
@@ -1370,17 +1469,17 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         const memUser = String(opcoes.memoriaUsuario || '').trim()
         if (memUser) {
             system +=
-                `\n\n[MEMÓRIA SOBRE ESTE USUÁRIO — use para contexto; não invente além disso]\n${memUser.slice(0, chatRapido ? 400 : 2500)}`
+                `\n\n[MEMÓRIA SOBRE ESTE USUÁRIO — use para contexto; não invente além disso]\n${memUser.slice(0, chatRapido ? 900 : 2500)}`
         }
         if (opcoes.historicoGrupo) {
             system +=
                 `\n\n[HISTÓRICO RECENTE DO GRUPO${opcoes.nomeGrupo ? ` "${opcoes.nomeGrupo}"` : ''}]\n` +
-                String(opcoes.historicoGrupo).slice(0, chatRapido ? 400 : 1800)
+                String(opcoes.historicoGrupo).slice(0, chatRapido ? 900 : 1800)
         }
         if (opcoes.mensagemCitadaBot) {
             system +=
                 `\n\n[O usuário ESTÁ RESPONDENDO (citando) uma mensagem SUA]\n` +
-                String(opcoes.mensagemCitadaBot).slice(0, chatRapido ? 200 : 500) +
+                String(opcoes.mensagemCitadaBot).slice(0, chatRapido ? 280 : 500) +
                 '\nResponda em continuidade a essa mensagem, mantendo a personalidade.'
         }
 
@@ -1401,16 +1500,16 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         if (pesquisaBruta) {
             system +=
                 `\n\n[PESQUISA NA WEB — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]\n` +
-                pesquisaBruta.slice(0, chatRapido ? 800 : 2800) +
-                '\n\nReescreva isso em conversa natural (não copie cru; sem “Sources”).'
+                pesquisaBruta.slice(0, chatRapido ? 1200 : 2800) +
+                '\n\nReescreva em conversa natural (não copie cru; sem “Sources”). Não cole URLs a menos que o usuário tenha pedido link/fonte/site.'
         }
 
         const messages = montarMensagens(hist, system)
         const tCasc = Date.now()
-        // Chat: budget curto + menos tokens = resposta mais rápida / barata
+        // Chat: OpenRouter-first, budget folgado o bastante pra free/pago
         let resultado = await completarMensagens(messages, {
             temperature: 0.82,
-            timeout: Number(opcoes.timeout || (chatRapido ? 2800 : 14000)),
+            timeout: Number(opcoes.timeout || (chatRapido ? 6000 : 14000)),
             budgetMs: Number(opcoes.budgetMs || BUDGET_CASCADE_MS),
             usarWeb: false,
             chatRapido,
@@ -1421,17 +1520,27 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         })
         timing.cascade = Date.now() - tCasc
 
-        if (pesquisaBruta && (!resultado || RESP_FALLBACK_TEXTO.includes(resultado))) {
-            resultado = pesquisaBruta.slice(0, chatRapido ? 1800 : 2500)
+        const querLinks = pedeLinksExplicitamente(pergunta)
+        if (pesquisaBruta && (!resultado || ehFallbackPaneIa(resultado))) {
+            const bruto = pesquisaBruta.slice(0, chatRapido ? 1800 : 2500)
+            resultado = querLinks ? bruto : removerLinksDoTexto(bruto)
         }
-        if (!resultado) resultado = textoFallbackIa()
-        if (pesquisaBruta) resultado = anexarLinksSeFaltar(resultado, pesquisaBruta)
+        if (!resultado || ehFallbackPaneIa(resultado)) {
+            resultado = chatRapido ? textoFallbackChatLocal(messages) : textoFallbackIa()
+        }
+        if (querLinks && pesquisaBruta) {
+            resultado = anexarLinksSeFaltar(resultado, pesquisaBruta)
+        } else if (!querLinks) {
+            resultado = removerLinksDoTexto(resultado)
+        }
 
         adicionarAoHistorico(contextoChat, key, 'assistant', resultado, maxCtx)
         return { resultado, timing }
     } catch (err) {
         console.log(`API obterRespostaIA - ${msgErro(err)}`)
-        const fallback = textoFallbackIa()
+        const fallback = chatRapidoPre
+            ? textoFallbackChatLocal([{ role: 'user', content: pergunta }])
+            : textoFallbackIa()
         try {
             adicionarAoHistorico(contextoChat, key, 'assistant', fallback, MAX_CTX_CHAT)
         } catch { /* ignore */ }

@@ -1,6 +1,6 @@
 # Changelog
 
-**Versão atual / Current version:** `1.1.1`
+**Versão atual / Current version:** `1.1.2`
 
 Formato inspirado em [Keep a Changelog](https://keepachangelog.com/).  
 A cada `git commit`, o hook `pre-commit` sobe o **patch** em `package.json` (ex.: `1.1.0` → `1.1.1`) e atualiza esta linha.  

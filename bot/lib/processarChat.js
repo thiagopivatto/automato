@@ -228,10 +228,10 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         ehDono: !!mensagemBaileys.mensagem_dono,
         mensagemDono: !!mensagemBaileys.mensagem_dono,
         usarPesquisa,
-        timeout: 2800,
-        budgetMs: 3000,
+        timeout: 6000,
+        budgetMs: 8000,
         maxOutputTokens: usarPesquisa === true ? 380 : 280,
-        webRaceMs: 1400,
+        webRaceMs: 1600,
         chatRapido: true,
         incluirPerplexity: false
     }
@@ -282,12 +282,12 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
                 /* */
             }
             resultadoTexto =
-                'Tô online, mas as IAs deram uma engasgada agora. Manda de novo em um minutinho?'
+                'Tô aqui. Manda de novo direto que eu te respondo sem enrolação.'
         }
     }
-    if (!resultadoTexto) {
+    if (!resultadoTexto || /engasgad|pane geral nas ias|ias deram uma engasgada/i.test(resultadoTexto)) {
         resultadoTexto =
-            'Tô online, mas as IAs deram uma engasgada agora. Manda de novo em um minutinho?'
+            'Tô aqui. Manda de novo direto que eu te respondo sem enrolação.'
     }
 
     await socket.responderTexto(
