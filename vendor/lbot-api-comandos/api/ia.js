@@ -544,6 +544,16 @@ const completarPollinations = async (messages, { timeout = 25000 } = {}) => {
     return null
 }
 
+const RESP_FALLBACK_TEXTO = [
+    'Tô aqui, mas as conexões de IA deram uma engasgada agora. Manda de novo em um minutinho que eu te respondo.',
+    'Deu uma pane geral nas IAs livres por uns segundos. Repete aí que eu pego na sequência.',
+    'Momento ruim pra nuvem: todos os provedores falharam. Tenta de novo daqui a pouco — eu continuo online.',
+    'Não consegui gerar a resposta agora (cota/limites nas IAs). Pode mandar de novo em breve?'
+]
+
+const textoFallbackIa = () =>
+    RESP_FALLBACK_TEXTO[Math.floor(Math.random() * RESP_FALLBACK_TEXTO.length)]
+
 const completarMensagens = async (messages, opcoes = {}) => {
     // Ordem: Gemini → Groq → Rapid → OpenRouter → OpenRouter free → Pollinations (grátis)
     const provedores = [
@@ -561,8 +571,6 @@ const completarMensagens = async (messages, opcoes = {}) => {
         { nome: 'pollinations', fn: () => completarPollinations(messages) }
     ]
 
-    let ultimoErro = null
-    let algumCota = false
     for (const p of provedores) {
         if (provedorEmCooldown(p.nome)) {
             console.log(`API IA skip ${p.nome} (cooldown cota)`)
@@ -572,10 +580,7 @@ const completarMensagens = async (messages, opcoes = {}) => {
             const texto = await p.fn()
             if (texto) return texto
         } catch (err) {
-            ultimoErro = err
-            const cota = ehErroCotaIa(err)
-            if (cota) {
-                algumCota = true
+            if (ehErroCotaIa(err)) {
                 marcarCooldownProvedor(p.nome)
                 console.log(`API IA ${p.nome} cota/limite — fallback. ${msgErro(err)}`)
             } else {
@@ -583,16 +588,10 @@ const completarMensagens = async (messages, opcoes = {}) => {
             }
         }
     }
-    if (!temChaveIa() && !process.env.GROQ_API_KEY?.trim()) {
-        throw new Error(avisoSemChave)
-    }
-    const status = ultimoErro?.response?.status
-    if (status === 402 || algumCota) {
-        throw new Error(
-            'Todas as IAs de texto falharam por cota/limite. Confira !cotasia e as chaves no .env (Gemini/Groq/OpenRouter/Rapid).'
-        )
-    }
-    throw ultimoErro || new Error('Nenhum provedor de IA respondeu')
+
+    // Nunca estoura erro pro usuário: devolve texto amigável
+    console.log('API IA: todos os provedores falharam — usando fallback local')
+    return textoFallbackIa()
 }
 
 /**
@@ -782,15 +781,11 @@ export const gerarTextoIA = async (prompt, system, opcoes = {}) => {
         if (system) messages.push({ role: 'system', content: system })
         messages.push({ role: 'user', content: String(prompt) })
         const resultado = await completarMensagens(messages, opcoes)
-        if (!resultado) throw new Error('resposta vazia')
-        return { resultado }
+        return { resultado: String(resultado || textoFallbackIa()).trim() }
     } catch (err) {
         console.log(`API gerarTextoIA - ${msgErro(err)}`)
-        throw {
-            erro: !temChaveIa()
-                ? avisoSemChave
-                : 'Houve um erro ao gerar texto com IA. Verifique RAPIDAPI_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY no .env.'
-        }
+        // Nunca propaga erro de API — resposta local
+        return { resultado: textoFallbackIa() }
     }
 }
 
@@ -851,21 +846,20 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
             maxOutputTokens: pesquisaBruta ? 1200 : 700
         })
 
-        if (!resultado && pesquisaBruta) {
+        if (pesquisaBruta && (!resultado || RESP_FALLBACK_TEXTO.includes(resultado))) {
             resultado = pesquisaBruta.slice(0, 2500)
         }
-        if (!resultado) throw new Error('resposta vazia')
+        if (!resultado) resultado = textoFallbackIa()
 
         adicionarAoHistorico(contextoChat, key, 'assistant', resultado, MAX_CTX_CHAT)
         return { resultado }
     } catch (err) {
-        if (hist.length && hist[hist.length - 1]?.role === 'user') hist.pop()
         console.log(`API obterRespostaIA - ${msgErro(err)}`)
-        throw {
-            erro: !temChaveIa()
-                ? avisoSemChave
-                : 'Houve um erro no servidor de IA. Tente novamente ou verifique RAPIDAPI_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY no .env.'
-        }
+        const fallback = textoFallbackIa()
+        try {
+            adicionarAoHistorico(contextoChat, key, 'assistant', fallback, MAX_CTX_CHAT)
+        } catch { /* ignore */ }
+        return { resultado: fallback }
     }
 }
 

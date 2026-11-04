@@ -119,14 +119,37 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
                 )) || ''
         }
     } catch { /* ignore */ }
-    const { resultado: resultadoTexto } = await api.IA.obterRespostaIA(pergunta, remetente, id_chat, {
-        historicoGrupo: historicoGrupoTexto,
-        nomeGrupo,
-        nomeUsuario: nome_usuario || '',
-        personalidade,
-        // pesquisa só quando a pergunta parece precisar de fatos atuais
-        usarPesquisa: 'auto'
-    })
+    let resultadoTexto = ''
+    try {
+        const resp = await api.IA.obterRespostaIA(pergunta, remetente, id_chat, {
+            historicoGrupo: historicoGrupoTexto,
+            nomeGrupo,
+            nomeUsuario: nome_usuario || '',
+            personalidade,
+            usarPesquisa: 'auto'
+        })
+        resultadoTexto = resp?.resultado || ''
+    } catch {
+        try {
+            const { carregarIaApi } = await import('./iaApi.js')
+            const IA = await carregarIaApi()
+            const resp = await IA.obterRespostaIA(pergunta, remetente, id_chat, {
+                historicoGrupo: historicoGrupoTexto,
+                nomeGrupo,
+                nomeUsuario: nome_usuario || '',
+                personalidade,
+                usarPesquisa: 'auto'
+            })
+            resultadoTexto = resp?.resultado || ''
+        } catch {
+            resultadoTexto =
+                'Tô online, mas as IAs deram uma engasgada agora. Manda de novo em um minutinho?'
+        }
+    }
+    if (!resultadoTexto) {
+        resultadoTexto =
+            'Tô online, mas as IAs deram uma engasgada agora. Manda de novo em um minutinho?'
+    }
     await socket.responderTexto(
         c,
         id_chat,

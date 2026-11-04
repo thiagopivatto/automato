@@ -739,16 +739,32 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                         '⏳ Consultando cotas das IAs…',
                         mensagem
                     )
-                    const { resultado } = await api.IA.consultarCotasIA()
-                    await socket.responderTexto(c, id_chat, resultado, mensagem)
-                } catch (err) {
-                    if (!err.erro) throw err
+                    let resultado
+                    try {
+                        if (typeof api?.IA?.consultarCotasIA === 'function') {
+                            ;({ resultado } = await api.IA.consultarCotasIA())
+                        } else {
+                            throw new Error('consultarCotasIA ausente no node_modules')
+                        }
+                    } catch {
+                        const { carregarIaApi } = await import('../lib/iaApi.js')
+                        const IA = await carregarIaApi()
+                        ;({ resultado } = await IA.consultarCotasIA())
+                    }
                     await socket.responderTexto(
                         c,
                         id_chat,
-                        criarTexto(comandos_info.outros.erro_api, comando, err.erro),
+                        resultado || 'Não consegui montar o relatório de cotas agora.',
                         mensagem
                     )
+                } catch (err) {
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        'Não consegui consultar as cotas agora. Rode `npm run sync:vendor` no servidor e reinicie.',
+                        mensagem
+                    )
+                    consoleErro(err, 'COTASIA')
                 }
                 break
 

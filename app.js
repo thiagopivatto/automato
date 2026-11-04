@@ -25,6 +25,13 @@ try {
 }
 carregarEnv(raizProjeto)
 
+// Garante node_modules/@victorsouzaleal/lbot-api-comandos = vendor (cópia no Linux/NAS)
+try {
+    await import('./scripts/sync-vendor.js')
+} catch (err) {
+    console.warn(`[sync-vendor] ${err?.message || err}`)
+}
+
 function versaoBaileys() {
     try {
         const req = createRequire(import.meta.url)
