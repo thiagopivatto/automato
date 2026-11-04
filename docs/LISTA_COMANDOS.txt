@@ -33,7 +33,7 @@ RESTRIÇÕES GERAIS
 
 ▶ !comandos
   O que faz : Alias de !menu — lista completa de comandos
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
+  Quem pode : Apenas o DONO do bot
   Como usar : Ex: !comandos - Mesmo que !menu.
 
 ▶ !reportar
@@ -45,7 +45,7 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: !sugerir adicionar comando X - Envia sugestão de comando/correção. | O dono vê a lista com !sugestoes.
 
 ▶ !meusdados
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
+  Quem pode : Apenas o DONO do bot
   Como usar : Ex: !meusdados - Exibe seus dados gerais como comandos, mensagens, tipo de usuário, etc.
 
 ▶ !info
@@ -77,7 +77,7 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: Responda um STICKER com !snome pack, autor - Renomeia o nome do pack e do autor do sticker.
 
 ================================================================================
-  UTILIDADES  (19 comandos)
+  UTILIDADES  (21 comandos)
 ================================================================================
 
 ▶ !encurtar
@@ -97,9 +97,19 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: !series - Exibe as tendências atuais de séries.
 
 ▶ !chat
-  O que faz : Conversa com opinião; pesquisa na web antes (como !pesquisa)
+  O que faz : Conversa com o Ultron (!chat, @menção ou respondendo mensagem dele)
+  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
+  Como usar : Ex: marque o bot @Ultron oi, tudo bem? | Ex: responda uma mensagem do bot com seu texto — ele continua a conversa | Ex: @bot o que rolou hoje na política? | Ex: !chat faz o resumo do grupo → roda !resumodogrupo | Ex: envie/responda uma imagem com !chat o que é isso? | Personalidade deste chat: !personalidade | Pesquisa na web só em perguntas de fato/atualidade.
+
+▶ !personalidade
+  O que faz : Personalidade do Ultron neste chat (grupo ou privado)
   Quem pode : Apenas o DONO do bot
-  Como usar : Ex: !chat o que rolou hoje na política? | Ex: !chat faz o resumo do grupo → roda !resumodogrupo | Antes de responder, pesquisa na internet (mesma lógica de !pesquisa) e trata o resultado em tom de conversa.
+  Como usar : Ex: !personalidade fala como um tiozão fofoqueiro e chato | Ex: !personalidade ver — Mostra a atual | Ex: !personalidade padrão — Volta ao Ultron padrão | Salva em arquivo por chat (grupo e PV separados). Vale para chat, resumo e automsg. | Em grupo: apenas admins. No privado: você controla só o seu PV.
+
+▶ !oquetemaqui
+  O que faz : Descreve o que tem na imagem marcada ou enviada
+  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
+  Como usar : Ex: Envie uma imagem com legenda !oquetemaqui | Ex: Responda uma imagem com !oquetemaqui | Ex: Responda uma imagem com !oquetemaqui quem é essa pessoa?
 
 ▶ !tabela
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
@@ -159,16 +169,12 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: Envie/responda um audio/video com !qualmusica - Procura a música tocada no audio/video. | Obs: Este comando funciona apenas com AUDIO/VIDEO.
 
 ================================================================================
-  IA / GERACAO  (17 comandos)
+  IA / GERACAO  (16 comandos)
 ================================================================================
 
 ▶ !comofaz
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
   Como usar : Ex: !comofaz - Busca um artigo aleatório do WikiHow (como fazer algo).
-
-▶ !curiosidade
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !curiosidade - Envia uma curiosidade aleatória.
 
 ▶ !playlist
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
@@ -221,7 +227,7 @@ RESTRIÇÕES GERAIS
 ▶ !resumodogrupo
   O que faz : Narrador agressivo/egocêntrico do grupo em áudio (3–5 min)
   Quem pode : Qualquer membro (só em grupo)
-  Como usar : Ex: !resumodogrupo - Nota de voz de 3 a 5 min, tom rebelde, egocêntrico e com palavrão. | Na próxima vez, só entra o que foi dito depois deste pedido (anti-repetição). | Personalidade por grupo: !personalidaderesumo | Requisitos: grupo; bot coletando mensagens.
+  Como usar : Ex: !resumodogrupo - Nota de voz de 3 a 5 min, tom rebelde, egocêntrico e com palavrão. | Na próxima vez, só entra o que foi dito depois deste pedido (anti-repetição). | Personalidade deste chat: !personalidade | Requisitos: grupo; bot coletando mensagens.
 
 ▶ !resumoportema
   O que faz : Resumo do grupo separado por temas (últimas ~1000 msgs)
@@ -230,7 +236,7 @@ RESTRIÇÕES GERAIS
 
 ▶ !personalidaderesumo
   O que faz : Define a personalidade do resumodogrupo só neste grupo
-  Quem pode : Apenas o DONO do bot
+  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
   Como usar : Ex: !personalidaderesumo fala como um tiozão fofoqueiro e chato | Ex: !personalidaderesumo ver - Mostra a personalidade atual | Ex: !personalidaderesumo reset - Volta ao padrão agressivo/egocêntrico | Alias: !resumopersona | Apenas admin do grupo (ou dono do bot).
 
 ================================================================================
@@ -266,7 +272,7 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: !img tema - Envia uma imagem com o tema que você digitar.
 
 ================================================================================
-  GRUPO  (43 comandos)
+  GRUPO  (44 comandos)
 ================================================================================
 
 ▶ !statusgrupo
@@ -375,7 +381,7 @@ RESTRIÇÕES GERAIS
 
 ▶ !alink
   Quem pode : Admin do grupo + bot precisa ser admin
-  Como usar : Ex: !alink - Liga/desliga o antilink e apaga a mensagem de quem postar qualquer tipo de link.
+  Como usar : Ex: !alink - Liga/desliga o antilink e apaga a mensagem de quem postar link. | Dono e admins do grupo podem enviar links normalmente.
 
 ▶ !autosticker
   Quem pode : Admin do grupo
@@ -384,6 +390,11 @@ RESTRIÇÕES GERAIS
 ▶ !autosimi
   Quem pode : Admin do grupo
   Como usar : Ex: !autosimi - Liga/desliga respostas automáticas do Simi (sem comando). Apenas admins.
+
+▶ !ofensa
+  O que faz : Rebate ofensas com resposta bem mais pesada (ligado por padrão)
+  Quem pode : Admin do grupo
+  Como usar : Ex: !ofensa on — Liga (padrão). | Ex: !ofensa off — Desliga. | Ex: !ofensa — Mostra se está ligada/desligada. | Quando alguém xinga no grupo, o bot devolve uma ofensa bem pior. Se a ofensa for contra membro do grupo ou pessoa pública, o bot defende a vítima (exceto temas gravíssimos). Apenas admins.
 
 ▶ !automsg
   O que faz : Interações humanas esporádicas no grupo
@@ -447,7 +458,7 @@ RESTRIÇÕES GERAIS
   Como usar : Ao receber visualização única (foto/vídeo/áudio/voz), o bot reenvia automaticamente como mídia normal. | Manual: responda a VO com !revelar (admin).
 
 ================================================================================
-  DIVERSÃO  (33 comandos)
+  DIVERSÃO  (28 comandos)
 ================================================================================
 
 ▶ !mascote
@@ -506,10 +517,6 @@ RESTRIÇÕES GERAIS
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
   Como usar : Ex: !chance de ficar rico - Calcula sua chance de um tema aleatório a sua escolha.
 
-▶ !fch
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !fch - Exibe uma frase aleatória montada com as cartas do jogo Cartas contra a Humanidade.
-
 ▶ !trisal
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
   Como usar : Ex: !trisal - Escolhe 3 pessoas aleatórias do grupo.
@@ -533,23 +540,6 @@ RESTRIÇÕES GERAIS
 ▶ !piada
   Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
   Como usar : Ex: !piada - Conta uma piada real (banco local + APIs).
-
-▶ !issoouaquilo
-  O que faz : Pergunta aleatória “isso ou aquilo”
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !issoouaquilo - Sorteia uma pergunta de escolha. | Ex: !ioa - Atalho.
-
-▶ !ioa
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !ioa - Atalho de !issoouaquilo.
-
-▶ !verdadeoudesafio
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !verdadeoudesafio [verdade | desafio] [1-5] | Ex: !vod 3 - Atalho. | Níveis 4-5: NSFW.
-
-▶ !vod
-  Quem pode : Qualquer usuário (grupo e/ou PV, se PV liberado)
-  Como usar : Ex: !vod [verdade | desafio] [1-5] - Atalho de verdade ou desafio.
 
 ▶ !fofoca
   O que faz : IA inventa fofoca absurda entre membros
@@ -592,7 +582,7 @@ RESTRIÇÕES GERAIS
   Como usar : Ex: !jornal - Notícias fictícias do grupo (texto + áudio ~5 min).
 
 ================================================================================
-  ADMIN (DONO DO BOT)  (41 comandos)
+  ADMIN (DONO DO BOT)  (42 comandos)
 ================================================================================
 
 ▶ !sair
@@ -755,13 +745,18 @@ RESTRIÇÕES GERAIS
   Quem pode : Apenas o DONO do bot
   Como usar : Ex: !sugestoes - Lista sugestões enviadas com !sugerir (só dono). | Ex: !sugestoes limpar - Apaga sugestões já lidas.
 
+▶ !cotasia
+  O que faz : Mostra créditos/cotas das IAs configuradas
+  Quem pode : Apenas o DONO do bot
+  Como usar : Ex: !cotasia - Consulta saldo/status de Gemini, OpenRouter, Groq, RapidAPI, ElevenLabs. | Só dono do bot.
+
 ▶ !devtest
   O que faz : Testes
   Quem pode : Apenas o DONO do bot
   Como usar : Testes
 
 ================================================================================
-  TOTAL: 171 comandos
+  TOTAL: 169 comandos
 ================================================================================
 
 ÍNDICE RÁPIDO (só nomes)
@@ -773,19 +768,19 @@ FIGURINHAS:
   !s, !simg, !emojimix, !ssf, !snome
 
 UTILIDADES:
-  !encurtar, !upimg, !filmes, !series, !chat, !tabela, !rbg, !ouvir, !audio, !traduz, !voz, !letra, !rastreio, !calc, !pesquisa, !moeda, !clima, !ddd, !qualmusica
+  !encurtar, !upimg, !filmes, !series, !chat, !personalidade, !oquetemaqui, !tabela, !rbg, !ouvir, !audio, !traduz, !voz, !letra, !rastreio, !calc, !pesquisa, !moeda, !clima, !ddd, !qualmusica
 
 IA / GERACAO:
-  !comofaz, !curiosidade, !playlist, !explica, !spoiler, !argumentos, !proscons, !comparar, !cotacao, !simulado, !roteiro, !resuma, !upscale, !musica, !resumodogrupo, !resumoportema, !personalidaderesumo
+  !comofaz, !playlist, !explica, !spoiler, !argumentos, !proscons, !comparar, !cotacao, !simulado, !roteiro, !resuma, !upscale, !musica, !resumodogrupo, !resumoportema, !personalidaderesumo
 
 DOWNLOADS:
   !play, !yt, !fb, !ig, !tw, !tk, !img
 
 GRUPO:
-  !statusgrupo, !status, !fotogrupo, !regras, !addlista, !remlista, !listanegra, !add, !ban, !voteban, !votar, !promover, !rebaixar, !mt, !mm, !mta, !rt, !adms, !enquete, !dono, !mutar, !shh, !link, !rlink, !restrito, !alink, !autosticker, !autosimi, !automsg, !bv, !afake, !aflood, !apg, !bantodos, !topativos, !contador, !atividade, !imarcar, !alterarcont, !ibanir, !bcmd, !dcmd, !revelar
+  !statusgrupo, !status, !fotogrupo, !regras, !addlista, !remlista, !listanegra, !add, !ban, !voteban, !votar, !promover, !rebaixar, !mt, !mm, !mta, !rt, !adms, !enquete, !dono, !mutar, !shh, !link, !rlink, !restrito, !alink, !autosticker, !autosimi, !ofensa, !automsg, !bv, !afake, !aflood, !apg, !bantodos, !topativos, !contador, !atividade, !imarcar, !alterarcont, !ibanir, !bcmd, !dcmd, !revelar
 
 DIVERSÃO:
-  !mascote, !simi, !viadometro, !detector, !roletarussa, !casal, !caracoroa, !ppt, !gadometro, !bafometro, !top, !sortear, !par, !chance, !fch, !trisal, !jacometro, !bolometro, !fernandometro, !joke, !piada, !issoouaquilo, !ioa, !verdadeoudesafio, !vod, !fofoca, !crime, !tribunal, !prefeito, !cancelado, !horoscopo, !boladocotidiano, !jornal
+  !mascote, !simi, !viadometro, !detector, !roletarussa, !casal, !caracoroa, !ppt, !gadometro, !bafometro, !top, !sortear, !par, !chance, !trisal, !jacometro, !bolometro, !fernandometro, !joke, !piada, !fofoca, !crime, !tribunal, !prefeito, !cancelado, !horoscopo, !boladocotidiano, !jornal
 
 ADMIN (DONO DO BOT):
-  !sair, !pvliberado, !bcmdglobal, !dcmdglobal, !sairgrupos, !infobot, !entrargrupo, !bcgrupos, !aviso, !fotobot, !nomebot, !nomesticker, !nomeadm, !prefixo, !autostickerpv, !autorevelar, !listablock, !bloquear, !usuarios, !novotipo, !deltipo, !tipotitulo, !limpartipo, !limitediario, !taxacomandos, !desbloquear, !estado, !admin, !tipocomandos, !usuariotipo, !grupos, !linkgrupo, !tipos, !rtodos, !r, !verdados, !desligar, !ping, !limpar, !sugestoes, !devtest
+  !sair, !pvliberado, !bcmdglobal, !dcmdglobal, !sairgrupos, !infobot, !entrargrupo, !bcgrupos, !aviso, !fotobot, !nomebot, !nomesticker, !nomeadm, !prefixo, !autostickerpv, !autorevelar, !listablock, !bloquear, !usuarios, !novotipo, !deltipo, !tipotitulo, !limpartipo, !limitediario, !taxacomandos, !desbloquear, !estado, !admin, !tipocomandos, !usuariotipo, !grupos, !linkgrupo, !tipos, !rtodos, !r, !verdados, !desligar, !ping, !limpar, !sugestoes, !cotasia, !devtest

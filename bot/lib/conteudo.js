@@ -67,10 +67,6 @@ export function tamanhoBanco(nome, { rapido = false } = {}) {
     if (!data) return 0
     if (data.total) return data.total
     if (Array.isArray(data.itens)) return data.itens.length
-    if (data.verdade && data.desafio) {
-        const sum = (obj) => Object.values(obj).reduce((s, a) => s + (a?.length || 0), 0)
-        return sum(data.verdade) + sum(data.desafio)
-    }
     return 0
 }
 
@@ -95,35 +91,6 @@ export function sortearItem(nome, chatId = 'global') {
     return escolha
 }
 
-export function obterVerdadeOuDesafioDoJson(tipo, nivel) {
-    const data = carregarJson('verdade_ou_desafio')
-    if (!data?.verdade || !data?.desafio) return null
-    const t = String(tipo || '').toLowerCase()
-    const n = Math.min(5, Math.max(1, Number(nivel) || 1))
-    const chave = ['verdade', 'vdd', 'truth', 'v'].includes(t)
-        ? 'verdade'
-        : ['desafio', 'dsf', 'dare', 'd'].includes(t)
-          ? 'desafio'
-          : Math.random() < 0.5
-            ? 'verdade'
-            : 'desafio'
-    const lista = (data[chave][n] || data[chave][1] || []).map(limparTexto).filter(Boolean)
-    if (!lista.length) return null
-    const texto = lista[Math.floor(Math.random() * lista.length)]
-    return { tipo: chave, nivel: n, texto }
-}
-
 export function resumoConteudo() {
-    const nomes = [
-        'piadas',
-        'trocadilhos',
-        'audios_malignos',
-        'isso_ou_aquilo',
-        'curiosidades',
-        'frases_soltas',
-        'verdade_ou_desafio'
-    ]
-    const out = {}
-    for (const n of nomes) out[n] = tamanhoBanco(n, { rapido: true })
-    return out
+    return { piadas: tamanhoBanco('piadas', { rapido: true }) }
 }

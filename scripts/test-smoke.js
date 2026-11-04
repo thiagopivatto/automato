@@ -22,7 +22,7 @@ const OBRIGATORIOS = [
     'mta', 'rt', 'rbg', 'ssf', 'emojimix', 'piada', 'sortear',
     'simi', 'resumodogrupo', 'limpar', 's', 'play', 'chat',
     'sugerir', 'fofoca', 'jornal', 'crime', 'tribunal', 'prefeito', 'cancelado',
-    'horoscopo', 'boladocotidiano', 'automsg', 'issoouaquilo', 'shh', 'resumoportema'
+    'horoscopo', 'boladocotidiano', 'automsg', 'shh', 'resumoportema'
 ]
 
 function listarTodosComandos() {

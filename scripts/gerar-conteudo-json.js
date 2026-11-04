@@ -377,26 +377,9 @@ async function main() {
     await fs.ensureDir(OUT)
     const arquivos = {}
 
+    // Mantém só o banco de piadas (!piada). Demais bancos (curiosidades, VoD, etc.) foram removidos.
     const piadas = gerarPiadas(2200)
     arquivos.piadas = { ...META, total: piadas.length, itens: piadas }
-
-    const vod = gerarVod(2200)
-    arquivos.verdade_ou_desafio = { ...META, ...vod }
-
-    const trocadilhos = gerarTrocadilhos(2200)
-    arquivos.trocadilhos = { ...META, total: trocadilhos.length, itens: trocadilhos }
-
-    const audios = gerarAudiosMalignos(2200)
-    arquivos.audios_malignos = { ...META, total: audios.length, itens: audios }
-
-    const isso = gerarIssoOuAquilo(2200)
-    arquivos.isso_ou_aquilo = { ...META, total: isso.length, itens: isso }
-
-    const curiosidades = gerarCuriosidades(2200)
-    arquivos.curiosidades = { ...META, total: curiosidades.length, itens: curiosidades }
-
-    const frases = gerarFrasesSoltas(2200)
-    arquivos.frases_soltas = { ...META, total: frases.length, itens: frases }
 
     for (const [nome, data] of Object.entries(arquivos)) {
         const dest = path.join(OUT, `${nome}.json`)

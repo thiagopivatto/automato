@@ -46,21 +46,6 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                 }
                 break
 
-            case 'curiosidade':
-                try {
-                    const { sortearItem } = await import('../lib/conteudo.js')
-                    const local = sortearItem('curiosidades', id_chat)
-                    if (local) {
-                        return await socket.responderTexto(c, id_chat, `💡 *Curiosidade*\n\n${local}`, mensagem)
-                    }
-                    const { resultado } = await api.IA.obterCuriosidade()
-                    await socket.responderTexto(c, id_chat, `💡 *Curiosidade*\n\n${resultado}`, mensagem)
-                } catch (err) {
-                    if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
-                }
-                break
-
             case 'playlist':
                 try {
                     if (!textoEntrada) return await socket.responderTexto(c, id_chat, erroComandoMsg(comando, botInfo), mensagem)

@@ -145,13 +145,43 @@ Ex: *!series* - Exibe as tendências atuais de séries.
 
 ### `!chat`
 
-**Descrição:** Conversa com opinião; pesquisa na web antes (como !pesquisa)
+**Descrição:** Conversa com o Ultron (!chat, @menção ou respondendo mensagem dele)
 
 **Como usar / exemplos:**
 
-Ex: *!chat* o que rolou hoje na política?
+Ex: marque o bot *@Ultron* oi, tudo bem?
+Ex: *responda uma mensagem do bot* com seu texto — ele continua a conversa
+Ex: *@bot* o que rolou hoje na política?
 Ex: *!chat* faz o resumo do grupo → roda *!resumodogrupo*
-Antes de responder, pesquisa na internet (mesma lógica de *!pesquisa*) e trata o resultado em tom de conversa.
+Ex: envie/responda uma *imagem* com *!chat* o que é isso?
+Personalidade deste chat: *!personalidade*
+Pesquisa na web só em perguntas de fato/atualidade.
+
+---
+
+### `!personalidade`
+
+**Descrição:** Personalidade do Ultron neste chat (grupo ou privado)
+
+**Como usar / exemplos:**
+
+Ex: *!personalidade* fala como um tiozão fofoqueiro e chato
+Ex: *!personalidade* ver — Mostra a atual
+Ex: *!personalidade* padrão — Volta ao Ultron padrão
+Salva em arquivo *por chat* (grupo e PV separados). Vale para chat, resumo e automsg.
+Em grupo: *apenas admins*. No privado: você controla só o seu PV.
+
+---
+
+### `!oquetemaqui`
+
+**Descrição:** Descreve o que tem na imagem marcada ou enviada
+
+**Como usar / exemplos:**
+
+Ex: Envie uma *imagem* com legenda *!oquetemaqui*
+Ex: Responda uma *imagem* com *!oquetemaqui*
+Ex: Responda uma imagem com *!oquetemaqui* quem é essa pessoa?
 
 ---
 
@@ -329,14 +359,6 @@ Ex: *!comofaz* - Busca um artigo aleatório do WikiHow (como fazer algo).
 
 ---
 
-### `!curiosidade`
-
-**Como usar / exemplos:**
-
-Ex: *!curiosidade* - Envia uma curiosidade aleatória.
-
----
-
 ### `!playlist`
 
 **Como usar / exemplos:**
@@ -445,7 +467,7 @@ Ex: *!musica* prompt - Gera música por IA (ElevenLabs).
 
 Ex: *!resumodogrupo* - Nota de voz de *3 a 5 min*, tom rebelde, egocêntrico e com palavrão.
 Na próxima vez, só entra o que foi dito *depois* deste pedido (anti-repetição).
-Personalidade por grupo: *!personalidaderesumo*
+Personalidade deste chat: *!personalidade*
 *Requisitos:* grupo; bot coletando mensagens.
 
 ---
@@ -799,7 +821,8 @@ Ex: *!restrito* - Abre/Restringe o grupo para ADMS.
 
 **Como usar / exemplos:**
 
-Ex: *!alink* - Liga/desliga o antilink e apaga a mensagem de quem postar qualquer tipo de link.
+Ex: *!alink* - Liga/desliga o antilink e apaga a mensagem de quem postar link.
+*Dono e admins do grupo* podem enviar links normalmente.
 
 ---
 
@@ -816,6 +839,19 @@ Ex: *!autosticker* - Liga/desliga a criação automatica de stickers sem precisa
 **Como usar / exemplos:**
 
 Ex: *!autosimi* - Liga/desliga respostas automáticas do Simi (sem comando). *Apenas admins*.
+
+---
+
+### `!ofensa`
+
+**Descrição:** Rebate ofensas com resposta bem mais pesada (ligado por padrão)
+
+**Como usar / exemplos:**
+
+Ex: *!ofensa* on — Liga (padrão).
+Ex: *!ofensa* off — Desliga.
+Ex: *!ofensa* — Mostra se está ligada/desligada.
+Quando alguém xinga no grupo, o bot devolve uma ofensa bem pior. Se a ofensa for contra membro do grupo ou pessoa pública, o bot defende a vítima (exceto temas gravíssimos). *Apenas admins.*
 
 ---
 
@@ -1120,14 +1156,6 @@ Ex: *!chance de ficar rico* - Calcula sua chance de um tema aleatório a sua esc
 
 ---
 
-### `!fch`
-
-**Como usar / exemplos:**
-
-Ex: *!fch* - Exibe uma frase aleatória montada com as cartas do jogo Cartas contra a Humanidade.
-
----
-
 ### `!trisal`
 
 **Como usar / exemplos:**
@@ -1173,43 +1201,6 @@ Ex: *!joke* - Conta uma piada aleatória (alias de *!piada*).
 **Como usar / exemplos:**
 
 Ex: *!piada* - Conta uma piada real (banco local + APIs).
-
----
-
-### `!issoouaquilo`
-
-**Descrição:** Pergunta aleatória “isso ou aquilo”
-
-**Como usar / exemplos:**
-
-Ex: *!issoouaquilo* - Sorteia uma pergunta de escolha.
-Ex: *!ioa* - Atalho.
-
----
-
-### `!ioa`
-
-**Como usar / exemplos:**
-
-Ex: *!ioa* - Atalho de *!issoouaquilo*.
-
----
-
-### `!verdadeoudesafio`
-
-**Como usar / exemplos:**
-
-Ex: *!verdadeoudesafio* [verdade|desafio] [1-5]
-Ex: *!vod* 3 - Atalho.
-Níveis 4-5: NSFW.
-
----
-
-### `!vod`
-
-**Como usar / exemplos:**
-
-Ex: *!vod* [verdade|desafio] [1-5] - Atalho de verdade ou desafio.
 
 ---
 
@@ -1693,6 +1684,17 @@ Ex: *!sugestoes limpar* - Apaga sugestões já lidas.
 
 ---
 
+### `!cotasia`
+
+**Descrição:** Mostra créditos/cotas das IAs configuradas
+
+**Como usar / exemplos:**
+
+Ex: *!cotasia* - Consulta saldo/status de Gemini, OpenRouter, Groq, RapidAPI, ElevenLabs.
+*Só dono do bot.*
+
+---
+
 ### `!devtest`
 
 **Descrição:** Testes
@@ -1710,11 +1712,10 @@ Testes
 - Downloads do YouTube/Instagram: `yt-dlp` recomendado no PATH (ou `YTDLP_PATH`).
 - `!resumodogrupo`: nota de voz; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
 - `!resumoportema`: resumo textual por temas das últimas ~1000 msgs (inclui áudios transcritos).
-- Bancos locais (≥2000 itens): `conteudo/` — veja docs/CONTEUDO.md
+- Banco local de piadas: `conteudo/piadas.json` — veja docs/CONTEUDO.md
 - `!automsg`: ligado por padrão; só admins ligam/desligam; interações humanas com intervalo longo.
-- `!verdadeoudesafio` / `!vod`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.
 - `!chat`: memória + histórico do grupo + busca na web quando necessário (Gemini gratuito).
 
 ---
 
-*Gerado a partir de `bot/comandos/comandos.js` — 171 comandos.*
+*Gerado a partir de `bot/comandos/comandos.js` — 169 comandos.*

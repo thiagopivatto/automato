@@ -8,7 +8,7 @@ import { versaoAtual } from './util.js'
 import { raizProjeto } from './caminhos.js'
 
 /** Muda a cada correção relevante — confira no Linux se bate com o Windows. */
-export const BUILD_ID = '20261104-ultron-persona'
+export const BUILD_ID = '20261104-rm-conteudo'
 
 const W = 54
 
@@ -146,7 +146,7 @@ export function bootPronto() {
     if (_conteudo) {
         row(
             'Conteúdo',
-            `${_conteudo.piadas || 0} piadas · ${_conteudo.curiosidades || 0} curiosidades`,
+            `${_conteudo.piadas || 0} piadas`,
             (_conteudo.piadas || 0) > 0
         )
     }

@@ -9,7 +9,6 @@ import { comandosInfo } from '../comandos/comandos.js'
 import { UsuarioControle } from '../controles/UsuarioControle.js'
 import axios from 'axios'
 import translate from '@vitalets/google-translate-api'
-import { obterVerdadeOuDesafio } from '../lib/verdadeOuDesafio.js'
 import { handlersSorteios } from './diversao/sorteios.js'
 
 export const diversao = async (c, mensagemBaileys, botInfo) => {
@@ -245,16 +244,6 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                 }
                 break
 
-            case "fch":
-                try {
-                    let { resultado: resultadoTexto } = await api.Gerais.obterCartasContraHu()
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.diversao.fch.msgs.resposta, resultadoTexto), mensagem)
-                } catch (err) {
-                    if(!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
-                }
-                break
-
             // NOVOS COMANDOS
 
             case 'trisal':
@@ -341,59 +330,6 @@ export const diversao = async (c, mensagemBaileys, botInfo) => {
                         criarTexto(comandos_info.outros.erro_api, comando, 'Não foi possível obter uma piada agora.'),
                         mensagem
                     )
-                }
-                break
-
-            case 'issoouaquilo':
-            case 'ioa':
-                try {
-                    const { sortearItem } = await import('../lib/conteudo.js')
-                    const texto = sortearItem('isso_ou_aquilo', id_chat)
-                    if (!texto) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            'Banco de “isso ou aquilo” vazio. Rode: npm run gerar:conteudo',
-                            mensagem
-                        )
-                    }
-                    await socket.responderTexto(c, id_chat, `⚖️ ${texto}`, mensagem)
-                } catch (err) {
-                    throw err
-                }
-                break
-
-            case 'verdadeoudesafio':
-            case 'vod':
-                try {
-                    let tipo = 'aleatorio'
-                    let nivel = 1
-                    if (args.length === 1 && /^\d+$/.test(args[0])) {
-                        nivel = parseInt(args[0], 10)
-                    } else if (args.length >= 1) {
-                        tipo = args[0]
-                        if (args[1] && /^\d+$/.test(args[1])) nivel = parseInt(args[1], 10)
-                        else if (/^\d+$/.test(args[0])) nivel = parseInt(args[0], 10)
-                    }
-                    if (isNaN(nivel) || nivel < 1 || nivel > 5) {
-                        return await socket.responderTexto(
-                            c,
-                            id_chat,
-                            `Use: *${prefixo}verdadeoudesafio* [verdade|desafio] [1-5]\nNíveis: 1 leve → 5 NSFW explícito.`,
-                            mensagem
-                        )
-                    }
-                    const item = obterVerdadeOuDesafio(tipo, nivel)
-                    const emoji = item.tipo === 'verdade' ? '🔮' : '🎲'
-                    const aviso = nivel >= 4 ? '\n⚠️ Conteúdo adulto / NSFW.' : ''
-                    await socket.responderTexto(
-                        c,
-                        id_chat,
-                        `${emoji} *${item.tipo.toUpperCase()}* · nível *${item.nivel}*${aviso}\n\n${item.texto}`,
-                        mensagem
-                    )
-                } catch (err) {
-                    throw err
                 }
                 break
 

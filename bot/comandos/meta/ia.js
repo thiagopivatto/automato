@@ -6,11 +6,6 @@ export function metaIa({ prefixo, nome_adm, nome_bot }) {
                 guia: `Ex: *${prefixo}comofaz* - Busca um artigo aleatório do WikiHow (como fazer algo).\n`,
                 msgs: {}
             },
-            curiosidade: {
-                descricao: '',
-                guia: `Ex: *${prefixo}curiosidade* - Envia uma curiosidade aleatória.\n`,
-                msgs: {}
-            },
             playlist: {
                 descricao: '',
                 guia: `Ex: *${prefixo}playlist* descrição - Cria uma playlist com pelo menos 20 músicas baseada na descrição.\n`,

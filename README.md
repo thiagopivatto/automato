@@ -48,7 +48,7 @@ Teste local: `npm run test:statusgrupo` (Node.js 22.3+ para o teste de relay com
 
 Bancos JSON (≥2000 itens cada) em `conteudo/`:
 
-- Piadas · Trocadilhos · Curiosidades · Frases · Isso ou aquilo · Áudios malignos · Verdade ou desafio
+- Banco local de piadas (`!piada`)
 
 Regenerar: `npm run gerar:conteudo`
 

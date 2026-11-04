@@ -47,9 +47,8 @@ md += `## Restrições gerais
 - Downloads do YouTube/Instagram: \`yt-dlp\` recomendado no PATH (ou \`YTDLP_PATH\`).
 - \`!resumodogrupo\`: nota de voz; análise + memória anti-repetição; na repetição, só msgs depois do último resumo; histórico ~7 dias.
 - \`!resumoportema\`: resumo textual por temas das últimas ~1000 msgs (inclui áudios transcritos).
-- Bancos locais (≥2000 itens): \`conteudo/\` — veja docs/CONTEUDO.md
+- Banco local de piadas: \`conteudo/piadas.json\` — veja docs/CONTEUDO.md
 - \`!automsg\`: ligado por padrão; só admins ligam/desligam; interações humanas com intervalo longo.
-- \`!verdadeoudesafio\` / \`!vod\`: níveis **4–5** são NSFW explícito — use com consentimento do grupo.
 - \`!chat\`: memória + histórico do grupo + busca na web quando necessário (Gemini gratuito).
 
 ---

@@ -8,8 +8,6 @@ import { comandosInfo } from '../comandos.js'
 export const ALIASES_HANDLER = {
     massacote: 'mascote',
     joke: 'piada',
-    ioa: 'issoouaquilo',
-    vod: 'verdadeoudesafio',
     resumopersona: 'personalidaderesumo',
     // admin: estado online|offline|manutencao são subargs de `estado`
     online: 'estado',

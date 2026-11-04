@@ -31,16 +31,6 @@ async function run() {
         fail('sticker+emojimix', e?.erro || e?.message)
     }
 
-    // curiosidade PT
-    try {
-        const { resultado } = await api.IA.obterCuriosidade()
-        const pt = /[áàâãéêíóôõúçÁÉÍÓÚ]|Wikipedia|curiosidade/i.test(resultado)
-        if (resultado && pt) ok('curiosidade', resultado.slice(0, 80))
-        else fail('curiosidade', 'não parece PT: ' + String(resultado).slice(0, 80))
-    } catch (e) {
-        fail('curiosidade', e?.erro || e?.message)
-    }
-
     // comofaz PT
     try {
         const { resultado } = await api.IA.obterComoFaz()

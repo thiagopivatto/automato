@@ -153,14 +153,7 @@ export function metaDiversao({ prefixo, nome_adm, nome_bot }) {
                     resposta: "🧩 *CHANCE* - Você tem *{p1}%* de chance {p2}"
                 }
             }, 
-            fch: {
-                descricao: '',
-                guia: `Ex: *${prefixo}fch* - Exibe uma frase aleatória montada com as cartas do jogo Cartas contra a Humanidade.\n`,
-                msgs: {
-                    resposta: "🧩〘*FRASES CONTRA A HUMANIDADE*〙\n\n - {p1}",
-                }
-            },
-trisal: {
+            trisal: {
                 descricao: '',
                 guia: `Ex: *${prefixo}trisal* - Escolhe 3 pessoas aleatórias do grupo.\n`,
                 msgs: {
@@ -218,30 +211,6 @@ trisal: {
             piada: {
                 descricao: '',
                 guia: `Ex: *${prefixo}piada* - Conta uma piada real (banco local + APIs).\n`,
-                msgs: {}
-            },
-            issoouaquilo: {
-                descricao: 'Pergunta aleatória “isso ou aquilo”',
-                guia:
-                    `Ex: *${prefixo}issoouaquilo* - Sorteia uma pergunta de escolha.\n` +
-                    `Ex: *${prefixo}ioa* - Atalho.\n`,
-                msgs: {}
-            },
-            ioa: {
-                descricao: '',
-                guia: `Ex: *${prefixo}ioa* - Atalho de *${prefixo}issoouaquilo*.\n`,
-                msgs: {}
-            },
-            verdadeoudesafio: {
-                descricao: '',
-                guia: `Ex: *${prefixo}verdadeoudesafio* [verdade|desafio] [1-5]\n`+
-                `Ex: *${prefixo}vod* 3 - Atalho.\n`+
-                `Níveis 4-5: NSFW.\n`,
-                msgs: {}
-            },
-            vod: {
-                descricao: '',
-                guia: `Ex: *${prefixo}vod* [verdade|desafio] [1-5] - Atalho de verdade ou desafio.\n`,
                 msgs: {}
             },
             fofoca: {
