@@ -44,6 +44,7 @@ const temChaveIa = () =>
     !!(
         process.env.GEMINI_API_KEY?.trim() ||
         process.env.OPENROUTER_API_KEY?.trim() ||
+        process.env.GROQ_API_KEY?.trim() ||
         rapidKey()
     )
 
@@ -271,6 +272,8 @@ const completarGemini = async (
         } catch (err) {
             ultimoErro = err
             const status = err?.response?.status
+            // Cota esgotada: não insiste nos outros modelos Gemini
+            if (ehErroCotaIa(err)) throw err
             if (status === 400 || status === 401 || status === 403) {
                 // google_search pode falhar em alguns modelos — tenta sem web
                 if (usarWeb) {
@@ -377,6 +380,37 @@ export const precisaPesquisaWeb = (texto) => {
     )
 }
 
+/** Detecta cota/rate-limit esgotado (429/402/RESOURCE_EXHAUSTED etc.). */
+export const ehErroCotaIa = (err) => {
+    const status = err?.response?.status || err?.status || err?.code
+    const msg = String(
+        err?.erro ||
+            err?.message ||
+            err?.response?.data?.error?.message ||
+            err?.response?.data?.message ||
+            JSON.stringify(err?.response?.data || '') ||
+            ''
+    )
+    if (status === 429 || status === 402) return true
+    return /RESOURCE_EXHAUSTED|quota|rate.?limit|insufficient.?credits|credit|billing|exhausted|too many requests|out of credits|limit exceeded|free.?tier/i.test(
+        msg
+    )
+}
+
+/** Cooldown curto quando um provedor estoura cota (evita insistir). */
+const cooldownProvedor = new Map()
+const marcarCooldownProvedor = (nome, ms = 8 * 60_000) => {
+    cooldownProvedor.set(nome, Date.now() + ms)
+}
+const provedorEmCooldown = (nome) => {
+    const ate = cooldownProvedor.get(nome) || 0
+    if (Date.now() >= ate) {
+        cooldownProvedor.delete(nome)
+        return false
+    }
+    return true
+}
+
 const completarRapidChat = async (messages) => {
     if (!rapidKey()) return null
     try {
@@ -390,32 +424,355 @@ const completarRapidChat = async (messages) => {
     }
 }
 
-const completarMensagens = async (messages, opcoes = {}) => {
-    // Gemini primeiro (gratuito); RapidAPI e OpenRouter como backup.
-    const provedores = [
-        () => completarGemini(messages, opcoes),
-        () => completarRapidChat(messages),
-        () => completarOpenRouter(messages, { ...opcoes, temperature: opcoes.temperature ?? 0.8 })
-    ]
+/** Groq free tier (se GROQ_API_KEY no .env). */
+const completarGroq = async (messages, { temperature = 0.7, timeout = TIMEOUT_PADRAO } = {}) => {
+    const key = process.env.GROQ_API_KEY?.trim()
+    if (!key) return null
+    const model = process.env.GROQ_MODEL?.trim() || 'llama-3.3-70b-versatile'
+    const { data } = await axios.post(
+        'https://api.groq.com/openai/v1/chat/completions',
+        {
+            model,
+            messages: messages.map((m) => ({
+                role: m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user',
+                content: m.content
+            })),
+            temperature,
+            max_tokens: 2048
+        },
+        {
+            timeout,
+            headers: {
+                Authorization: `Bearer ${key}`,
+                'Content-Type': 'application/json'
+            }
+        }
+    )
+    return extrairTextoOpenAI(data)
+}
+
+/** OpenRouter forçando modelos :free (sem gastar crédito pago). */
+const completarOpenRouterFree = async (messages, { temperature = 0.7, timeout = TIMEOUT_PADRAO } = {}) => {
+    const key = process.env.OPENROUTER_API_KEY?.trim()
+    if (!key) return null
+    const modelosFree = [
+        process.env.OPENROUTER_FREE_MODEL?.trim(),
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'google/gemma-3-27b-it:free',
+        'qwen/qwen3-8b:free',
+        'openrouter/auto'
+    ].filter(Boolean)
 
     let ultimoErro = null
-    for (const tentar of provedores) {
+    for (const model of modelosFree) {
         try {
-            const texto = await tentar()
+            const { data } = await axios.post(
+                'https://openrouter.ai/api/v1/chat/completions',
+                {
+                    model,
+                    messages,
+                    temperature,
+                    max_tokens: 2048
+                },
+                {
+                    timeout,
+                    headers: {
+                        Authorization: `Bearer ${key}`,
+                        'Content-Type': 'application/json',
+                        'HTTP-Referer': 'https://github.com/ultron-whatsapp-bot',
+                        'X-Title': 'Ultron WhatsApp Bot'
+                    }
+                }
+            )
+            const texto = extrairTextoOpenAI(data)
             if (texto) return texto
         } catch (err) {
             ultimoErro = err
-            console.log(`API IA provedor falhou - ${msgErro(err)}`)
+            if (ehErroCotaIa(err)) continue
+            const status = err?.response?.status
+            if (status === 404 || status === 400) continue
         }
     }
-    if (!temChaveIa()) {
+    if (ultimoErro) throw ultimoErro
+    return null
+}
+
+/**
+ * Pollinations text — grátis, sem chave (último recurso).
+ * https://text.pollinations.ai/
+ */
+const completarPollinations = async (messages, { timeout = 25000 } = {}) => {
+    const system = messages.find((m) => m.role === 'system')?.content || ''
+    const userParts = messages.filter((m) => m.role !== 'system').map((m) => m.content)
+    const prompt = [system, ...userParts].filter(Boolean).join('\n\n').slice(0, 3500)
+    if (!prompt) return null
+    try {
+        const { data } = await axios.post(
+            'https://text.pollinations.ai/',
+            {
+                messages: messages.map((m) => ({
+                    role: m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user',
+                    content: m.content
+                })),
+                model: 'openai',
+                private: true
+            },
+            {
+                timeout,
+                headers: { 'Content-Type': 'application/json' },
+                responseType: 'text',
+                transformResponse: [(d) => d]
+            }
+        )
+        const texto = String(data || '').trim()
+        if (texto && !/^error/i.test(texto)) return texto.slice(0, 8000)
+    } catch {
+        /* tenta GET */
+    }
+    try {
+        const { data } = await axios.get(`https://text.pollinations.ai/${encodeURIComponent(prompt.slice(0, 1200))}`, {
+            timeout,
+            responseType: 'text',
+            transformResponse: [(d) => d],
+            headers: { Accept: 'text/plain' }
+        })
+        const texto = String(data || '').trim()
+        if (texto && !/^error/i.test(texto)) return texto.slice(0, 8000)
+    } catch (err) {
+        throw err
+    }
+    return null
+}
+
+const completarMensagens = async (messages, opcoes = {}) => {
+    // Ordem: Gemini → Groq → Rapid → OpenRouter → OpenRouter free → Pollinations (grátis)
+    const provedores = [
+        { nome: 'gemini', fn: () => completarGemini(messages, opcoes) },
+        { nome: 'groq', fn: () => completarGroq(messages, opcoes) },
+        { nome: 'rapid', fn: () => completarRapidChat(messages) },
+        {
+            nome: 'openrouter',
+            fn: () => completarOpenRouter(messages, { ...opcoes, temperature: opcoes.temperature ?? 0.8 })
+        },
+        {
+            nome: 'openrouter-free',
+            fn: () => completarOpenRouterFree(messages, { ...opcoes, temperature: opcoes.temperature ?? 0.8 })
+        },
+        { nome: 'pollinations', fn: () => completarPollinations(messages) }
+    ]
+
+    let ultimoErro = null
+    let algumCota = false
+    for (const p of provedores) {
+        if (provedorEmCooldown(p.nome)) {
+            console.log(`API IA skip ${p.nome} (cooldown cota)`)
+            continue
+        }
+        try {
+            const texto = await p.fn()
+            if (texto) return texto
+        } catch (err) {
+            ultimoErro = err
+            const cota = ehErroCotaIa(err)
+            if (cota) {
+                algumCota = true
+                marcarCooldownProvedor(p.nome)
+                console.log(`API IA ${p.nome} cota/limite — fallback. ${msgErro(err)}`)
+            } else {
+                console.log(`API IA provedor falhou (${p.nome}) - ${msgErro(err)}`)
+            }
+        }
+    }
+    if (!temChaveIa() && !process.env.GROQ_API_KEY?.trim()) {
         throw new Error(avisoSemChave)
     }
     const status = ultimoErro?.response?.status
-    if (status === 402) {
-        throw new Error('OpenRouter sem crédito (402). Gemini/Rapid também falharam — confira as chaves e o saldo.')
+    if (status === 402 || algumCota) {
+        throw new Error(
+            'Todas as IAs de texto falharam por cota/limite. Confira !cotasia e as chaves no .env (Gemini/Groq/OpenRouter/Rapid).'
+        )
     }
     throw ultimoErro || new Error('Nenhum provedor de IA respondeu')
+}
+
+/**
+ * Consulta créditos/status das IAs configuradas (para !cotasia).
+ * @returns {Promise<{resultado: string, itens: object[]}>}
+ */
+export const consultarCotasIA = async () => {
+    const itens = []
+    const add = (nome, ok, detalhe) => itens.push({ nome, ok, detalhe: String(detalhe || '').trim() })
+
+    // Gemini — não tem API pública de saldo; faz ping leve
+    {
+        const key = process.env.GEMINI_API_KEY?.trim()
+        if (!key) {
+            add('Gemini', false, 'chave não configurada (GEMINI_API_KEY)')
+        } else {
+            try {
+                const model = MODELOS_TEXTO_GEMINI[0] || 'gemini-flash-latest'
+                const { data, status } = await axios.post(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+                    {
+                        contents: [{ role: 'user', parts: [{ text: 'responda só: ok' }] }],
+                        generationConfig: { maxOutputTokens: 8, temperature: 0 }
+                    },
+                    {
+                        timeout: 20000,
+                        params: { key },
+                        headers: { 'Content-Type': 'application/json' },
+                        validateStatus: () => true
+                    }
+                )
+                if (status === 429 || /RESOURCE_EXHAUSTED|quota/i.test(JSON.stringify(data || {}))) {
+                    add('Gemini', false, `cota/rate-limit esgotada (HTTP ${status}). Free tier reseta ~meia-noite PT.`)
+                } else if (status >= 400) {
+                    const msg = data?.error?.message || `HTTP ${status}`
+                    add('Gemini', false, msg.slice(0, 180))
+                } else {
+                    const txt = extrairTextoGemini(data) || 'ok'
+                    add(
+                        'Gemini',
+                        true,
+                        `chave ok · ping "${txt.slice(0, 40)}" · uso: aistudio.google.com (sem API de saldo)`
+                    )
+                }
+            } catch (err) {
+                add('Gemini', false, msgErro(err))
+            }
+        }
+    }
+
+    // OpenRouter — /api/v1/key (usage/limit) + tenta /credits
+    {
+        const key = process.env.OPENROUTER_API_KEY?.trim()
+        if (!key) {
+            add('OpenRouter', false, 'chave não configurada (OPENROUTER_API_KEY)')
+        } else {
+            try {
+                const headers = {
+                    Authorization: `Bearer ${key}`,
+                    'Content-Type': 'application/json'
+                }
+                let detalhe = ''
+                try {
+                    const { data } = await axios.get('https://openrouter.ai/api/v1/key', {
+                        timeout: 15000,
+                        headers
+                    })
+                    const d = data?.data || data || {}
+                    const usage = d.usage
+                    const limit = d.limit
+                    const rem = d.limit_remaining
+                    const free = d.is_free_tier
+                    const partes = []
+                    if (usage != null) partes.push(`uso $${Number(usage).toFixed(4)}`)
+                    if (limit != null) partes.push(`limite $${Number(limit).toFixed(4)}`)
+                    else partes.push('limite ilimitado/nulo')
+                    if (rem != null) partes.push(`restante $${Number(rem).toFixed(4)}`)
+                    if (free != null) partes.push(free ? 'free tier' : 'pago')
+                    detalhe = partes.join(' · ') || 'chave ok'
+                } catch (e1) {
+                    detalhe = `key: ${msgErro(e1)}`
+                }
+                try {
+                    const { data } = await axios.get('https://openrouter.ai/api/v1/credits', {
+                        timeout: 15000,
+                        headers
+                    })
+                    const d = data?.data || data || {}
+                    if (d.total_credits != null) {
+                        const restante = Number(d.total_credits) - Number(d.total_usage || 0)
+                        detalhe += ` · créditos ${Number(d.total_credits).toFixed(2)} · usados ${Number(d.total_usage || 0).toFixed(2)} · sobra ${restante.toFixed(2)}`
+                    }
+                } catch {
+                    /* management key only — ignore */
+                }
+                add('OpenRouter', true, detalhe)
+            } catch (err) {
+                add('OpenRouter', false, msgErro(err))
+            }
+        }
+    }
+
+    // Groq
+    {
+        const key = process.env.GROQ_API_KEY?.trim()
+        if (!key) {
+            add('Groq', false, 'opcional — GROQ_API_KEY não configurada (fallback grátis)')
+        } else {
+            try {
+                const { status, data } = await axios.get('https://api.groq.com/openai/v1/models', {
+                    timeout: 15000,
+                    headers: { Authorization: `Bearer ${key}` },
+                    validateStatus: () => true
+                })
+                if (status === 429) add('Groq', false, 'rate-limit/cota esgotada')
+                else if (status >= 400) add('Groq', false, data?.error?.message || `HTTP ${status}`)
+                else add('Groq', true, `chave ok · ${(data?.data || []).length || '?'} modelos · free tier console.groq.com`)
+            } catch (err) {
+                add('Groq', false, msgErro(err))
+            }
+        }
+    }
+
+    // RapidAPI
+    {
+        const key = rapidKey()
+        if (!key) {
+            add('RapidAPI', false, 'chave não configurada (RAPIDAPI_KEY)')
+        } else {
+            add(
+                'RapidAPI',
+                true,
+                `chave ok (${key.slice(0, 6)}…) · cotas por API no hub rapidapi.com (sem endpoint único de saldo)`
+            )
+        }
+    }
+
+    // ElevenLabs
+    {
+        const key = elevenKey()
+        if (!key) {
+            add('ElevenLabs', false, 'chave não configurada (usa Edge TTS sem ela)')
+        } else {
+            try {
+                const { data, status } = await axios.get('https://api.elevenlabs.io/v1/user/subscription', {
+                    timeout: 15000,
+                    headers: { 'xi-api-key': key },
+                    validateStatus: () => true
+                })
+                if (status >= 400) {
+                    add('ElevenLabs', false, data?.detail?.message || data?.detail || `HTTP ${status}`)
+                } else {
+                    const usados = data?.character_count
+                    const limite = data?.character_limit
+                    const resto =
+                        usados != null && limite != null ? Math.max(0, Number(limite) - Number(usados)) : null
+                    const tier = data?.tier || data?.plan || '?'
+                    add(
+                        'ElevenLabs',
+                        true,
+                        `plano ${tier} · chars ${usados ?? '?'}/${limite ?? '?'}${resto != null ? ` · sobra ${resto}` : ''}`
+                    )
+                }
+            } catch (err) {
+                add('ElevenLabs', false, msgErro(err))
+            }
+        }
+    }
+
+    // Pollinations (sempre disponível como fallback)
+    add('Pollinations', true, 'fallback grátis de texto (sem chave) · text.pollinations.ai')
+
+    const linhas = ['📊 *Cotas / status das IAs*', '']
+    for (const it of itens) {
+        linhas.push(`${it.ok ? '✅' : '❌'} *${it.nome}*`)
+        linhas.push(`   ${it.detalhe}`)
+        linhas.push('')
+    }
+    linhas.push('_Em erro de cota no chat/texto, o bot troca sozinho pra outra IA grátis._')
+    return { resultado: linhas.join('\n').trim(), itens }
 }
 
 /** Geração de texto única (sem histórico longo). */

@@ -10,6 +10,7 @@ import {tiposMensagem} from '../baileys/mensagem.js'
 import {downloadMediaMessage} from '@whiskeysockets/baileys'
 import os from 'node:os'
 import {comandosInfo} from '../comandos/comandos.js'
+import api from '@victorsouzaleal/lbot-api-comandos'
 
 
 export const admin = async(c, mensagemBaileys, botInfo) => {
@@ -727,6 +728,27 @@ export const admin = async(c, mensagemBaileys, botInfo) => {
                     await socket.responderTexto(c, id_chat, texto.slice(0, 4000), mensagem)
                 } catch (err) {
                     throw err
+                }
+                break
+
+            case 'cotasia':
+                try {
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        '⏳ Consultando cotas das IAs…',
+                        mensagem
+                    )
+                    const { resultado } = await api.IA.consultarCotasIA()
+                    await socket.responderTexto(c, id_chat, resultado, mensagem)
+                } catch (err) {
+                    if (!err.erro) throw err
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        criarTexto(comandos_info.outros.erro_api, comando, err.erro),
+                        mensagem
+                    )
                 }
                 break
 

@@ -466,6 +466,13 @@ export function metaAdmin({ prefixo, nome_adm, nome_bot }) {
                     `Ex: *${prefixo}sugestoes limpar* - Apaga sugestões já lidas.\n`,
                 msgs: {}
             },
+            cotasia: {
+                descricao: 'Mostra créditos/cotas das IAs configuradas',
+                guia:
+                    `Ex: *${prefixo}cotasia* - Consulta saldo/status de Gemini, OpenRouter, Groq, RapidAPI, ElevenLabs.\n` +
+                    `*Só dono do bot.*\n`,
+                msgs: {}
+            },
             devtest: {
                 descricao: 'Testes',
                 guia: 'Testes',

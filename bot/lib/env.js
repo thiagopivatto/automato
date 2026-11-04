@@ -28,6 +28,7 @@ export function chavesIa() {
     return {
         gemini: env('GEMINI_API_KEY'),
         openrouter: env('OPENROUTER_API_KEY'),
+        groq: env('GROQ_API_KEY'),
         rapid: env('RAPIDAPI_KEY', 'X_RAPIDAPI_KEY'),
         eleven: env('ELEVENLABS_API_KEY', 'XI_API_KEY')
     }
@@ -43,6 +44,9 @@ export const ENV_MATRIZ = {
         'NUMERO_DONO',
         'ELEVENLABS_API_KEY',
         'OPENROUTER_MODEL',
+        'OPENROUTER_FREE_MODEL',
+        'GROQ_API_KEY',
+        'GROQ_MODEL',
         'YTDLP_PATH',
         'YTDLP_COOKIES',
         'YTDLP_BROWSER_COOKIES',
