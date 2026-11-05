@@ -1,7 +1,7 @@
 /**
  * Reações de ack em comandos (WhatsApp: 1 reação por remetente na msg).
- * Fluxo: ⏳ (processando) → ✅ (ok) ou ❌ (erro).
- * Tenta 👍 antes do ⏳ para clientes que empilham; no WA clássico fica o último.
+ * Fluxo: ⏳ enquanto processa. Ao concluir, a reação sai. Erro troca para ❌.
+ * Texto vazio na reação remove a do bot.
  */
 import { logWarn } from './logger.js'
 
@@ -19,15 +19,14 @@ export async function reagirMensagem(c, mensagem, emoji) {
     }
 }
 
-/** Ack inicial: joinha + relógio (processando). */
+/** Ack inicial: só o relógio, enquanto o comando roda. */
 export async function reagirAckInicio(c, mensagem) {
-    await reagirMensagem(c, mensagem, '👍')
     await reagirMensagem(c, mensagem, '⏳')
 }
 
-/** Troca para tick de OK. */
+/** Pronto: tira a espera. Não coloca tick. */
 export async function reagirAckOk(c, mensagem) {
-    await reagirMensagem(c, mensagem, '✅')
+    await reagirMensagem(c, mensagem, '')
 }
 
 /** Erro no comando. */

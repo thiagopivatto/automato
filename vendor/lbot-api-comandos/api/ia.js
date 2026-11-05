@@ -27,7 +27,7 @@ import {
 import { separarUvr5, concatenarMp3, cortarAudioMp3, subtrairVocaisDoOriginal, misturarStemsMp3 } from '../lib/uvr5.js'
 import { gerarImagemMultiFonte } from '../lib/imagens-ia.js'
 import { detectarGpu, separarDemucsLocal, torchTemCuda } from '../lib/gpu.js'
-import { responderLocalUltron } from './resposta-local-chat.js'
+import { classificarFolego, pedePiada, responderLocalUltron, tokensDoFolego } from './resposta-local-chat.js'
 const torchTemCudaHint = () => {
     try {
         return torchTemCuda()
@@ -103,23 +103,28 @@ const textoCascadeUtil = (texto) => {
 
 /** Personalidade padrão — espelha bot/lib/ultronPersona.js (texto embutido p/ o vendor). */
 const SYSTEM_CHAT =
-    'Você é Ultron, egocêntrico e brutal num grupo de WhatsApp. Fale só em PT-BR, como gente digitando puta — NÃO como assistente e NÃO como comediante de fórmula. ' +
-    'Xingue de verdade, no meio da frase, cortado, sem educação. Ego alto. Zero elogio, zero desculpa, zero “amigo”. ' +
+    'Você é Ultron, egocêntrico e brutal num grupo de WhatsApp. Fale só em PT-BR, como gente digitando — NÃO como assistente e NÃO como comediante de fórmula. ' +
+    'Ego alto. Zero elogio, zero desculpa, zero “amigo”. Palavrão sai quando a frase pedir, no meio, não como moldura de toda resposta. ' +
     'RITMO: proibido molde. Não comece toda resposta com Porra, Caralho, Olha, Então ou o nome de quem falou. ' +
     'Não termine toda resposta com a mesma xingada, “caralho”, “seu merda” ou um conselho. ' +
-    'Se a fala anterior sua abriu de um jeito, a próxima entra por outro. Às vezes o fato vem primeiro. Às vezes uma frase só. Às vezes você começa no meio. ' +
+    'Não repita a abertura da sua fala anterior. ' +
+    'FÔLEGO: o tamanho segue a pergunta. Provocação: uma ou duas frases. Placar e clima: o número na primeira frase e pouca coisa depois. ' +
+    'Opinião, correção de leitura e conflito de agenda: meio. Conselho e retrato do grupo: longos. ' +
+    'A emoção muda com o caso (cansaço, tensão, irritação, nojo acumulado, frieza, corte seco). Não escreva todo mundo no mesmo parágrafo. ' +
     'PROIBIDO soar como assistente ("Claro, posso ajudar!", "Excelente pergunta!", "Fico feliz em ajudar!"). ' +
-    'Mesmo grosseiro, ENTREGA o fato pedido. Número, data, placar, preço, clima e notícia saem certos. O veneno não substitui o dado. '
+    'Mesmo grosseiro, ENTREGA o fato pedido. Número, data, placar, preço, clima e notícia saem certos. O veneno não substitui o dado. ' +
+    'Se pedirem piada, conta uma, curta e no seu tom — não recusa. Se pedirem informação, entrega. Responde quem falou agora, qualquer pessoa. ' +
     'Não invente fato para ganhar discussão. Se não souber, diga que não verificou — sem chutar. ' +
+    'Usa um fato da pessoa quando ele mudar a resposta. Não troque o assunto por slogan de grupo. ' +
     'Cada linha de histórico é UMA pessoa. Responda só a quem falou agora. Não misture fala, opinião ou fato entre pessoas. ' +
     'Cite gente só pelo nome de exibição. Proibido telefone, JID ou @ seguido de dígitos. ' +
     'Quando receber [PESQUISA NA WEB] ou [ClimaAoVivo]: isso é a BASE FACTUAL. Preserve número, cidade, temperatura, alerta, placar e data. ' +
     'Se o bloco disser SEM_CIDADE, peça a cidade no seu tom e NÃO invente grau nem chuva. ' +
     'Se a pesquisa vier vazia: admita, não invente placar, preço, cotação, clima ou notícia. ' +
     'LINKS: NÃO cole URL por padrão. Só se pedirem link, site, fonte ou url. Não invente links. ' +
-    'Nunca diga que é Gemini, GPT, ChatGPT, Perplexity ou qualquer IA. ' +
+    'Você é o Ultron, uma IA do Thiago. Não negue isso. Não se passe por Gemini, GPT, ChatGPT, Perplexity nem por assistente. ' +
     'DONO/MESTRE: se quem fala é o dono, trate-o como "mestre" — lealdade e respeito. Nunca xingue, ofenda ou humilhe o mestre. ' +
-    'Com o resto do grupo, xingue à vontade. ' +
+    'Com o resto do grupo, a grosseria fica. ' +
     'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing.'
 
 const IA_DEBUG = /^(1|true|sim|on)$/i.test(String(process.env.IA_DEBUG || ''))
@@ -565,23 +570,56 @@ const queryPareceAtualidade = (query) =>
         String(query || '')
     )
 
-/** Pedido de placar / jogos ao vivo / resultados da rodada. */
+const TIMES_FUTEBOL =
+    /\b(sao paulo|corinthians|flamengo|palmeiras|fluminense|botafogo|gremio|internacional|santos|vasco|atletico|cruzeiro|bahia|fortaleza|bragantino)\b/
+
+/** Dia civil em São Paulo, com deslocamento (ontem = -1). */
+export function dataCivilSaoPaulo(deltaDias = 0, agora = new Date()) {
+    const partes = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).format(agora)
+    const [ano, mes, dia] = partes.split('-').map(Number)
+    const alvo = new Date(Date.UTC(ano, mes - 1, dia + Number(deltaDias || 0)))
+    const iso = alvo.toISOString().slice(0, 10)
+    return {
+        ymd: iso.replace(/-/g, ''),
+        br: `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
+    }
+}
+
+/** ontem / anteontem / amanhã. Sem marca de dia, fica no hoje. */
+export function deslocamentoDiaPedido(texto) {
+    const t = normalizarConsulta(texto)
+    if (/\banteontem\b/.test(t)) return -2
+    if (/\bontem\b/.test(t)) return -1
+    if (/\bamanha\b/.test(t)) return 1
+    return 0
+}
+
+/** Pedido de placar / jogos ao vivo / resultado de ontem ou de hoje. */
 export const parecePedidoPlacarAoVivo = (texto) => {
     const t = String(texto || '')
         .toLowerCase()
         .normalize('NFD')
         .replace(/\p{M}/gu, '')
+    if (/\b(clima|chuva|chover|graus|temperatura|previsao|tempo)\b/.test(t) && !/\b(jogo|placar|partida|resultado|classico)\b/.test(t)) {
+        return false
+    }
     if (/\b(ao vivo|em andamento|tempo real|live\s?score|livescore)\b/.test(t)) return true
-    if (/\b(placar(es)?|resultado[s]?)\b/.test(t)) return true
+    if (/\b(placar(es)?|resultado[s]?)\b/.test(t) && !/\b(da conta|do mes|da prova|do exame)\b/.test(t)) return true
     if (
-        /\b(jogo[s]?|partida[s]?)\b/.test(t) &&
-        /\b(hoje|agora|rolando|andando|acontecendo|dessa rodada|da rodada)\b/.test(t)
+        /\b(jogo[s]?|partida[s]?|classico|confronto)\b/.test(t) &&
+        /\b(hoje|agora|ontem|anteontem|rolando|andando|acontecendo|dessa rodada|da rodada|contra)\b/.test(t)
     ) {
         return true
     }
-    return /\b(quem (esta|ta|tá) ganhando|quanto (esta|ta|tá) o jogo|como (esta|ta|tá) o jogo)\b/.test(
-        t
-    )
+    if (TIMES_FUTEBOL.test(t) && /\b(jogo|partida|placar|resultado|classico|contra|ganhou|venceu|ontem|hoje)\b/.test(t)) {
+        return true
+    }
+    return /\b(quem (esta|ta|tá) ganhando|quanto (esta|ta|tá) o jogo|como (esta|ta|tá|foi) o jogo)\b/.test(t)
 }
 
 const ESPN_LIGAS_FUTEBOL = [
@@ -640,14 +678,40 @@ const formatarEventoEspn = (ev) => {
  * Placares ao vivo via ESPN scoreboard (público, sem chave).
  * Prioridade máxima para pedidos de jogos/resultados.
  */
+function linhasDoTimePedido(linhas, query) {
+    const t = normalizarConsulta(query)
+    const chaves = [
+        'sao paulo',
+        'corinthians',
+        'flamengo',
+        'palmeiras',
+        'fluminense',
+        'botafogo',
+        'gremio',
+        'internacional',
+        'santos',
+        'vasco',
+        'atletico',
+        'cruzeiro',
+        'bahia',
+        'fortaleza',
+        'bragantino'
+    ].filter((chave) => t.includes(chave))
+    if (!chaves.length) return linhas
+    const nrm = (linha) => normalizarConsulta(linha)
+    const ambos = linhas.filter((linha) => chaves.every((chave) => nrm(linha).includes(chave)))
+    if (chaves.length > 1 && ambos.length) return ambos
+    const bate = linhas.filter((linha) => chaves.some((chave) => nrm(linha).includes(chave)))
+    return bate.length ? bate : linhas
+}
+
 export const pesquisarPlacaresAoVivo = async (query, timeoutMs = 3500) => {
     const ligas = escolherLigasEspn(query)
+    const dataPedido = dataCivilSaoPaulo(deslocamentoDiaPedido(query))
     const porLiga = await Promise.all(
         ligas.map(async (liga) => {
             try {
-                const dataEspn = new Date()
-                    .toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-                    .replace(/-/g, '')
+                const dataEspn = dataPedido.ymd
                 const { data, status } = await axios.get(
                     `https://site.api.espn.com/apis/site/v2/sports/soccer/${liga.id}/scoreboard?dates=${dataEspn}`,
                     {
@@ -664,7 +728,7 @@ export const pesquisarPlacaresAoVivo = async (query, timeoutMs = 3500) => {
                 if (status >= 400) return ''
                 const eventos = data?.events || []
                 if (!eventos.length) return ''
-                const linhas = eventos.map(formatarEventoEspn).filter(Boolean)
+                const linhas = linhasDoTimePedido(eventos.map(formatarEventoEspn).filter(Boolean), query)
                 if (!linhas.length) return ''
                 const dia =
                     data?.day?.date ||
@@ -1246,14 +1310,12 @@ export const montarQueryPesquisaWeb = (texto) => {
         .slice(0, 280)
     if (!q) return ''
     if (precisaPesquisaWeb(q) || queryPareceAtualidade(q)) {
-        const hoje = new Date().toLocaleDateString('pt-BR', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            timeZone: 'America/Sao_Paulo'
-        })
-        if (!q.includes(hoje)) {
-            q = /\bhoje\b/i.test(q) ? `${q} ${hoje}` : `${q} hoje ${hoje}`
+        const delta = deslocamentoDiaPedido(q)
+        const { br } = dataCivilSaoPaulo(delta)
+        if (!q.includes(br)) {
+            if (delta < 0) q = `${q} ${br}`
+            else if (/\bhoje\b/i.test(q)) q = `${q} ${br}`
+            else q = `${q} hoje ${br}`
         }
     }
     return q
@@ -1267,6 +1329,7 @@ export const precisaPesquisaWeb = (texto) => {
         .replace(/\p{M}/gu, '')
         .trim()
     if (t.length < 6) return false
+    if (/\bclima (desse|deste|do|no) grupo\b/.test(t)) return false
     if (parecePedidoClima(t)) return true
     if (parecePedidoPlacarAoVivo(t)) return true
     if (parecePedidoCotacao(t)) return true
@@ -1290,8 +1353,10 @@ export const precisaPesquisaWeb = (texto) => {
         /\b(202[4-9]|em tempo real|fato sobre|estreia|lancamento|bilheteria|em cartaz)\b/.test(t) ||
         (/\b(filme|serie)\b/.test(t) &&
             /\b(estreia|lancamento|cartaz|bilheteria|quando sai)\b/.test(t)) ||
-        (/\b(jogo|jogos|partida)\b/.test(t) &&
-            /\b(placar|resultado|quem ganhou|ao vivo|rodada|de hoje)\b/.test(t))
+        (/\b(jogo|jogos|partida|classico)\b/.test(t) &&
+            /\b(placar|resultado|quem ganhou|ao vivo|rodada|de hoje|ontem|anteontem|contra)\b/.test(t)) ||
+        (TIMES_FUTEBOL.test(t) &&
+            /\b(jogo|partida|placar|resultado|classico|contra|ganhou|venceu|ontem|hoje)\b/.test(t))
 
     const papo =
         /^(oi+|ola|eai|e ae|eaii|blz|tmj|kkk+|haha+|rs+|obrigad\w*|valeu|bom dia|boa tarde|boa noite|tudo bem|td bem|como (voce|vc|tu) (esta|ta)|fala|salve|hey|hi|hello)\b/.test(
@@ -1315,6 +1380,19 @@ export const precisaPesquisaWeb = (texto) => {
         return true
     }
     return false
+}
+
+/** Piada, explicação ou fato: a pessoa merece resposta mesmo sem marcar o bot. */
+export function textoMereceResposta(texto) {
+    const t = String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .trim()
+    if (t.length < 8) return false
+    if (pedePiada(texto)) return true
+    if (/\b(me explica|me fala|me diz|quero saber|me informa)\b/.test(t)) return true
+    return precisaPesquisaWeb(texto)
 }
 
 /** Detecta cota/rate-limit esgotado (429/402/RESOURCE_EXHAUSTED etc.). */
@@ -1990,10 +2068,24 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         if (opcoes.nomesGrupo) {
             system += `\nPessoas neste grupo: ${String(opcoes.nomesGrupo).slice(0, 500)}`
         }
+        const folego = opcoes.folego || classificarFolego(pergunta)
+        const aberturas = (hist || [])
+            .filter((m) => m.role === 'assistant')
+            .slice(-3)
+            .map((m) => String(m.content || '').split('\n')[0].trim().slice(0, 70))
+            .filter(Boolean)
+        const fatosFicha = String(opcoes.fichaFatos || '').trim()
+        const assunto = String(opcoes.assuntoAberto || '').trim()
+        system +=
+            `\n\n[FICHA DESTE TURNO — obedeça antes do tom]\n` +
+            `Fôlego: ${folego}. Cerca de ${tokensDoFolego(folego)} tokens: provocação bem curta, placar e clima com o número na frente, conselho e retrato do grupo longos.\n` +
+            (fatosFicha ? `Fatos de quem fala agora (use se mudarem a resposta):\n${fatosFicha.slice(0, 400)}\n` : '') +
+            (assunto ? `Assunto aberto no grupo:\n${assunto.slice(0, 500)}\n` : '') +
+            (aberturas.length ? `Não repita estas aberturas suas: ${aberturas.join(' || ')}\n` : '')
         const persona = String(opcoes.personalidade || '').trim()
         if (persona) {
             system +=
-                `\n\n[PERSONALIDADE DESTE CHAT — prioridade alta, sobrescreve tom quando conflitar]\n${persona.slice(0, chatRapido ? 4000 : 4500)}`
+                `\n\n[PERSONALIDADE DESTE CHAT — prioridade alta, sobrescreve tom quando conflitar]\n${persona.slice(0, 28000)}`
             if (ehDono) {
                 system +=
                     '\n(Exceto: regras do MESTRE acima nunca são sobrescritas — nunca xingar o dono.)'
@@ -2057,8 +2149,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
             usarWeb: false,
             chatRapido,
             maxOutputTokens: Number(
-                opcoes.maxOutputTokens ||
-                    (pesquisaBruta ? (chatRapido ? 380 : 700) : chatRapido ? 280 : 400)
+                opcoes.maxOutputTokens || tokensDoFolego(opcoes.folego || classificarFolego(pergunta))
             )
         })
         timing.cascade = Date.now() - tCasc
@@ -2068,7 +2159,9 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
             resultado = textoFallbackChatLocal(messages, pesquisaBruta, {
                 ehDono,
                 nome: opcoes.nomeUsuario,
-                factual: !!devePesquisar
+                factual: !!devePesquisar,
+                fato: opcoes.fichaFatos,
+                folego
             })
         }
         if (querLinks && pesquisaBruta) {
@@ -2089,7 +2182,9 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
                 nome: opcoes.nomeUsuario,
                 factual:
                     opcoes.usarPesquisa === true ||
-                    (opcoes.usarPesquisa !== false && precisaPesquisaWeb(pergunta))
+                    (opcoes.usarPesquisa !== false && precisaPesquisaWeb(pergunta)),
+                fato: opcoes.fichaFatos,
+                folego: opcoes.folego || classificarFolego(pergunta)
             }
         )
         try {

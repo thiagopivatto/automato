@@ -133,6 +133,21 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             tipo == tiposMensagem.texto ||
             tipo == tiposMensagem.textoExt ||
             tipo == tiposMensagem.imagem
+        const textoSolto =
+            !mensagem_bot &&
+            !ehComando &&
+            tipoTextoOuImg &&
+            textoSimi.length >= 2 &&
+            !String(comando || '').startsWith(prefixo) &&
+            !textoSimi.startsWith(prefixo)
+        let pedidoSolto = false
+        if (textoSolto) {
+            if (!mensagem_grupo) pedidoSolto = true
+            else {
+                const { textoMereceResposta } = await import('../../vendor/lbot-api-comandos/api/ia.js')
+                pedidoSolto = textoMereceResposta(textoSimi)
+            }
+        }
         const botMarcado =
             mensagem_grupo &&
             !mensagem_bot &&
@@ -161,11 +176,11 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
 
         const textoChatMencao = botMarcado
             ? limparTextoMencaoBot(textoSimi, botInfo)
-            : citouBot
+            : citouBot || pedidoSolto
               ? textoSimi
               : ''
         const autoChat =
-            (botMarcado || citouBot) &&
+            (botMarcado || citouBot || pedidoSolto) &&
             !mensagem_bot &&
             !ehComando
 

@@ -87,8 +87,8 @@ function heuristicaRapida(texto, prefixo) {
         return { tipo: 'comando', comando: `${prefixo}top`, argsTexto: `${top[1]} ${top[2].trim()}` }
     }
 
-    if (/\b(casal|sortear|trisal|piada|fofoca|jornal|cancelado)\b/.test(t) && /faz|roda|executa|manda|gera|quero|pode/.test(t)) {
-        const nome = t.match(/\b(casal|sortear|trisal|piada|fofoca|jornal|cancelado)\b/)[1]
+    if (/\b(casal|sortear|trisal|fofoca|jornal|cancelado)\b/.test(t) && /faz|roda|executa|manda|gera|quero|pode/.test(t)) {
+        const nome = t.match(/\b(casal|sortear|trisal|fofoca|jornal|cancelado)\b/)[1]
         return { tipo: 'comando', comando: `${prefixo}${nome}`, argsTexto: '' }
     }
 
@@ -106,7 +106,7 @@ function parecePedidoDeComando(texto, prefixo) {
     return (
         /resumo(\s+do)?\s+grupo|resumir|faz(er)?\s+(o\s+)?resumo/.test(t) ||
         /\btop\s+\d+/.test(t) ||
-        /\b(casal|trisal|sortear|piada|fofoca|jornal|cancelado|enquete)\b/.test(t) ||
+        /\b(casal|trisal|sortear|fofoca|jornal|cancelado|enquete)\b/.test(t) ||
         /\b(baixa|baixar|download|play|yt|youtube|spotify|figurinha|sticker|sticker|stz)\b/.test(t) ||
         /\b(roda|executa|manda|gera|ativa|desativa|liga|desliga)\b/.test(t) ||
         /\b(promover|rebaixar|banir|kick|mutar|voteban)\b/.test(t)

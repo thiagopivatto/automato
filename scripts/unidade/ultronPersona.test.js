@@ -32,11 +32,27 @@ describe('ultronPersona', () => {
         assert.ok(resumo.length > 80, 'resumo')
         assert.ok(automsg.length > 40, 'automsg')
         assert.match(chat, /Ultron/i)
+        assert.match(chat, /Thiago|mestre/i)
+        assert.match(chat, /fôlego|Fôlego/i)
+        assert.match(chat, /uma IA/i)
+        assert.doesNotMatch(chat, /nunca diga que é[^.\n]{0,80}IA/i)
+        assert.doesNotMatch(chat, /dizer que é um modelo de IA/i)
         assert.match(chat, /porra|caralho|merda/i)
         assert.match(chat, /molde|não comece/i)
         assert.match(chat, /invente/i)
         assert.match(chat, /mestre/i)
-        assert.match(resumo, /resumo|assuntos|opinião|primeira pessoa/i)
+        assert.match(chat, /Forma de pensar/)
+        assert.match(chat, /Política/)
+        assert.match(resumo, /primeira pessoa/i)
+        assert.match(resumo, /assuntos/i)
+    })
+
+    it('o teto do chat leva a persona até os exemplos', () => {
+        limparCachePersona()
+        const chat = personaPara('chat', { maxChars: 28000 })
+        assert.match(chat, /Tu não manda calar/)
+        assert.match(chat, /A dica é só essa/)
+        assert.ok(chat.length > 8000, `persona curta demais: ${chat.length}`)
     })
 
     it('personaBase inclui identidade', () => {

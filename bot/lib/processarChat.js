@@ -4,7 +4,8 @@
  */
 import api from './lbotApi.js'
 import { ehFallbackPaneIa, precisaPesquisaWeb } from '../../vendor/lbot-api-comandos/api/ia.js'
-import { responderLocalUltron } from '../../vendor/lbot-api-comandos/api/resposta-local-chat.js'
+import { classificarFolego, responderLocalUltron, tokensDoFolego } from '../../vendor/lbot-api-comandos/api/resposta-local-chat.js'
+import { assuntoAberto, extrairTresFatos } from './fichaChat.js'
 import * as socket from '../baileys/socket.js'
 import { aliasesParticipanteMeta, criarTexto, listaContemJid, mencaoNumero } from './util.js'
 import { comandosInfo } from '../comandos/comandos.js'
@@ -99,24 +100,26 @@ async function carregarPersonalidade(mensagemBaileys, id_chat) {
         // Sem !personalidade do chat: usa persona/ULTRON.md (contexto chat)
         if (!String(personalidade || '').trim()) {
             const { personaPara } = await import('./ultronPersona.js')
-            personalidade = personaPara('chat', { maxChars: 4200 })
+            personalidade = personaPara('chat', { maxChars: 28000 })
         }
         return personalidade
     } catch {
         try {
             const { personaPara } = await import('./ultronPersona.js')
-            return personaPara('chat', { maxChars: 4200 })
+            return personaPara('chat', { maxChars: 28000 })
         } catch {
             return ''
         }
     }
 }
 
-function respostaSeguraChat(pergunta, mensagemBaileys) {
+function respostaSeguraChat(pergunta, mensagemBaileys, fato) {
     return responderLocalUltron(pergunta, {
         ehDono: !!mensagemBaileys?.mensagem_dono,
         nome: mensagemBaileys?.nome_usuario || '',
-        factual: precisaPesquisaWeb(pergunta)
+        factual: precisaPesquisaWeb(pergunta),
+        fato,
+        folego: classificarFolego(pergunta)
     })
 }
 
@@ -325,6 +328,8 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
     const memoriaUsuario = [memoriaFalante, memoriaMencionados].filter(Boolean).join('\n\n')
 
     const usarPesquisa = precisaPesquisaWeb(pergunta)
+    const folego = classificarFolego(pergunta)
+    const fatosFalante = extrairTresFatos(memoriaUsuario).join('\n')
 
     const opcoesIa = {
         historicoGrupo: historicoGrupoTexto,
@@ -340,7 +345,10 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         nomesGrupo: nomesParaPrompt(membrosChat),
         timeout: usarPesquisa ? 9000 : 8000,
         budgetMs: usarPesquisa ? 12000 : 10000,
-        maxOutputTokens: usarPesquisa ? 420 : 280,
+        folego,
+        fichaFatos: fatosFalante,
+        assuntoAberto: assuntoAberto(historicoGrupoTexto),
+        maxOutputTokens: tokensDoFolego(folego),
         // Factual: race maior + Perplexity (se houver chave); casual sem web
         webRaceMs: usarPesquisa ? 4500 : 1600,
         chatRapido: true,
@@ -393,10 +401,10 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
             } catch {
                 /* */
             }
-            resultadoTexto = respostaSeguraChat(pergunta, mensagemBaileys)
+            resultadoTexto = respostaSeguraChat(pergunta, mensagemBaileys, fatosFalante)
         }
     }
-    resultadoTexto = textoChatUtil(resultadoTexto) || respostaSeguraChat(pergunta, mensagemBaileys)
+    resultadoTexto = textoChatUtil(resultadoTexto) || respostaSeguraChat(pergunta, mensagemBaileys, fatosFalante)
 
     const participantes = mensagemBaileys.grupo?.participantes || []
     let textoFinal = resultadoTexto

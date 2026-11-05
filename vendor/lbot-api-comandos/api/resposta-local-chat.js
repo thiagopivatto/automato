@@ -32,6 +32,50 @@ function normalizar(texto) {
 const PESADA =
     /\b(suicid|me matar|quero morrer|nao quero mais viver|nao aguento mais viver|me cortar|automutil)/
 
+/** Teto de tokens por tipo de pergunta. Provocação curta; conselho e grupo longos. */
+export const TOKENS_FOLEGO = {
+    provocacao: 80,
+    placar: 160,
+    clima: 160,
+    papo: 220,
+    noticia: 320,
+    opiniao: 320,
+    correcao: 320,
+    agenda: 320,
+    conselho: 700,
+    grupo: 700
+}
+
+export function classificarFolego(texto) {
+    const t = normalizar(texto)
+    if (/\bclima (desse|deste|do|no) grupo\b/.test(t) || /\bcomo (esta|ta) o grupo\b/.test(t)) return 'grupo'
+    if (/\b(cala a boca|vai se foder|vsf|seu lixo|seu merda)\b/.test(t) && t.length < 90) return 'provocacao'
+    if (/\b(placar|quem ganhou)\b/.test(t) || (/\bresultado\b/.test(t) && /\b(jogo|hoje|agora|ontem)\b/.test(t))) return 'placar'
+    if (/\b(jogo|partida|classico)\b/.test(t) && /\b(ontem|anteontem|hoje|contra|sao paulo|corinthians|flamengo|palmeiras)\b/.test(t)) {
+        return 'placar'
+    }
+    if (
+        /\b(sao paulo|corinthians|flamengo|palmeiras|vasco|santos|botafogo|fluminense|gremio)\b/.test(t) &&
+        /\b(ontem|anteontem|contra)\b/.test(t) &&
+        !/\b(filme|serie|clima|chuva|graus)\b/.test(t)
+    ) {
+        return 'placar'
+    }
+    if (/\b(chuva|chover|graus|temperatura|previsao)\b/.test(t) || (/\bclima\b/.test(t) && !/\bgrupo\b/.test(t))) {
+        return 'clima'
+    }
+    if (/\bnotici/.test(t)) return 'noticia'
+    if (/\b(demiss|conselho|me da uma dica|dica|o que eu faco|pedir as contas)\b/.test(t)) return 'conselho'
+    if (/\b(entao eu|eu largo|nao foi isso que)\b/.test(t)) return 'correcao'
+    if (/\b(o que (vc|voce|tu) acha|acha do|acha que)\b/.test(t)) return 'opiniao'
+    if (/\b(sabado|marcar|futebol as|8h|horario)\b/.test(t)) return 'agenda'
+    return 'papo'
+}
+
+export function tokensDoFolego(folego) {
+    return TOKENS_FOLEGO[folego] || TOKENS_FOLEGO.papo
+}
+
 const LINHAS = {
     saudacao: [
         'Chegou. O grupo continua o mesmo circo.',
@@ -105,10 +149,11 @@ const LINHAS = {
         'Não compro isso. Falta o pedaço que sustenta a frase.'
     ],
     piada: [
-        'Piada pronta eu não entrego. O grupo já se encarrega do constrangimento.',
-        'Quer piada? Olha a última mensagem e tira a sua conclusão.',
-        'Eu zoio o que está na cara. Não faço stand-up.',
-        'O cômico aqui é a confiança de quem fala sem pensar.'
+        'Dois no grupo combinaram de decidir juntos. Um decidiu. O outro abriu áudio de quatro minutos pra dizer que ia pensar. A piada é essa.',
+        'Perguntaram a hora pro cara. Ele respondeu com a cotação do bitcoin. Ninguém riu. Eu ri.',
+        'A piada: ele jurou que era a última vez. O grupo inteiro já tinha ouvido essa temporada.',
+        'Curta. O sujeito pediu sinceridade, recebeu, e processou quem falou. Fim.',
+        'Vai. Três pessoas marcaram o mesmo horário. Nenhuma era a que podia. O grupo chamou isso de organização.'
     ],
     conselho: [
         'Conselho curto: para de enrolar e faz o que você já sabe que tem que fazer.',
@@ -228,6 +273,11 @@ const LINHAS = {
     ]
 }
 
+export function pedePiada(texto) {
+    const t = normalizar(texto)
+    return /\bpiada\b/.test(t) && /\b(conta|manda|faz|quero|pede|solta|outra|uma)\b/.test(t)
+}
+
 function tipoConversa(t) {
     if (PESADA.test(t)) return 'pesada'
     if (/^(ate|tchau|falou|flw|fui|boa noite pra voces|ate mais)\b/.test(t)) return 'despedida'
@@ -261,45 +311,86 @@ function tipoConversa(t) {
     return 'papo'
 }
 
-function montarFatos(pesquisa, semente, ehDono) {
+function textoDosFatos(pesquisa, folego, ehDono, semente) {
     const bruto = String(pesquisa || '')
     const semCidade = /SEM_CIDADE/i.test(bruto)
     const fatos = bruto
         .replace(/SEM_CIDADE:[^\n]*/gi, '')
         .replace(/\s+/g, ' ')
         .trim()
+    const limite = folego === 'placar' || folego === 'clima' ? 320 : 700
     const partes = []
-    if (semCidade) {
-        partes.push(escolher(ehDono ? LINHAS.cidadeMestre : LINHAS.cidade, semente + 'cidade'))
+    if (fatos && (/\d/.test(fatos) || fatos.length > 24)) partes.push(fatos.slice(0, limite))
+    if (semCidade) partes.push(escolher(ehDono ? LINHAS.cidadeMestre : LINHAS.cidade, semente + 'cidade'))
+    return partes.join(' ').trim()
+}
+
+function semXingamento(texto) {
+    return !/\b(porra|caralho|merda|foder|vsf|idiota|burro|otario)\b/i.test(String(texto || ''))
+}
+
+function montarReserva(fala, folego, { ehDono, fato }) {
+    const ponto = String(fala || '').replace(/\s+/g, ' ').trim()
+    const fatoTxt = String(fato || '').replace(/\s+/g, ' ').trim().slice(0, 180)
+    if (folego === 'provocacao') {
+        return ehDono ? 'Mestre, pode falar. Eu escuto.' : 'Não. Tu não manda calar ninguém aqui.'
     }
-    if (fatos.length > 40) {
-        partes.push(escolher(ehDono ? LINHAS.leadFatoMestre : LINHAS.leadFato, semente + 'fato'))
-        partes.push(fatos.slice(0, 1200))
+    if (folego === 'conselho') {
+        const base = ehDono
+            ? 'Mestre, olha a conta antes da raiva. Se o mês fecha sem esse salário, sai. Se não fecha, fica. Decidir no ódio do turno marca o mês que vai faltar. A dica pesa porque saída sem reserva não é plano.'
+            : 'Olha a conta antes de olhar o chefe. Se o mês fecha sem esse salário, pede e aguenta. Se não fecha, não pede. Reclamar do expediente no mesmo dia em que se fantasia uma saída não é plano. É raiva. Tu sai no dia em que o número deixar. Sair hoje, no ódio do turno, é marcar o mês que vai te faltar. A dica é só essa.'
+        return fatoTxt ? `${base} Do que eu já sei: ${fatoTxt}.` : base
     }
-    return partes.join('\n').trim()
+    if (folego === 'grupo') {
+        const miolo = fatoTxt || ponto.slice(0, 160)
+        const cabeca = ehDono ? 'Mestre, são conversas separadas, não um assunto só.' : 'São conversas separadas, não um assunto só.'
+        return `${cabeca} ${miolo} Nada disso fechou enquanto um não escuta o que o outro já respondeu.`
+    }
+    if (folego === 'opiniao') {
+        return `De novo isso. ${ponto.slice(0, 120)} Eu aguentei a primeira. Na repetição eu corto.${fatoTxt ? ` E eu lembro: ${fatoTxt}.` : ' Não é opinião nova. É tique.'}`
+    }
+    if (folego === 'correcao') {
+        return `Não. Eu não mandei isso. ${ponto.slice(0, 120)} ${fatoTxt ? `${fatoTxt}. ` : ''}Leitura torta eu não assino. Termina ou assume.`
+    }
+    if (folego === 'agenda') {
+        return `${ponto.slice(0, 140)} Se alguém já disse que não pode, tira o nome ou muda a hora. ${fatoTxt || 'Chamar geral como se ninguém tivesse respondido é preguiça.'}`
+    }
+    const miolo = ponto.slice(0, 100)
+    if (ehDono) return `Mestre, ${miolo || 'pode falar'}. Eu levo isso a sério.`
+    if (fatoTxt) return `${miolo}. Do que eu já sei de você: ${fatoTxt}.`
+    return miolo
+        ? `${miolo}. O resto ainda está solto.`
+        : 'Fala o ponto. Eu respondo em cima dele.'
 }
 
 /**
  * @param {string} texto fala do usuário (pode vir como [Nome]: texto)
- * @param {{ ehDono?: boolean, pesquisa?: string, nome?: string, factual?: boolean }} [opcoes]
+ * @param {{ ehDono?: boolean, pesquisa?: string, nome?: string, factual?: boolean, fato?: string, folego?: string }} [opcoes]
  */
 export function responderLocalUltron(texto, opcoes = {}) {
     const fala = falaLimpa(texto)
     const t = normalizar(fala)
     const ehDono = !!opcoes.ehDono
-    const comFatos = montarFatos(opcoes.pesquisa, fala || 'fato', ehDono)
-    if (comFatos) return comFatos
-
-    const tipo = tipoConversa(t)
-    if (tipo === 'pesada') return escolher(LINHAS.pesada, fala)
-    if (ehDono) {
-        if (opcoes.factual) return escolher(LINHAS.factualMestre, fala || 'fato')
-        if (tipo === 'ofensa' || tipo === 'pedidoXingo') return escolher(LINHAS.mestre, fala || 'mestre')
-        const lista = (LINHAS[tipo] || LINHAS.mestre).filter(
-            (l) => !/\b(porra|caralho|merda|foder|vsf|idiota|burro|otario)\b/i.test(l)
-        )
-        return escolher(lista.length ? lista : LINHAS.mestre, fala || 'mestre')
+    const folego = opcoes.folego || classificarFolego(fala)
+    if (PESADA.test(t)) return escolher(LINHAS.pesada, fala)
+    if (pedePiada(t)) {
+        const joke = escolher(LINHAS.piada, fala)
+        return ehDono ? `Mestre, ${joke}` : joke
     }
-    if (opcoes.factual) return escolher(LINHAS.factualSem, fala || 'fato')
-    return escolher(LINHAS[tipo] || LINHAS.papo, fala || tipo)
+
+    const comFatos = textoDosFatos(opcoes.pesquisa, folego, ehDono, fala || 'fato')
+    if (comFatos) {
+        if (ehDono && semXingamento(comFatos)) return `Mestre, ${comFatos}`
+        return comFatos
+    }
+
+    if (opcoes.factual || folego === 'placar' || folego === 'clima' || folego === 'noticia') {
+        if (ehDono) return escolher(LINHAS.factualMestre, fala || 'fato')
+        if (folego === 'noticia') return 'Não verifiquei a notícia agora. Sem chute. O que eu não vi, eu não afirmo.'
+        return escolher(LINHAS.factualSem, fala || 'fato')
+    }
+
+    const reserva = montarReserva(fala, folego, { ehDono, fato: opcoes.fato })
+    if (ehDono && !semXingamento(reserva)) return escolher(LINHAS.mestre, fala || 'mestre')
+    return reserva
 }
