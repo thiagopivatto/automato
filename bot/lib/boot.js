@@ -29,10 +29,12 @@ let _apis = null
 let _dono = null
 let _autoMsg = null
 let _grupos = 0
+let _gruposSync = false
 let _meta = {}
 /** @type {Record<string, number>} */
 let _fases = {}
 let _bootInicio = 0
+let _bootProntoFeito = false
 
 const trunc = (s, n) => {
     const t = String(s ?? '')
@@ -46,9 +48,12 @@ export function registrarBootMeta(meta = {}) {
     _meta = { ..._meta, ...meta }
 }
 
-export function bootMarcarInicio() {
+export function bootMarcarInicio(force = false) {
+    if (_bootInicio && !force) return
     _bootInicio = Date.now()
     _fases = {}
+    _bootProntoFeito = false
+    bootMarcarFase('start')
 }
 
 export function bootMarcarFase(nome) {
@@ -122,7 +127,18 @@ export function registrarBootGrupos(qtd) {
 }
 
 function linhaFases() {
-    const ordem = ['banner', 'env', 'bot', 'grupos', 'pronto']
+    const ordem = [
+        'start',
+        'pastas',
+        'db',
+        'auth',
+        'waVer',
+        'banner',
+        'env',
+        'bot',
+        'pronto',
+        'grupos'
+    ]
     const partes = []
     let prev = 0
     for (const nome of ordem) {
@@ -135,7 +151,18 @@ function linhaFases() {
     return { partes: partes.join(' · '), total }
 }
 
+/** Atualiza contagem de grupos após sync em background (sem reimprimir painel). */
+export function bootGruposProntos(qtd) {
+    registrarBootGrupos(qtd)
+    _gruposSync = true
+    bootMarcarFase('grupos')
+    const n = Number(qtd) || 0
+    console.log(c.dim(`  · Grupos sincronizados: ${n} (${_fases.grupos || 0}ms desde start)`))
+}
+
 export function bootPronto() {
+    if (_bootProntoFeito) return
+    _bootProntoFeito = true
     bootMarcarFase('pronto')
     const agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
     const nodeOk = /^v(2[0-9]|[3-9]\d)/.test(process.version)
@@ -158,13 +185,17 @@ export function bootPronto() {
             .split(',')
             .map((s) => s.trim())
             .filter(Boolean)
-            .join(' → ') || 'chat: gemini → OR free → OR · geral: +rapid+poll'
-    const budget = process.env.IA_BUDGET_MS || '7000'
+            .join(' → ') || 'chat: OR free → OR → poll → gemini'
+    const budget = process.env.IA_BUDGET_MS || '8000'
     const filaConc = process.env.FILA_CONCURRENCY || '12'
     const filaChat = process.env.FILA_CHAT_CONCURRENCY || '1'
     const filaTo = process.env.FILA_TIMEOUT_MS || '180000'
     const maxChatQ = process.env.MAX_CHAT_QUEUES || '500'
     const { partes: fasesTxt, total: bootTotal } = linhaFases()
+    const openMs = _fases.open != null ? _fases.open : null
+    const prontoMs = _fases.pronto != null ? _fases.pronto : bootTotal
+    const openAtePronto =
+        openMs != null ? Math.max(0, prontoMs - openMs) : bootTotal
 
     secao('Conexão')
     row('Horário', agora)
@@ -193,7 +224,7 @@ export function bootPronto() {
     }
     if (ehUnc(dirDados) || ehUnc(sessao)) {
         console.log(
-            c.warn('     ⚠  Dados/sessão em UNC/NAS — prefira ULTRON_DATA_DIR / ULTRON_SESSAO_DIR no SSD')
+            c.warn('     ⚠  Dados/sessão em UNC/NAS — meta <3s exige SSD (ULTRON_DATA_DIR / ULTRON_SESSAO_DIR)')
         )
     }
 
@@ -210,7 +241,15 @@ export function bootPronto() {
         _dono !== false || !!_meta.dono
     )
     row('AutoMsg', _autoMsg === false ? 'desligada' : 'ligada', _autoMsg !== false)
-    row('Grupos', _grupos ? `${_grupos} sincronizados` : 'nenhum', _grupos > 0)
+    row(
+        'Grupos',
+        _gruposSync
+            ? `${_grupos} sincronizados`
+            : _grupos
+              ? `${_grupos} (sync em background…)`
+              : 'sincronizando em background…',
+        true
+    )
 
     if (_apis?.length) {
         console.log('')
@@ -225,15 +264,16 @@ export function bootPronto() {
     console.log('')
     secao('IA / runtime')
     row('Cascade', cascade)
-    row('IA_BUDGET_MS', `${budget} (chat hot path ≤4.5s)`)
-    row('Chat meta', '≤3–4s · web Tavily/Brave/DDG · personalidade Ultron')
+    row('IA_BUDGET_MS', `${budget}`)
+    row('Chat meta', 'rápido · OpenRouter-first · persona/ULTRON.md')
     row('Fila', `global=${filaConc} chat=${filaChat} maxQ=${maxChatQ} timeout=${filaTo}ms`)
     row('Log', process.env.LOG_LEVEL || 'warn')
 
     console.log('')
     secao('Boot timing')
     row('Fases', fasesTxt || '—')
-    row('Total', `${bootTotal}ms`, bootTotal < 15000)
+    row('Desde start', `${bootTotal}ms`)
+    row('Open→pronto', `${openAtePronto}ms`, openAtePronto < 3000)
 
     const box = (plain, paint = (s) => s) =>
         c.brand('  │') + paint(center(plain, W)) + c.brand('│')

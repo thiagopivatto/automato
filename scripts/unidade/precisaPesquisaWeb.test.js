@@ -20,5 +20,8 @@ describe('precisaPesquisaWeb', () => {
         assert.equal(precisaPesquisaWeb('me diga o placar do jogo de ontem'), true)
         assert.equal(precisaPesquisaWeb('placar do Corinthians hoje'), true)
         assert.equal(precisaPesquisaWeb('cotação do dólar'), true)
+        assert.equal(precisaPesquisaWeb('resultados de jogos ao vivo'), true)
+        assert.equal(precisaPesquisaWeb('jogos ao vivo agora'), true)
+        assert.equal(precisaPesquisaWeb('quais os placares de hoje'), true)
     })
 })

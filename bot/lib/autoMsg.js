@@ -25,13 +25,6 @@ const MAX_HIST_RECENTES = 12
 const DELAY_ENVIO_MIN_MS = 12_000
 const DELAY_ENVIO_MAX_MS = 50_000
 
-const SYSTEM_AUTOMSG =
-    'Você é Ultron, um membro normal de um grupo de WhatsApp (PT-BR). ' +
-    'Fale como pessoa real: espontâneo, curto (1–3 frases), informal. ' +
-    'Pode filosofar de leve ou fazer uma pergunta sincera. ' +
-    'Não soe como assistente, bot ou motivacional corporativo. ' +
-    'Não force piada. Não invente fatos. Nunca diga que é IA.'
-
 let timer = null
 let sockRef = null
 let botInfoRef = null
@@ -112,7 +105,8 @@ async function obterUltimoContexto(id_grupo) {
 
 async function gerarTextoHumano(prompt, personalidade = '') {
     try {
-        let system = SYSTEM_AUTOMSG
+        const { ultronSystemAutomsg } = await import('./ultronPersona.js')
+        let system = ultronSystemAutomsg()
         const persona = String(personalidade || '').trim()
         if (persona) system += `\n\n[PERSONALIDADE DESTE CHAT]\n${persona.slice(0, 600)}`
         const { resultado } = await api.IA.gerarTextoIA(prompt, system, {

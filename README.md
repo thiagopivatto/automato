@@ -36,7 +36,7 @@ Changelog (pt-BR + EN): [CHANGELOG.md](CHANGELOG.md) — a cada commit o patch s
 
 ## Instalação (rode no SSD local)
 
-**Não rode o processo a partir de share UNC/NAS** (`\\servidor\...`). Clone ou copie o repo para disco local; use o NAS só como backup opcional.
+**Não rode o processo a partir de share UNC/NAS** (`\\servidor\...`). Clone ou copie o repo para disco local; use o NAS só como backup opcional. Meta de boot **Open→pronto abaixo de 3s** exige SSD (`ULTRON_DATA_DIR` / `ULTRON_SESSAO_DIR` locais).
 
 ```bash
 git clone <seu-repo> automato
@@ -110,14 +110,23 @@ Prefixos: `! # . * - + / $ &`
 | `!comando guia` | Ajuda de qualquer comando |
 | `!admin` | Painel do dono (1ª vez cadastra você) |
 | `!chat` | Conversa com a IA |
-| `!personalidade` | Tom do bot neste chat (chat/automsg) |
-| `!personalidaderesumo` | Tom só do `!resumodogrupo` |
+| `!personalidade` | Tom extra deste chat (chat/automsg); padrão = [`persona/ULTRON.md`](persona/ULTRON.md) |
+| `!personalidaderesumo` | Tom extra só do `!resumodogrupo` |
 | `!painel` | Dump + toggles do grupo (admin) |
 | `!criarimg` | Gera imagem (Pollinations / HF / Gemini / Horde / Rapid) |
 | `!cotasia` | Status das APIs de IA |
 | `!painelbot` / `!infobot` | Painel global + lista de grupos (dono) |
 
 Cite uma mensagem do bot ou marque-o no grupo para falar com a IA sem comando.
+
+### Personalidade (arquivo único)
+
+A voz padrão do Ultron vive em **[`persona/ULTRON.md`](persona/ULTRON.md)** (linguagem natural, seções `# Chat`, `# Resumo`, `# Automsg`, etc.).
+
+1. Edite o arquivo e reinicie o bot (ou espere o reload por mtime).
+2. Por grupo: `!personalidade <texto>` / `!personalidade padrão`.
+3. Só resumo: `!personalidaderesumo <texto>` / `reset`.
+4. Arquivo custom: `ULTRON_PERSONA_FILE=C:\caminho\meu-ultron.md` no `.env`.
 
 ---
 

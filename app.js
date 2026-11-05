@@ -19,7 +19,7 @@ import {
     dirDados,
     garantirPastasRuntime
 } from './bot/lib/caminhos.js'
-import { BUILD_ID, registrarBootMeta } from './bot/lib/boot.js'
+import { BUILD_ID, registrarBootMeta, bootMarcarInicio, bootMarcarFase } from './bot/lib/boot.js'
 import { incrMetrica, logWarn, logInfo } from './bot/lib/logger.js'
 import { filtrarMsgsNovas, carregarDedupDisco, liberarMsgId } from './bot/lib/dedupMsgs.js'
 import { createRequire } from 'module'
@@ -30,8 +30,10 @@ try {
 } catch {
     /* UNC */
 }
+bootMarcarInicio(true)
 carregarEnv(raizProjeto)
 await garantirPastasRuntime().catch((e) => console.warn('[pastas]', e?.message || e))
+bootMarcarFase('pastas')
 
 // IA/API: import direto via bot/lib/lbotApi.js (vendor). Sync só se forçado.
 if (!/^(1|true|sim|on)$/i.test(String(process.env.ULTRON_SKIP_VENDOR_SYNC || '1'))) {
@@ -42,34 +44,34 @@ if (!/^(1|true|sim|on)$/i.test(String(process.env.ULTRON_SKIP_VENDOR_SYNC || '1'
     }
 }
 
-// Smoke vendor (fonte única)
-try {
-    const api = (await import('./bot/lib/lbotApi.js')).default
-    if (typeof api?.IA?.obterRespostaIA !== 'function') {
-        console.warn('[boot] vendor IA.obterRespostaIA ausente')
-    } else {
-        logInfo('vendor IA ok', { build: BUILD_ID, data: dirDados })
-    }
-} catch (err) {
-    console.warn(`[boot] vendor: ${err?.message || err}`)
+// Smoke vendor adiado (não bloqueia boot); pule com ULTRON_SKIP_VENDOR_SMOKE=1
+if (!/^(1|true|sim|on)$/i.test(String(process.env.ULTRON_SKIP_VENDOR_SMOKE || ''))) {
+    setImmediate(() => {
+        import('./bot/lib/lbotApi.js')
+            .then((mod) => {
+                const api = mod.default
+                if (typeof api?.IA?.obterRespostaIA !== 'function') {
+                    console.warn('[boot] vendor IA.obterRespostaIA ausente')
+                } else {
+                    logInfo('vendor IA ok', { build: BUILD_ID, data: dirDados })
+                }
+            })
+            .catch((err) => console.warn(`[boot] vendor: ${err?.message || err}`))
+    })
 }
 
-// SQLite + migração NeDB (se necessário)
-try {
-    const { iniciarDb } = await import('./bot/db/sqlite.js')
-    await iniciarDb()
-} catch (err) {
-    console.warn(`[db] ${err?.message || err}`)
-}
-
-try {
-    const { iniciarHealthLocal } = await import('./bot/lib/health.js')
-    iniciarHealthLocal()
-} catch (err) {
-    console.warn(`[health] ${err?.message || err}`)
-}
-
-await carregarDedupDisco().catch((e) => console.warn('[dedup]', e?.message || e))
+await Promise.all([
+    import('./bot/db/sqlite.js')
+        .then((m) => m.iniciarDb())
+        .catch((err) => console.warn(`[db] ${err?.message || err}`)),
+    import('./bot/lib/health.js')
+        .then((m) => {
+            m.iniciarHealthLocal()
+        })
+        .catch((err) => console.warn(`[health] ${err?.message || err}`)),
+    carregarDedupDisco().catch((e) => console.warn('[dedup]', e?.message || e))
+])
+bootMarcarFase('db')
 
 function versaoBaileys() {
     try {
@@ -153,13 +155,21 @@ async function connectToWhatsApp() {
     let eventosEsperando = []
     const sessaoDir = caminhoSessao()
 
+    const tAuth = Date.now()
     const [auth, versaoInfo] = await Promise.all([
         useMultiFileAuthState(sessaoDir),
         obterVersaoWaWeb()
     ])
+    bootMarcarFase('auth')
+    bootMarcarFase('waVer')
     const { state: estadoAuth, saveCreds } = auth
     const versaoWaWeb = versaoInfo.version
     const bailVer = versaoBaileys()
+    logInfo('auth+waVer', {
+        ms: Date.now() - tAuth,
+        waCache: !!versaoInfo.fromCache,
+        wa: versaoWaWeb.join('.')
+    })
 
     registrarBootMeta({
         baileys: bailVer,
@@ -259,15 +269,19 @@ async function connectToWhatsApp() {
                         lid: botInfo.lid_bot
                     })
 
+                    bootMarcarFase('open')
                     await garantirDono().catch((e) => console.error('[dono]', e?.message || e))
                     await eventosSocket.conexaoAberta(c, botInfo)
                     inicializacaoCompleta = true
                     logInfo('conexão aberta', { build: BUILD_ID })
-                    await eventosSocket.atualizacaoDadosGrupos(c, botInfo).catch((e) => {
-                        console.error('[grupos.init]', e?.message || e)
-                    })
+                    // Fila de msgs antes do sync de grupos (não bloqueia “pronto”)
                     await eventosSocket.realizarEventosEspera(c, eventosEsperando, botInfo)
                     eventosEsperando = []
+                    setImmediate(() => {
+                        eventosSocket.atualizacaoDadosGrupos(c, botInfo).catch((e) => {
+                            console.error('[grupos.init]', e?.message || e)
+                        })
+                    })
                 }
             } else if (connection === 'close') {
                 const botInfo = (await refreshBotInfo(bot)) || {}

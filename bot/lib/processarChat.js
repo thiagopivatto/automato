@@ -87,9 +87,19 @@ async function carregarPersonalidade(mensagemBaileys, id_chat) {
                     mensagemBaileys.grupo?.id_grupo || id_chat
                 )) || ''
         }
+        // Sem !personalidade do chat: usa persona/ULTRON.md (contexto chat)
+        if (!String(personalidade || '').trim()) {
+            const { personaPara } = await import('./ultronPersona.js')
+            personalidade = personaPara('chat', { maxChars: 3500 })
+        }
         return personalidade
     } catch {
-        return ''
+        try {
+            const { personaPara } = await import('./ultronPersona.js')
+            return personaPara('chat', { maxChars: 3500 })
+        } catch {
+            return ''
+        }
     }
 }
 
@@ -213,7 +223,9 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
     else if (
         !/\?/.test(pergunta) &&
         pergunta.length < 40 &&
-        !/\b(noticia|hoje|agora|placar|preço|preco|cotacao)\b/i.test(pergunta)
+        !/\b(noticia|hoje|agora|placar|preço|preco|cotacao|resultado|jogo|ao\s*vivo)\b/i.test(
+            pergunta
+        )
     ) {
         usarPesquisa = false
     }
@@ -231,9 +243,11 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         timeout: 6000,
         budgetMs: 8000,
         maxOutputTokens: usarPesquisa === true ? 380 : 280,
-        webRaceMs: 1600,
+        // Factual: race maior + Perplexity (se houver chave); casual sem web
+        webRaceMs: usarPesquisa === true ? 2800 : 1600,
         chatRapido: true,
-        incluirPerplexity: false
+        incluirPerplexity: usarPesquisa === true,
+        maxFontesWeb: 3
     }
 
     let resultadoTexto = ''

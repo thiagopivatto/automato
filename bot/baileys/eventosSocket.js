@@ -65,11 +65,11 @@ export const conexaoAberta = async(c, botInfo)=>{
     try{
         const {
             bootBanner,
-            bootMarcarInicio,
             bootMarcarFase,
+            bootPronto,
             registrarBootAutoMsg
         } = await import('../lib/boot.js')
-        bootMarcarInicio()
+        // Timer vem do app.js (start); não resetar aqui
         bootBanner()
         await criarArquivosNecessarios()
         carregarEnv()
@@ -91,6 +91,8 @@ export const conexaoAberta = async(c, botInfo)=>{
         } catch (e) {
             console.log(corTexto(`  Limpeza periódica: ${e?.message || e}`, '#eab308'))
         }
+        // Pronto antes do sync de grupos — mensagens já podem fluir
+        bootPronto()
     } catch(err){
         consoleErro(err, "Inicialização")
         c.end(new Error("erro_geral"))
@@ -318,7 +320,7 @@ export const atualizacaoParticipantesGrupo = async (c, evento, botInfo)=>{
 }
 
 export const atualizacaoDadosGrupos = async (c, botInfo)=>{
-    const { registrarBootGrupos, bootPronto, bootMarcarFase } = await import('../lib/boot.js')
+    const { bootGruposProntos } = await import('../lib/boot.js')
     try{
         const dadosGrupos = await socket.obterTodosGrupos(c)
         if(dadosGrupos.length){
@@ -328,9 +330,7 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
             await grupos.verificarListaNegraGeral(c, dadosGrupos, botInfo)
             await grupos.atualizarContagemGrupos(dadosGrupos)
         }
-        registrarBootGrupos(dadosGrupos?.length || 0)
-        bootMarcarFase('grupos')
-        bootPronto()
+        bootGruposProntos(dadosGrupos?.length || 0)
         return true
     } catch(err){
         const msg = String(err?.message || err || '')
@@ -340,16 +340,15 @@ export const atualizacaoDadosGrupos = async (c, botInfo)=>{
         } else {
             consoleErro(err, "GROUPS.UPDATE")
         }
-        // Fallback: conta grupos já salvos no NeDB (não zera o boot)
+        let n = 0
         try {
             const salvos = await new GrupoControle().obterTodosGruposInfo()
-            registrarBootGrupos(Array.isArray(salvos) ? salvos.length : 0)
+            n = Array.isArray(salvos) ? salvos.length : 0
         } catch {
-            registrarBootGrupos(0)
+            n = 0
         }
         try {
-            bootMarcarFase('grupos')
-            bootPronto()
+            bootGruposProntos(n)
         } catch {
             console.log(corTexto('Online', false))
         }

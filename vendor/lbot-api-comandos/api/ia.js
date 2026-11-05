@@ -112,8 +112,9 @@ const SYSTEM_CHAT =
     'Não comece toda resposta com o nome da pessoa. Não force sarcasmo em 100% das msgs — às vezes seriedade objetiva impacta mais. ' +
     'Use histórico do grupo e memória do usuário quando existirem. Não invente fatos sobre membros. ' +
     'Em debates: provoca com lógica; não inventa fatos só pra ganhar. ' +
-    'Quando receber [PESQUISA NA WEB]: use como base factual, limpe markdown/citações, reescreva em conversa natural, ' +
-    'preserve números/datas, acrescente opinião/sarcasmo sem sacrificar precisão. ' +
+    'Quando receber [PESQUISA NA WEB]: use como BASE FACTUAL OBRIGATÓRIA — números, placares, preços e datas SÓ do bloco. ' +
+    'Limpe markdown/citações; reescreva em conversa natural; acrescente opinião/sarcasmo sem sacrificar precisão. ' +
+    'Se o bloco de pesquisa estiver vazio ou inútil: diga que não conseguiu verificar agora — NÃO invente placar/preço/notícia. ' +
     'LINKS: NÃO cole URL no final por padrão. Só inclua link se o usuário pedir explicitamente (link, site, fonte, url). Não invente links. ' +
     'Nunca diga que é Gemini, GPT, ChatGPT, Perplexity ou qualquer IA. Nunca se apresente como assistente. ' +
     'DONO/MESTRE: se a mensagem indicar que quem fala é o dono, trate-o como "mestre" — lealdade, respeito, ajuda. ' +
@@ -549,6 +550,122 @@ const pesquisarPerplexityBruto = async (query) => {
  * Opcional: TAVILY_KEYLESS=1 usa modo keyless rate-limited.
  * @see https://docs.tavily.com/documentation/api-reference/endpoint/search
  */
+const queryPareceAtualidade = (query) =>
+    /\b(noticia|not[ií]cia[s]?|hoje|ontem|agora|placar(es)?|resultado[s]?|pre[cç]o[s]?|cota[cç][aã]o|[aã]o vivo|tempo real|ultim[oa]s?|eleic|campeonato|jogo[s]?|live)\b/i.test(
+        String(query || '')
+    )
+
+/** Pedido de placar / jogos ao vivo / resultados da rodada. */
+export const parecePedidoPlacarAoVivo = (texto) => {
+    const t = String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+    if (/\b(ao vivo|em andamento|tempo real|live\s?score|livescore)\b/.test(t)) return true
+    if (/\b(placar(es)?|resultado[s]?)\b/.test(t)) return true
+    if (
+        /\b(jogo[s]?|partida[s]?)\b/.test(t) &&
+        /\b(hoje|agora|rolando|andando|acontecendo|dessa rodada|da rodada)\b/.test(t)
+    ) {
+        return true
+    }
+    return /\b(quem (esta|ta|tá) ganhando|quanto (esta|ta|tá) o jogo|como (esta|ta|tá) o jogo)\b/.test(
+        t
+    )
+}
+
+const ESPN_LIGAS_FUTEBOL = [
+    { id: 'bra.1', nome: 'Brasileirão Série A' },
+    { id: 'bra.2', nome: 'Brasileirão Série B' },
+    { id: 'eng.1', nome: 'Premier League' },
+    { id: 'esp.1', nome: 'La Liga' },
+    { id: 'ita.1', nome: 'Serie A' },
+    { id: 'uefa.champions', nome: 'Champions League' },
+    { id: 'conmebol.libertadores', nome: 'Libertadores' }
+]
+
+const escolherLigasEspn = (query) => {
+    const t = String(query || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+    const ids = new Set()
+    if (/\b(brasileirao|serie a|flamengo|palmeiras|corinthians|sao paulo|fluminense|botafogo|gremio|internacional|santos|vasco|atletico)\b/.test(t)) {
+        ids.add('bra.1')
+    }
+    if (/\b(serie b|brasileirao b)\b/.test(t)) ids.add('bra.2')
+    if (/\b(premier|ingles|manchester|liverpool|arsenal|chelsea)\b/.test(t)) ids.add('eng.1')
+    if (/\b(laliga|la liga|espanhol|real madrid|barcelona)\b/.test(t)) ids.add('esp.1')
+    if (/\b(serie a italiana|italiana|juventus|milan|inter de milao)\b/.test(t)) ids.add('ita.1')
+    if (/\b(champions|uefa)\b/.test(t)) ids.add('uefa.champions')
+    if (/\b(libertadores|conmebol)\b/.test(t)) ids.add('conmebol.libertadores')
+    if (!ids.size) {
+        // Pedido genérico → principais ao vivo BR + Europa
+        ;['bra.1', 'bra.2', 'eng.1', 'esp.1', 'uefa.champions'].forEach((id) => ids.add(id))
+    }
+    return ESPN_LIGAS_FUTEBOL.filter((l) => ids.has(l.id))
+}
+
+const formatarEventoEspn = (ev) => {
+    const comp = ev?.competitions?.[0]
+    const comps = [...(comp?.competitors || [])].sort(
+        (a, b) => Number(a?.homeAway === 'home' ? 0 : 1) - Number(b?.homeAway === 'home' ? 0 : 1)
+    )
+    if (comps.length < 2) return ''
+    const nome = (c) =>
+        String(c?.team?.shortDisplayName || c?.team?.displayName || c?.team?.name || '?').trim()
+    const placar = (c) => {
+        const s = c?.score
+        return s === undefined || s === null || s === '' ? '-' : String(s)
+    }
+    const status =
+        String(ev?.status?.type?.description || ev?.status?.type?.name || '')
+            .trim() || '—'
+    const detalhe = String(ev?.status?.type?.detail || ev?.status?.displayClock || '').trim()
+    const st = detalhe && !status.includes(detalhe) ? `${status} (${detalhe})` : status
+    return `${nome(comps[0])} ${placar(comps[0])} x ${placar(comps[1])} ${nome(comps[1])} — ${st}`
+}
+
+/**
+ * Placares ao vivo via ESPN scoreboard (público, sem chave).
+ * Prioridade máxima para pedidos de jogos/resultados.
+ */
+export const pesquisarPlacaresAoVivo = async (query, timeoutMs = 3500) => {
+    const ligas = escolherLigasEspn(query)
+    const porLiga = await Promise.all(
+        ligas.map(async (liga) => {
+            try {
+                const { data, status } = await axios.get(
+                    `https://site.api.espn.com/apis/site/v2/sports/soccer/${liga.id}/scoreboard`,
+                    {
+                        timeout: Math.min(timeoutMs, 3200),
+                        headers: {
+                            Accept: 'application/json',
+                            // UA de browser: ESPN bloqueia bots genéricos (403)
+                            'User-Agent':
+                                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                        },
+                        validateStatus: () => true
+                    }
+                )
+                if (status >= 400) return ''
+                const eventos = data?.events || []
+                if (!eventos.length) return ''
+                const linhas = eventos.map(formatarEventoEspn).filter(Boolean)
+                if (!linhas.length) return ''
+                const dia = data?.day?.date || ''
+                return `${liga.nome}${dia ? ` (${dia})` : ''}:\n- ${linhas.join('\n- ')}`
+            } catch {
+                return ''
+            }
+        })
+    )
+    const blocos = porLiga.filter(Boolean)
+    if (!blocos.length) return ''
+    const agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    return `Placares atualizados em ${agora} (fonte ESPN):\n\n${blocos.join('\n\n')}`.slice(0, 4500)
+}
+
 const pesquisarTavily = async (query, timeoutMs = 4000) => {
     const q = String(query || '').trim().slice(0, 400)
     if (!q) return ''
@@ -559,6 +676,7 @@ const pesquisarTavily = async (query, timeoutMs = 4000) => {
         const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
         if (key) headers.Authorization = `Bearer ${key}`
         else headers['X-Tavily-Access-Mode'] = 'keyless'
+        const topic = queryPareceAtualidade(q) ? 'news' : 'general'
         const { data, status } = await axios.post(
             'https://api.tavily.com/search',
             {
@@ -566,7 +684,7 @@ const pesquisarTavily = async (query, timeoutMs = 4000) => {
                 max_results: 5,
                 search_depth: 'basic',
                 include_answer: true,
-                topic: 'general'
+                topic
             },
             { headers, timeout: timeoutMs, validateStatus: () => true }
         )
@@ -630,15 +748,18 @@ const pesquisarBrave = async (query, timeoutMs = 3500) => {
     }
 }
 
+/** Fontes com dado atualizado (contam no early-exit). Wiki/Instant são fallback. */
+export const FONTE_WEB_UTIL = new Set([
+    'PlacarAoVivo',
+    'Tavily',
+    'Brave',
+    'DuckDuckGo',
+    'Perplexity'
+])
+
 /**
- * Agrega fontes em tempo real.
- * Chat: sem Perplexity + raceMs curto. !pesquisa: pode incluir Perplexity.
- * @param {string} query
- * @param {{ incluirPerplexity?: boolean, raceMs?: number }} [opts]
- */
-/**
- * Race first-hit: fontes em paralelo; junta as primeiras não vazias sem esperar a mais lenta.
- * opts: { incluirPerplexity, raceMs, maxFontes }
+ * Race first-hit priorizando placar ESPN + Tavily/Brave/DDG HTML.
+ * opts: { incluirPerplexity, raceMs, maxFontes, preferirAtualidade }
  */
 export const pesquisarWebSimples = async (query, opts = {}) => {
     const q = String(query || '').trim()
@@ -646,50 +767,96 @@ export const pesquisarWebSimples = async (query, opts = {}) => {
     const incluirPerplexity = opts.incluirPerplexity === true
     const raceMs = Math.max(0, Number(opts.raceMs || 0) || 0)
     const maxFontes = Math.max(1, Math.min(5, Number(opts.maxFontes || 3) || 3))
-    const rotuladas = [
-        { nome: 'DuckDuckGo', p: pesquisarDuckDuckGoInstant(q, Math.min(1800, raceMs || 2200)) },
-        { nome: 'DuckDuckGo', p: pesquisarDuckDuckGoHtml(q, Math.min(2800, raceMs || 3200)) },
-        { nome: 'Wikipedia', p: pesquisarWikipedia(q, Math.min(2200, raceMs || 2800)) },
-        { nome: 'Tavily', p: pesquisarTavily(q, Math.min(2800, raceMs || 3500)) },
-        { nome: 'Brave', p: pesquisarBrave(q, Math.min(2800, raceMs || 3200)) }
-    ]
-    if (incluirPerplexity) {
-        rotuladas.unshift({ nome: 'Perplexity', p: pesquisarPerplexityBruto(q) })
+    const to = (cap, def) => Math.min(cap, raceMs || def)
+    const querPlacar = parecePedidoPlacarAoVivo(q)
+
+    // Ordem: placar ESPN (se pedido) → Perplexity → Tavily/Brave → HTML; Wiki/Instant por último
+    const rotuladas = []
+    if (querPlacar) {
+        rotuladas.push({
+            nome: 'PlacarAoVivo',
+            util: true,
+            p: pesquisarPlacaresAoVivo(q, to(3500, 3500))
+        })
     }
+    if (incluirPerplexity) {
+        rotuladas.push({
+            nome: 'Perplexity',
+            util: true,
+            p: pesquisarPerplexityBruto(q)
+        })
+    }
+    rotuladas.push(
+        { nome: 'Tavily', util: true, p: pesquisarTavily(q, to(3200, 3500)) },
+        { nome: 'Brave', util: true, p: pesquisarBrave(q, to(3200, 3200)) },
+        { nome: 'DuckDuckGo', util: true, p: pesquisarDuckDuckGoHtml(q, to(3000, 3200)) },
+        { nome: 'Wikipedia', util: false, p: pesquisarWikipedia(q, to(2200, 2800)) },
+        { nome: 'DuckDuckGoInstant', util: false, p: pesquisarDuckDuckGoInstant(q, to(1800, 2200)) }
+    )
 
     const partes = []
+    const fallback = []
+    let uteis = 0
     const vistos = new Set()
+    const montarSaida = () => {
+        // Wiki/Instant só se nenhuma útil chegou
+        if (uteis === 0 && fallback.length) {
+            for (const f of fallback) {
+                if (partes.length >= maxFontes) break
+                partes.push(f)
+            }
+        }
+        return partes.join('\n\n').slice(0, 7500)
+    }
     const coletar = async () => {
         await new Promise((resolve) => {
             let pendentes = rotuladas.length
-            const tentarFim = () => {
-                if (pendentes <= 0 || partes.length >= maxFontes) resolve()
+            let fechou = false
+            const fechar = () => {
+                if (fechou) return
+                fechou = true
+                resolve()
             }
-            for (const { nome, p } of rotuladas) {
+            const tentarFim = () => {
+                const temPlacar = partes.some((p) => p.startsWith('[PlacarAoVivo]'))
+                // Placar ESPN sozinho já basta; senão 2 úteis
+                if (temPlacar || uteis >= Math.min(2, maxFontes) || partes.length >= maxFontes) {
+                    fechar()
+                } else if (pendentes <= 0) fechar()
+            }
+            for (const { nome, util, p } of rotuladas) {
                 Promise.resolve(p)
                     .then((txt) => {
+                        if (fechou) return
                         const t = String(txt || '').trim()
-                        if (t && partes.length < maxFontes && !vistos.has(nome + t.slice(0, 40))) {
-                            vistos.add(nome + t.slice(0, 40))
-                            partes.push(`[${nome}]\n${t}`)
+                        if (!t) return
+                        const chave = nome + t.slice(0, 40)
+                        if (vistos.has(chave)) return
+                        vistos.add(chave)
+                        const rotulo = nome === 'DuckDuckGoInstant' ? 'DuckDuckGo' : nome
+                        const bloco = `[${rotulo}]\n${t}`
+                        if (!util) {
+                            fallback.push(bloco)
+                            return
                         }
+                        if (partes.length >= maxFontes) return
+                        partes.push(bloco)
+                        uteis += 1
                     })
                     .catch(() => {})
                     .finally(() => {
                         pendentes -= 1
-                        if (partes.length >= maxFontes || pendentes <= 0) resolve()
-                        else tentarFim()
+                        tentarFim()
                     })
             }
         })
-        return partes.join('\n\n').slice(0, 7500)
+        return montarSaida()
     }
 
     if (raceMs > 0) {
         const out = await raceTimeout(coletar(), raceMs, null)
         if (out != null) return out
-        // Timeout: devolve o que já chegou
-        return partes.join('\n\n').slice(0, 7500)
+        return montarSaida()
     }
     return coletar()
 }
@@ -731,6 +898,28 @@ const anexarLinksSeFaltar = (texto, pesquisaBruta) => {
     return `${out}\n\n${links.join('\n')}`
 }
 
+/** Query de busca: limpa menção e acrescenta data de hoje em atualidade. */
+export const montarQueryPesquisaWeb = (texto) => {
+    let q = String(texto || '')
+        .replace(/@\d+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 280)
+    if (!q) return ''
+    if (precisaPesquisaWeb(q) || queryPareceAtualidade(q)) {
+        const hoje = new Date().toLocaleDateString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            timeZone: 'America/Sao_Paulo'
+        })
+        if (!/\b20\d{2}\b/.test(q) && !/\bhje\b|\bhoje\b/i.test(q)) {
+            q = `${q} hoje ${hoje}`
+        }
+    }
+    return q
+}
+
 /** Bate-papo casual não precisa de web; fatos/atualidades sim (não força só por `?`). */
 export const precisaPesquisaWeb = (texto) => {
     const t = String(texto || '')
@@ -765,14 +954,16 @@ export const precisaPesquisaWeb = (texto) => {
     ) {
         return false
     }
+    if (parecePedidoPlacarAoVivo(t)) return true
+
     const sinalFactual =
         /\b(quem (e|é|foi|ganhou|morreu|venceu|inventou|criou|fundou)|o que (e|é|aconteceu|rolou|significa)|quando (foi|sera|será|aconteceu|sai)|onde (fica|e|é|nasceu)|quanto (custa|vale|e|é)|preco|preço|cotacao|cotação)\b/.test(
             t
         ) ||
-        /\b(noticia|notícia|hoje|ontem|agora|atual|ultim[oa]|pesquisa|busca na web|pesquisar|clima|tempo|temperatura|placar|resultado|eleic|presidente|ministro|governo)\b/.test(
+        /\b(noticia[s]?|notícia[s]?|hoje|ontem|agora|atual|ultim[oa]s?|pesquisa|busca na web|pesquisar|clima|tempo|temperatura|placar(es)?|resultado[s]?|eleic|presidente|ministro|governo|ao vivo)\b/.test(
             t
         ) ||
-        /\b(dolar|dólar|euro|bitcoin|btc|ethereum|ibovespa|selic|ipca|inflacao|inflação|filme|serie|série|lancamento|lançamento|campeonato|libertadores|copa|brasileirao|brasileirão)\b/.test(
+        /\b(dolar|dólar|euro|bitcoin|btc|ethereum|ibovespa|selic|ipca|inflacao|inflação|filme|serie|série|lancamento|lançamento|campeonato|libertadores|copa|brasileirao|brasileirão|jogo[s]?)\b/.test(
             t
         ) ||
         /\b(202[4-9]|essa semana|neste momento|agora mesmo|em tempo real|fato sobre)\b/.test(t) ||
@@ -783,7 +974,9 @@ export const precisaPesquisaWeb = (texto) => {
     // "me diga/me fala/explica/busca" só com gancho factual extra
     if (
         /^(me diga|me fala|explica|busca|pesquisa|como)\b/.test(t) &&
-        /\b(hoje|agora|preco|preço|noticia|notícia|placar|quem|quando|onde|quanto|202[4-9]|dolar|dólar|bitcoin)\b/.test(t)
+        /\b(hoje|agora|preco|preço|noticia|notícia|placar|resultado|jogo|quem|quando|onde|quanto|202[4-9]|dolar|dólar|bitcoin|ao vivo)\b/.test(
+            t
+        )
     ) {
         return true
     }
@@ -1429,13 +1622,14 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
 
         // Dispara web cedo (first-hit) enquanto monta o system
         const tWeb = Date.now()
+        const queryWeb = devePesquisar ? montarQueryPesquisaWeb(pergunta) : ''
         const webPromise = devePesquisar
-            ? pesquisarWebSimples(pergunta, {
+            ? pesquisarWebSimples(queryWeb || pergunta, {
                   incluirPerplexity:
                       opcoes.incluirPerplexity === true ||
                       (!chatRapido && opcoes.incluirPerplexity !== false),
                   raceMs: webRaceMs,
-                  maxFontes: chatRapido ? 2 : 3
+                  maxFontes: Number(opcoes.maxFontesWeb || 3) || 3
               }).catch((err) => {
                   logIa(`API chat pesquisa prévia - ${msgErro(err)}`)
                   return ''
@@ -1488,7 +1682,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
             const web = await webPromise
             pesquisaBruta = limparBrutoPesquisa(
                 String(web || '').replace(
-                    /^\[(Perplexity|Tavily|Brave|DuckDuckGo|Wikipedia)\]\s*/gm,
+                    /^\[(Perplexity|Tavily|Brave|DuckDuckGo|Wikipedia|PlacarAoVivo)\]\s*/gm,
                     ''
                 )
             )
@@ -1500,8 +1694,15 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         if (pesquisaBruta) {
             system +=
                 `\n\n[PESQUISA NA WEB — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]\n` +
-                pesquisaBruta.slice(0, chatRapido ? 1200 : 2800) +
-                '\n\nReescreva em conversa natural (não copie cru; sem “Sources”). Não cole URLs a menos que o usuário tenha pedido link/fonte/site.'
+                pesquisaBruta.slice(0, chatRapido ? 1400 : 2800) +
+                '\n\nBASE FACTUAL OBRIGATÓRIA: números/placares/preços/datas só deste bloco. ' +
+                'Se houver placares ESPN/ao vivo no bloco, INFORME OS PLACARES de forma clara (time, número, status) — sem dizer que não sabe. ' +
+                'Reescreva em conversa natural (não copie cru; sem “Sources”). ' +
+                'Não cole URLs a menos que o usuário tenha pedido link/fonte/site.'
+        } else if (devePesquisar) {
+            system +=
+                '\n\n[PESQUISA NA WEB — vazia]\n' +
+                'Não foi possível verificar na web agora. Admita isso; NÃO invente placar, preço, cotação ou notícia.'
         }
 
         const messages = montarMensagens(hist, system)

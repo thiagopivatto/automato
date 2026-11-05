@@ -314,8 +314,17 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     )
                     let personalidadeGrupo = ''
                     try {
+                        const { personaPara } = await import('../lib/ultronPersona.js')
+                        personalidadeGrupo = personaPara('resumo', { maxChars: 2800 })
+                    } catch { /* ignore */ }
+                    try {
                         const { obterPersonalidadeResumo } = await import('../lib/personalidadeResumo.js')
-                        personalidadeGrupo = (await obterPersonalidadeResumo(idGrupo)) || ''
+                        const extra = (await obterPersonalidadeResumo(idGrupo)) || ''
+                        if (extra) {
+                            personalidadeGrupo =
+                                (personalidadeGrupo ? `${personalidadeGrupo}\n\n` : '') +
+                                `PERSONALIDADE EXTRA DESTE GRUPO (prioridade alta):\n${extra}`
+                        }
                     } catch { /* ignore */ }
                     const { gerado, limiteSuperior, periodoInicio, periodoFim } = await gerarResumoDaJanela(
                         janela,
