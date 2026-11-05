@@ -39,19 +39,42 @@ export async function carregarJanelaResumo(idGrupo, prefixo) {
 }
 
 export async function gerarResumoDaJanela(janela, nomeGrupo, personalidade = '', { preferirEleven = false } = {}) {
-    const gerado = await api.IA.gerarResumoGrupoAudio({
-        mensagens: janela.msgs,
-        nomeGrupo: nomeGrupo || 'o grupo',
-        teveResumoAnterior: janela.teveResumoAnterior,
-        memoriaTexto: janela.memoriaTexto,
-        personalidade,
-        preferirEleven
-    })
-    return {
-        gerado,
+    const base = {
         limiteSuperior: janela.limiteSuperior,
         periodoInicio: janela.periodoInicio,
         periodoFim: janela.periodoFim
+    }
+    try {
+        const gerado = await api.IA.gerarResumoGrupoAudio({
+            mensagens: janela.msgs,
+            nomeGrupo: nomeGrupo || 'o grupo',
+            teveResumoAnterior: janela.teveResumoAnterior,
+            memoriaTexto: janela.memoriaTexto,
+            personalidade,
+            preferirEleven
+        })
+        if (gerado?.roteiro || gerado?.resultado) return { gerado, ...base }
+    } catch (err) {
+        console.log(`resumo grupo áudio/IA - ${err?.erro || err?.message || err}`)
+    }
+    try {
+        const { montarRoteiroLocalFallback } = await import('../../vendor/lbot-api-comandos/api/resumo-grupo.js')
+        const roteiro = montarRoteiroLocalFallback(janela.msgs || [], nomeGrupo || 'o grupo', {}, '')
+        if (roteiro) {
+            return {
+                gerado: { resultado: null, roteiro, entrega: 'texto', roteiroLocal: true },
+                ...base
+            }
+        }
+    } catch { /* segue */ }
+    return {
+        gerado: {
+            resultado: null,
+            roteiro: `Vi ${janela.msgs?.length || 0} mensagens em ${nomeGrupo || 'o grupo'} e não consegui narrar. O histórico está salvo — chama de novo que eu monto o comentário.`,
+            entrega: 'texto',
+            roteiroLocal: true
+        },
+        ...base
     }
 }
 

@@ -283,11 +283,34 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         mensagem
                     )
                     const { resultado } = await gerarResumoPorTemaDaJanela(janela, grupo?.nome || 'o grupo')
-                    // Uma única mensagem (WhatsApp aguenta o texto formatado)
-                    await socket.responderTexto(c, id_chat, resultado, mensagem)
+                    const texto = String(resultado || '').trim()
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        texto || 'Não achei texto novo pra organizar por tema.',
+                        mensagem
+                    )
                 } catch (err) {
-                    if (!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro), mensagem)
+                    let textoLocal = ''
+                    try {
+                        const { montarResumoTemaLocal } = await import('../../vendor/lbot-api-comandos/api/ia.js')
+                        const idGrupo = grupo?.id_grupo || id_chat
+                        const { carregarJanelaResumoPorTema } = await import('../servicos/resumoPorTema.js')
+                        const janela = await carregarJanelaResumoPorTema(idGrupo, 1000)
+                        if (janela?.msgs?.length) {
+                            textoLocal = montarResumoTemaLocal(janela.msgs, grupo?.nome || 'o grupo')
+                        }
+                    } catch { /* histórico indisponível */ }
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        textoLocal || 'O histórico desse grupo não abriu agora. Chama de novo que eu leio as mensagens salvas.',
+                        mensagem
+                    )
+                    if (!err?.erro) {
+                        err.message = `${comando} - ${err.message}`
+                        consoleErro(err, 'IA')
+                    }
                 }
                 break
 
@@ -333,21 +356,26 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         { preferirEleven: !!mensagemBaileys.mensagem_dono }
                     )
 
-                    if (!gerado?.resultado) {
-                        return await socket.responderTexto(
+                    const audioOk = gerado?.resultado?.length > 200
+                    if (audioOk) {
+                        await socket.responderVozBuffer(
                             c,
                             id_chat,
-                            'Não consegui gerar o áudio do resumo agora. Tenta de novo daqui a pouco.',
+                            gerado.resultado,
+                            mensagem,
+                            gerado.mimetype || 'audio/ogg; codecs=opus'
+                        )
+                    } else {
+                        const roteiro = String(gerado?.roteiro || '').trim()
+                        await socket.responderTexto(
+                            c,
+                            id_chat,
+                            roteiro
+                                ? `O áudio não saiu. O comentário do grupo:\n\n${roteiro.slice(0, 3500)}`
+                                : 'Não deu pra narrar agora, mas o histórico do grupo continua salvo.',
                             mensagem
                         )
                     }
-                    await socket.responderVozBuffer(
-                        c,
-                        id_chat,
-                        gerado.resultado,
-                        mensagem,
-                        gerado.mimetype || 'audio/ogg; codecs=opus'
-                    )
 
                     try {
                         await persistirAposResumo(idGrupo, limiteSuperior, gerado, { periodoInicio, periodoFim })
@@ -355,18 +383,14 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                         consoleErro(erroMarco, 'RESUMO GRUPO')
                     }
                 } catch (err) {
-                    const msg = criarTexto(
-                        comandos_info.outros.erro_api,
-                        comando,
-                        err?.erro || 'erro de API'
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        'O resumo em áudio falhou, mas o grupo continua sendo lido. Chama de novo que eu devolvo o comentário em texto.',
+                        mensagem
                     )
-                    await socket.responderTexto(c, id_chat, msg, mensagem)
-                    if (!err?.erro) {
-                        err.message = `${comando} - ${err.message}`
-                        consoleErro(err, 'IA')
-                    } else {
-                        consoleErro(new Error(String(err.erro)), 'RESUMO GRUPO')
-                    }
+                    err.message = `${comando} - ${err?.erro || err?.message || err}`
+                    consoleErro(err, 'RESUMO GRUPO')
                 }
                 break
 

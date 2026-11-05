@@ -89,8 +89,19 @@ export const utilidades = async(c, mensagemBaileys, botInfo) => {
                     const { processarChatIA } = await import('../lib/processarChat.js')
                     await processarChatIA(c, mensagemBaileys, botInfo, texto_recebido)
                 } catch(err){
-                    if(!err.erro) throw err
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, comando, err.erro) , mensagem)
+                    const { responderLocalUltron } = await import('../../vendor/lbot-api-comandos/api/resposta-local-chat.js')
+                    const { precisaPesquisaWeb } = await import('../../vendor/lbot-api-comandos/api/ia.js')
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        responderLocalUltron(texto_recebido, {
+                            ehDono: !!mensagemBaileys.mensagem_dono,
+                            nome: nome_usuario || '',
+                            factual: precisaPesquisaWeb(texto_recebido)
+                        }),
+                        mensagem
+                    )
+                    consoleErro(err, 'CHAT')
                 }
                 break
 

@@ -3,7 +3,8 @@
  * Meta tier B: E2E ≤ ~3–4s com web (Tavily/Brave/DDG/Wiki) + personalidade.
  */
 import api from './lbotApi.js'
-import { precisaPesquisaWeb } from '../../vendor/lbot-api-comandos/api/ia.js'
+import { ehFallbackPaneIa, precisaPesquisaWeb } from '../../vendor/lbot-api-comandos/api/ia.js'
+import { responderLocalUltron } from '../../vendor/lbot-api-comandos/api/resposta-local-chat.js'
 import * as socket from '../baileys/socket.js'
 import { aliasesParticipanteMeta, criarTexto, listaContemJid, mencaoNumero } from './util.js'
 import { comandosInfo } from '../comandos/comandos.js'
@@ -111,15 +112,18 @@ async function carregarPersonalidade(mensagemBaileys, id_chat) {
     }
 }
 
-const ENGASGOS = [
-    'Repete. Travou no meio.',
-    'Manda de novo, essa não saiu.',
-    'Engasguei. De novo, sem romance.',
-    'Não saiu. Repete a pergunta.'
-]
+function respostaSeguraChat(pergunta, mensagemBaileys) {
+    return responderLocalUltron(pergunta, {
+        ehDono: !!mensagemBaileys?.mensagem_dono,
+        nome: mensagemBaileys?.nome_usuario || '',
+        factual: precisaPesquisaWeb(pergunta)
+    })
+}
 
-function fallbackChatEngasgo() {
-    return ENGASGOS[Math.floor(Math.random() * ENGASGOS.length)]
+function textoChatUtil(texto) {
+    const t = String(texto || '').trim()
+    if (!t || ehFallbackPaneIa(t)) return ''
+    return t.slice(0, 3500)
 }
 
 async function montarMembrosChat(mensagemBaileys) {
@@ -320,18 +324,7 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
     }
     const memoriaUsuario = [memoriaFalante, memoriaMencionados].filter(Boolean).join('\n\n')
 
-    // Fatos/atualidade → força web; papo casual não gasta pesquisa
-    let usarPesquisa = 'auto'
-    if (precisaPesquisaWeb(pergunta)) usarPesquisa = true
-    else if (
-        !/\?/.test(pergunta) &&
-        pergunta.length < 40 &&
-        !/\b(noticia|hoje|agora|placar|preço|preco|cotacao|resultado|jogo|ao\s*vivo)\b/i.test(
-            pergunta
-        )
-    ) {
-        usarPesquisa = false
-    }
+    const usarPesquisa = precisaPesquisaWeb(pergunta)
 
     const opcoesIa = {
         historicoGrupo: historicoGrupoTexto,
@@ -345,13 +338,13 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         usarPesquisa,
         cidadeUsuario: cidadeUsuario || '',
         nomesGrupo: nomesParaPrompt(membrosChat),
-        timeout: usarPesquisa === true ? 9000 : 6000,
-        budgetMs: usarPesquisa === true ? 12000 : 8000,
-        maxOutputTokens: usarPesquisa === true ? 420 : 280,
+        timeout: usarPesquisa ? 9000 : 8000,
+        budgetMs: usarPesquisa ? 12000 : 10000,
+        maxOutputTokens: usarPesquisa ? 420 : 280,
         // Factual: race maior + Perplexity (se houver chave); casual sem web
-        webRaceMs: usarPesquisa === true ? 4500 : 1600,
+        webRaceMs: usarPesquisa ? 4500 : 1600,
         chatRapido: true,
-        incluirPerplexity: usarPesquisa === true,
+        incluirPerplexity: usarPesquisa,
         maxFontesWeb: 3
     }
 
@@ -400,23 +393,31 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
             } catch {
                 /* */
             }
-            resultadoTexto = fallbackChatEngasgo()
+            resultadoTexto = respostaSeguraChat(pergunta, mensagemBaileys)
         }
     }
-    if (!resultadoTexto || /engasgad|pane geral nas ias|ias deram uma engasgada/i.test(resultadoTexto)) {
-        resultadoTexto = fallbackChatEngasgo()
-    }
+    resultadoTexto = textoChatUtil(resultadoTexto) || respostaSeguraChat(pergunta, mensagemBaileys)
 
     const participantes = mensagemBaileys.grupo?.participantes || []
-    const aplicado = aplicarMencoes(resultadoTexto, membrosChat, participantes)
-    const textoFinal = aplicado.texto
-    const mentionsFinais = [...aplicado.mentions]
+    let textoFinal = resultadoTexto
+    let mentionsFinais = []
+    try {
+        const aplicado = aplicarMencoes(resultadoTexto, membrosChat, participantes)
+        textoFinal = aplicado.texto || resultadoTexto
+        mentionsFinais = [...aplicado.mentions]
+    } catch {
+        textoFinal = resultadoTexto
+    }
 
     const corpoResposta = criarTexto(comandos_info.utilidades.chat.msgs.resposta, textoFinal)
-    if (mentionsFinais.length) {
-        await socket.responderComMencoes(c, id_chat, corpoResposta, [...new Set(mentionsFinais)], mensagem)
-    } else {
-        await socket.responderTexto(c, id_chat, corpoResposta, mensagem)
+    try {
+        if (mentionsFinais.length) {
+            await socket.responderComMencoes(c, id_chat, corpoResposta, [...new Set(mentionsFinais)], mensagem)
+        } else {
+            await socket.responderTexto(c, id_chat, corpoResposta, mensagem)
+        }
+    } catch {
+        await socket.responderTexto(c, id_chat, textoFinal.slice(0, 1500), mensagem).catch(() => {})
     }
 
     setImmediate(() => {

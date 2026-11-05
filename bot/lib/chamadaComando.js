@@ -270,8 +270,18 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
                     )
                 } catch (err) {
                     incrMetrica('ia_erro')
-                    const msg = err?.erro || err?.message || 'erro no chat'
-                    await socket.responderTexto(c, id_chat, criarTexto(comandos_info.outros.erro_api, '@chat', msg), mensagem).catch(()=>{})
+                    const { responderLocalUltron } = await import('../../vendor/lbot-api-comandos/api/resposta-local-chat.js')
+                    const { precisaPesquisaWeb } = await import('../../vendor/lbot-api-comandos/api/ia.js')
+                    await socket.responderTexto(
+                        c,
+                        id_chat,
+                        responderLocalUltron(textoChatMencao, {
+                            ehDono: !!mensagemBaileys.mensagem_dono,
+                            factual: precisaPesquisaWeb(textoChatMencao)
+                        }),
+                        mensagem
+                    ).catch(()=>{})
+                    consoleErro(err, 'CHAT')
                 }
             }, 4)
         } else if (autoOfensaGrupo) {

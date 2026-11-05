@@ -546,7 +546,11 @@ export const gerarResumoGrupoAudio = async ({
         usouRoteiroLocal = true
         est = estimarDuracaoSegundos(texto, 'edge')
     }
-    if (contarPalavras(texto) < 40) throw { erro: 'Não foi possível montar o comentário do grupo.' }
+    if (contarPalavras(texto) < 40) {
+        texto =
+            `Vi ${lista.length} mensagens em ${nomeGrupo || 'o grupo'}. ` +
+            'O papo está magro, mas eu li. Não vou inventar assunto que não está no histórico.'
+    }
 
     console.log(
         `resumo grupo: ${contarPalavras(texto)} palavras, ~${est}s estimado, ` +
@@ -563,26 +567,31 @@ export const gerarResumoGrupoAudio = async ({
         somenteEdge: !(preferirEleven && elevenKey())
     }
 
+    const pacoteTexto = {
+        resultado: null,
+        roteiro: texto,
+        totalMsgs: lista.length,
+        ttsFonte: null,
+        entrega: 'texto',
+        memoria: memoriaExtraida,
+        analiseNivel: analise.nivel_conteudo,
+        roteiroLocal: usouRoteiroLocal
+    }
     try {
         const audio = await sintetizarAudioResumo(texto, optsTts)
+        if (!audio?.resultado?.length) return pacoteTexto
         return {
+            ...pacoteTexto,
             resultado: audio.resultado,
-            roteiro: texto,
-            totalMsgs: lista.length,
             ttsFonte: audio.fonte,
             mimetype: audio.mimetype || 'audio/ogg; codecs=opus',
             ptt: audio.ptt !== false,
             duracao: audio.duracao || 0,
-            entrega: 'audio',
-            memoria: memoriaExtraida,
-            analiseNivel: analise.nivel_conteudo,
-            roteiroLocal: usouRoteiroLocal
+            entrega: 'audio'
         }
     } catch (err) {
-        console.log(`API resumo TTS final - ${msgErro(err)}`)
-        throw {
-            erro: 'Não foi possível gerar o áudio do resumo agora. Tenta de novo daqui a pouco.'
-        }
+        console.log(`API resumo TTS final - ${msgErro(err)} — entregando texto`)
+        return pacoteTexto
     }
 }
 

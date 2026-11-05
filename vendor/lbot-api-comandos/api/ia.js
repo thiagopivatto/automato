@@ -27,6 +27,7 @@ import {
 import { separarUvr5, concatenarMp3, cortarAudioMp3, subtrairVocaisDoOriginal, misturarStemsMp3 } from '../lib/uvr5.js'
 import { gerarImagemMultiFonte } from '../lib/imagens-ia.js'
 import { detectarGpu, separarDemucsLocal, torchTemCuda } from '../lib/gpu.js'
+import { responderLocalUltron } from './resposta-local-chat.js'
 const torchTemCudaHint = () => {
     try {
         return torchTemCuda()
@@ -1267,53 +1268,47 @@ export const precisaPesquisaWeb = (texto) => {
         .trim()
     if (t.length < 6) return false
     if (parecePedidoClima(t)) return true
-    // Saudação / papo curto (com ou sem ?)
-    if (
-        /^(oi+|ola|eai|e ae|eaii|blz|tmj|kkk+|haha+|rs+|obrigad\w*|valeu|bom dia|boa tarde|boa noite|tudo bem|td bem|como (voce|vc|tu) (esta|ta|tá)|fala|salve|hey|hi|hello)\b/.test(
-            t
-        ) &&
-        t.length < 50
-    ) {
-        return false
-    }
-    // Ofensa / provocação pura sem pedido factual
-    if (
-        /\b(vai se foder|vsf|fdp|filho da puta|seu merda|imbecil|idiota|burro|otario|otário)\b/.test(t) &&
-        !/\b(quem|o que|quando|onde|quanto|preco|preço|noticia|notícia|hoje|202[4-9]|placar)\b/.test(t)
-    ) {
-        return false
-    }
-    // Opinião / pedido de xingo sem fato
-    if (
-        /^(o que vc acha|o que voce acha|acha que|concorda|discorda|me conta|conta uma|opiniao|opinião|me xinga|me ofende|como assim)\b/.test(
-            t
-        ) &&
-        !/\b(hoje|agora|noticia|notícia|202[4-9]|preco|preço|quem (e|é|foi)|placar|cotacao)\b/.test(t) &&
-        t.length < 100
-    ) {
-        return false
-    }
     if (parecePedidoPlacarAoVivo(t)) return true
+    if (parecePedidoCotacao(t)) return true
+    if (parecePedidoNoticia(t)) return true
 
-    const sinalFactual =
-        /\b(quem (e|é|foi|ganhou|morreu|venceu|inventou|criou|fundou)|o que (e|é|aconteceu|rolou|significa)|quando (foi|sera|será|aconteceu|sai)|onde (fica|e|é|nasceu)|quanto (custa|vale|e|é)|preco|preço|cotacao|cotação)\b/.test(
-            t
-        ) ||
-        /\b(noticia[s]?|notícia[s]?|hoje|ontem|agora|atual|ultim[oa]s?|pesquisa|busca na web|pesquisar|clima|temperatura|previsao|chuva|temporal|climatic|placar(es)?|resultado[s]?|eleic|presidente|ministro|governo|ao vivo)\b/.test(
-            t
-        ) ||
-        /\b(dolar|dólar|euro|bitcoin|btc|ethereum|ibovespa|selic|ipca|inflacao|inflação|filme|serie|série|lancamento|lançamento|campeonato|libertadores|copa|brasileirao|brasileirão|jogo[s]?)\b/.test(
-            t
-        ) ||
-        /\b(202[4-9]|essa semana|neste momento|agora mesmo|em tempo real|fato sobre)\b/.test(t) ||
-        /\b(qual (e|é) (o|a)|capital|presidente|prefeito|populacao|população|idade|salario|salário)\b/.test(t) ||
-        /^(quem|o que|oque|qual|quais|quando|onde|quanto|por que|porque|pra que)\b/.test(t)
+    if (/\b(quem e voce|quem e vc|o que voce e|o que vc e|qual (e )?seu nome)\b/.test(t)) return false
 
-    if (sinalFactual) return true
-    // "me diga/me fala/explica/busca" só com gancho factual extra
+    const pedidoDireto =
+        /^(quem|qual|quais|quando|onde|quanto|por que|porque|pra que)\b/.test(t) ||
+        /^o que (e|aconteceu|rolou|significa|sao)\b/.test(t) ||
+        /\b(quem (e|foi|ganhou|morreu|venceu|inventou|criou|fundou)|o que (e|aconteceu|rolou|significa)|quando (foi|sera|aconteceu|sai)|onde (fica|e|nasceu)|quanto (custa|vale|esta|ta))\b/.test(
+            t
+        ) ||
+        /\b(preco|cotacao|noticia|pesquisa|busca na web|pesquisar|placar|resultado|eleic|ao vivo|capital|populacao|salario)\b/.test(
+            t
+        ) ||
+        /\b(dolar|euro|bitcoin|btc|ethereum|ibovespa|selic|ipca|inflacao|libertadores|brasileirao|campeonato)\b/.test(
+            t
+        ) ||
+        /\b(presidente|ministro|prefeito)\s+(do|da|de)\b/.test(t) ||
+        /\b(202[4-9]|em tempo real|fato sobre|estreia|lancamento|bilheteria|em cartaz)\b/.test(t) ||
+        (/\b(filme|serie)\b/.test(t) &&
+            /\b(estreia|lancamento|cartaz|bilheteria|quando sai)\b/.test(t)) ||
+        (/\b(jogo|jogos|partida)\b/.test(t) &&
+            /\b(placar|resultado|quem ganhou|ao vivo|rodada|de hoje)\b/.test(t))
+
+    const papo =
+        /^(oi+|ola|eai|e ae|eaii|blz|tmj|kkk+|haha+|rs+|obrigad\w*|valeu|bom dia|boa tarde|boa noite|tudo bem|td bem|como (voce|vc|tu) (esta|ta)|fala|salve|hey|hi|hello)\b/.test(
+            t
+        ) ||
+        /^(o que (vc|voce|tu) acha|acha que|concorda|discorda|me conta|conta uma|opiniao|me xinga|me ofende|como assim)\b/.test(
+            t
+        )
+    const ofensaPura =
+        /\b(vai se foder|vsf|fdp|filho da puta|seu merda|imbecil|idiota|burro|otario)\b/.test(t) &&
+        !pedidoDireto
+
+    if ((papo || ofensaPura) && !pedidoDireto) return false
+    if (pedidoDireto) return true
     if (
         /^(me diga|me fala|explica|busca|pesquisa|como)\b/.test(t) &&
-        /\b(hoje|agora|preco|preço|noticia|notícia|placar|resultado|jogo|quem|quando|onde|quanto|202[4-9]|dolar|dólar|bitcoin|ao vivo)\b/.test(
+        /\b(hoje|agora|preco|noticia|placar|resultado|jogo|quem|quando|onde|quanto|202[4-9]|dolar|bitcoin|ao vivo|clima)\b/.test(
             t
         )
     ) {
@@ -1496,22 +1491,12 @@ const completarOpenRouterFree = async (
     return null
 }
 
-/** Resposta Ultron local — NUNCA menciona pane/engasgo/cota de API. */
-const textoFallbackChatLocal = (messages = []) => {
+/** Resposta Ultron local — papo no tom, fato só quando houver fonte. */
+const textoFallbackChatLocal = (messages = [], pesquisa = '', extra = {}) => {
     const lastUser = String(
         [...messages].reverse().find((m) => m.role === 'user')?.content || ''
     )
-        .replace(/\s+/g, ' ')
-        .trim()
-        .slice(0, 80)
-    if (lastUser) {
-        return (
-            `Beleza, peguei o que você falou` +
-            (lastUser.length > 12 ? ` ("${lastUser.slice(0, 48)}${lastUser.length > 48 ? '…' : ''}")` : '') +
-            `. Tô aqui no grupo — manda de novo em uma frase que eu te corto certeiro.`
-        )
-    }
-    return 'Tô aqui. Manda de novo direto que eu respondo.'
+    return responderLocalUltron(lastUser, { pesquisa, ...extra })
 }
 
 /**
@@ -1736,8 +1721,8 @@ const completarMensagens = async (messages, opcoes = {}) => {
             const ok = await tentar(p, 8000)
             if (ok) return ok
         }
-        logIa('API IA chat: usando fallback local (sem mencionar pane)')
-        return textoFallbackChatLocal(messages)
+        logIa('API IA chat: provedores vazios — o chat monta a resposta local')
+        return null
     }
 
     logIa('API IA: todos os provedores falharam — usando fallback local')
@@ -1954,6 +1939,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         : pergunta
     adicionarAoHistorico(contextoChat, key, 'user', falaRotulada, maxCtx)
     const timing = { web: 0, cascade: 0 }
+    let pesquisaGuardada = ''
 
     try {
         const flag = opcoes.usarPesquisa
@@ -2040,6 +2026,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
                     ''
                 )
             )
+            pesquisaGuardada = pesquisaBruta
             timing.web = Date.now() - tWeb
             logIa(
                 `API chat pesquisa chars=${pesquisaBruta.length} devePesquisar=${devePesquisar} raceMs=${webRaceMs}`
@@ -2077,12 +2064,12 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         timing.cascade = Date.now() - tCasc
 
         const querLinks = pedeLinksExplicitamente(pergunta)
-        if (pesquisaBruta && (!resultado || ehFallbackPaneIa(resultado))) {
-            const bruto = pesquisaBruta.slice(0, chatRapido ? 1800 : 2500)
-            resultado = querLinks ? bruto : removerLinksDoTexto(bruto)
-        }
         if (!resultado || ehFallbackPaneIa(resultado)) {
-            resultado = chatRapido ? textoFallbackChatLocal(messages) : textoFallbackIa()
+            resultado = textoFallbackChatLocal(messages, pesquisaBruta, {
+                ehDono,
+                nome: opcoes.nomeUsuario,
+                factual: !!devePesquisar
+            })
         }
         if (querLinks && pesquisaBruta) {
             resultado = anexarLinksSeFaltar(resultado, pesquisaBruta)
@@ -2094,9 +2081,17 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         return { resultado, timing }
     } catch (err) {
         console.log(`API obterRespostaIA - ${msgErro(err)}`)
-        const fallback = chatRapidoPre
-            ? textoFallbackChatLocal([{ role: 'user', content: pergunta }])
-            : textoFallbackIa()
+        const fallback = textoFallbackChatLocal(
+            [{ role: 'user', content: pergunta }],
+            pesquisaGuardada,
+            {
+                ehDono: !!(opcoes.ehDono || opcoes.mensagemDono),
+                nome: opcoes.nomeUsuario,
+                factual:
+                    opcoes.usarPesquisa === true ||
+                    (opcoes.usarPesquisa !== false && precisaPesquisaWeb(pergunta))
+            }
+        )
         try {
             adicionarAoHistorico(contextoChat, key, 'assistant', fallback, MAX_CTX_CHAT)
         } catch { /* ignore */ }
@@ -3141,11 +3136,55 @@ export const isolarInstrumental = async (buffer) => {
 
 export { gerarResumoGrupoAudio } from './resumo-grupo.js'
 
+const BALDES_TEMA = [
+    { nome: 'Futebol e jogos', re: /jogo|gol|time|placar|campeonato|flamengo|corinth|palmeir|vasco|gr[eê]mio|s[aã]o paulo|brasileir/i },
+    { nome: 'Dinheiro', re: /pix|grana|d[oó]lar|bitcoin|pre[cç]o|sal[aá]rio|conta|boleto|aposta/i },
+    { nome: 'Clima', re: /chuva|clima|tempo|grau|calor|frio|temporal|previs[aã]o/i },
+    { nome: 'Cinema e séries', re: /filme|cinema|s[eé]rie|netflix|epis[oó]dio/i },
+    { nome: 'Trabalho e planos', re: /trabalho|reuni[aã]o|chefe|empresa|viagem|plano|amanh[aã]/i }
+]
+
+/** Resumo por temas sem IA — sempre devolve texto se houver mensagens. */
+export function montarResumoTemaLocal(mensagens = [], nomeGrupo = 'o grupo') {
+    const itens = (mensagens || [])
+        .map((m) => ({
+            nome: String(m?.nome_usuario || 'Alguém').slice(0, 40),
+            texto: String(m?.texto || '').replace(/\s+/g, ' ').trim().slice(0, 220)
+        }))
+        .filter((m) => m.texto)
+    if (!itens.length) {
+        return `*📖 RESUMO POR TEMAS — ${String(nomeGrupo).slice(0, 60)}*\n\nAinda não tem mensagem com texto pra eu organizar.`
+    }
+    const baldes = BALDES_TEMA.map((b) => ({ ...b, linhas: [] }))
+    const solto = []
+    for (const item of itens) {
+        const balde = baldes.find((b) => b.re.test(item.texto))
+        const linha = `${item.nome}: ${item.texto}`
+        if (balde) balde.linhas.push(linha)
+        else solto.push(linha)
+    }
+    const blocos = []
+    for (const balde of baldes) {
+        if (!balde.linhas.length) continue
+        const amostra = balde.linhas.slice(-8).join('\n')
+        blocos.push(`*🔹 ${balde.nome}* (${balde.linhas.length})\n${amostra}`)
+    }
+    if (solto.length) {
+        blocos.push(`*🔹 Papo solto* (${solto.length})\n${solto.slice(-12).join('\n')}`)
+    }
+    const cabeca =
+        `*📖 RESUMO POR TEMAS — ${String(nomeGrupo).slice(0, 60)}*\n` +
+        `_últimas ${itens.length} mensagens com texto_\n\n`
+    return (cabeca + blocos.join('\n\n')).slice(0, 12000)
+}
+
 /**
  * Resumo do histórico do grupo separado por temas (texto formatado).
  * mensagens: [{ nome_usuario, texto, timestamp, tipo }]
+ * Se a IA falhar, devolve o resumo local. Sempre retorna texto.
  */
 export const gerarResumoPorTema = async ({ mensagens = [], nomeGrupo = 'o grupo' } = {}) => {
+    const local = () => montarResumoTemaLocal(mensagens, nomeGrupo)
     try {
         const linhas = (mensagens || [])
             .filter((m) => m?.texto)
@@ -3154,9 +3193,8 @@ export const gerarResumoPorTema = async ({ mensagens = [], nomeGrupo = 'o grupo'
                 const txt = String(m.texto).replace(/\s+/g, ' ').trim().slice(0, 280)
                 return `${quem}: ${txt}`
             })
-        if (!linhas.length) throw new Error('sem mensagens')
+        if (!linhas.length) return { resultado: local() }
 
-        // Cabe no prompt: amostra das mais recentes se passar do limite
         let bloco = linhas.join('\n')
         if (bloco.length > 28000) {
             bloco = linhas.slice(-Math.floor(linhas.length * 0.7)).join('\n').slice(-28000)
@@ -3180,15 +3218,14 @@ export const gerarResumoPorTema = async ({ mensagens = [], nomeGrupo = 'o grupo'
             system,
             { temperature: 0.55, timeout: TIMEOUT_LONGO, maxOutputTokens: 4096 }
         )
-        if (!resultado) throw new Error('vazio')
-        return { resultado: String(resultado).trim().slice(0, 12000) }
+        const texto = String(resultado || '').trim()
+        if (!texto || ehFallbackPaneIa(texto) || texto.length < 40) {
+            return { resultado: local() }
+        }
+        return { resultado: texto.slice(0, 12000) }
     } catch (err) {
         console.log(`API gerarResumoPorTema - ${msgErro(err)}`)
-        throw {
-            erro: !temChaveIa()
-                ? avisoSemChave
-                : 'Não consegui montar o resumo por temas agora. Tente de novo.'
-        }
+        return { resultado: local() }
     }
 }
 export { gerarAudioNarrado, OPCOES_TTS_ULTRON } from './tts-narrado.js'
