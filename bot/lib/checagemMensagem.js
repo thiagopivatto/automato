@@ -4,7 +4,7 @@ import * as socket from '../baileys/socket.js'
 import {BotControle} from '../controles/BotControle.js'
 import {GrupoControle} from '../controles/GrupoControle.js'
 import {UsuarioControle} from '../controles/UsuarioControle.js'
-import {comandosInfo, verificarComandoExiste} from '../comandos/comandos.js'
+import {comandosInfo, mensagemEhComando, verificarComandoExiste} from '../comandos/comandos.js'
 
 
 export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
@@ -47,7 +47,7 @@ export const checagemMensagem = async (c, mensagemBaileys, botInfo) => {
         } catch {
             // Baileys 7 / LID: blocklist pode falhar/hang — não bloqueia comandos
         }
-        const comandoExiste = verificarComandoExiste(botInfo, comando)
+        const comandoExiste = mensagemEhComando(botInfo, comando)
 
         // Identidade canônica (PN) + promove dono; evita "Comum" / "Olá null" com LID
         const { usuario: dadosUsuarioGarantido, idCanonico } = await usuarios.garantirIdentidade({

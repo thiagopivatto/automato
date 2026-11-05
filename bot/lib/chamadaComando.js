@@ -11,7 +11,7 @@ import {admin as adminComandos} from '../comandos/admin.js'
 import {info as infoComandos} from '../comandos/info.js'
 import {figurinhas as figurinhasComandos, autoSticker} from '../comandos/figurinhas.js'
 import {downloads as downloadsComandos} from '../comandos/downloads.js'
-import {comandosInfo, verificarComandoExiste, obterGuiaComando} from '../comandos/comandos.js'
+import {comandosInfo, mensagemEhComando, verificarComandoExiste, obterGuiaComando} from '../comandos/comandos.js'
 import {
     botFoiMencionado,
     limparTextoMencaoBot,
@@ -76,6 +76,9 @@ export const executarComandoDireto = async (c, mensagemBaileys, botInfo) => {
     const { nome: nome_grupo } = { ...grupo }
     const t = moment.now()
     const msgGuia = args?.length && args[0] === 'guia'
+    if (!mensagemEhComando(botInfo, comando)) {
+        throw { erro: `Não encontrei o comando ${comando} para executar.` }
+    }
 
     const rodar = async (cat, handler, cor) => {
         if (msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando(cat, comando, botInfo), mensagem)
@@ -128,26 +131,11 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
         const autoStickerGrupo = (mensagem_grupo && (tipo == tiposMensagem.imagem || tipo == tiposMensagem.video) && grupo?.autosticker)
 
         const textoSimi = (corpo || mensagemBaileys.texto_recebido || '').trim()
-        const ehComando = verificarComandoExiste(botInfo, comando)
+        const ehComando = mensagemEhComando(botInfo, comando)
         const tipoTextoOuImg =
             tipo == tiposMensagem.texto ||
             tipo == tiposMensagem.textoExt ||
             tipo == tiposMensagem.imagem
-        const textoSolto =
-            !mensagem_bot &&
-            !ehComando &&
-            tipoTextoOuImg &&
-            textoSimi.length >= 2 &&
-            !String(comando || '').startsWith(prefixo) &&
-            !textoSimi.startsWith(prefixo)
-        let pedidoSolto = false
-        if (textoSolto) {
-            if (!mensagem_grupo) pedidoSolto = true
-            else {
-                const { textoMereceResposta } = await import('../../vendor/lbot-api-comandos/api/ia.js')
-                pedidoSolto = textoMereceResposta(textoSimi)
-            }
-        }
         const botMarcado =
             mensagem_grupo &&
             !mensagem_bot &&
@@ -176,11 +164,11 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
 
         const textoChatMencao = botMarcado
             ? limparTextoMencaoBot(textoSimi, botInfo)
-            : citouBot || pedidoSolto
+            : citouBot
               ? textoSimi
               : ''
         const autoChat =
-            (botMarcado || citouBot || pedidoSolto) &&
+            (botMarcado || citouBot) &&
             !mensagem_bot &&
             !ehComando
 
@@ -213,7 +201,7 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
             : {}
 
         // Prioridade: 1 comando 2 @bot/reply-bot 3 ofensa 4 autosticker
-        if(verificarComandoExiste(botInfo, comando, 'utilidades')){
+        if(ehComando && verificarComandoExiste(botInfo, comando, 'utilidades')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c,id_chat, obterGuiaComando("utilidades", comando, botInfo), mensagem)
                 await utilidadesComandos(c, mensagemBaileys, botInfo)
@@ -223,43 +211,43 @@ export const chamadaComando = async (c, mensagemBaileys, botInfo) => {
                     : ''
                 consoleComando(mensagem_grupo, "UTILIDADES", comando, "#de9a07", t, nome_usuario, nome_grupo, detalheChat)
             }, 1, contarOpts)
-        } else if(verificarComandoExiste(botInfo, comando, 'ia')){
+        } else if(ehComando && verificarComandoExiste(botInfo, comando, 'ia')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("ia", comando, botInfo), mensagem)
                 await iaComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "IA", comando, "#7c4dff", t, nome_usuario, nome_grupo)
             }, 1, contarOpts)
-        }  else if(verificarComandoExiste(botInfo, comando, 'figurinhas')){
+        }  else if(ehComando && verificarComandoExiste(botInfo, comando, 'figurinhas')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c,id_chat, obterGuiaComando("figurinhas", comando, botInfo), mensagem)
                 await figurinhasComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "FIGURINHAS", comando, "#ae45d1", t, nome_usuario, nome_grupo)
             }, 2, contarOpts)
-        } else if(verificarComandoExiste(botInfo, comando, 'downloads')){
+        } else if(ehComando && verificarComandoExiste(botInfo, comando, 'downloads')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("downloads", comando, botInfo), mensagem)
                 await downloadsComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "DOWNLOADS", comando, "#2195cf", t, nome_usuario, nome_grupo)
             }, 1, contarOpts)
-        } else if (verificarComandoExiste(botInfo, comando, 'grupo')){
+        } else if (ehComando && verificarComandoExiste(botInfo, comando, 'grupo')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("grupo", comando, botInfo), mensagem)
                 await grupoComandos(c, mensagemBaileys, botInfo)
                 if(mensagem_grupo) consoleComando(mensagem_grupo, "ADMINISTRAÇÃO", comando, "#e0e031", t, nome_usuario, nome_grupo)
             }, 3, contarOpts)
-        } else if(verificarComandoExiste(botInfo, comando, 'diversao')){
+        } else if(ehComando && verificarComandoExiste(botInfo, comando, 'diversao')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("diversao", comando, botInfo), mensagem)
                 await diversaoComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "DIVERSÃO", comando, "#22e3dd", t, nome_usuario, nome_grupo)
             }, 2, contarOpts)
-        } else if(verificarComandoExiste(botInfo, comando, 'admin')){
+        } else if(ehComando && verificarComandoExiste(botInfo, comando, 'admin')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("admin", comando, botInfo), mensagem)
                 await adminComandos(c, mensagemBaileys, botInfo)
                 consoleComando(mensagem_grupo, "DONO", comando, "#d1d1d1", t, nome_usuario, nome_grupo)
             }, 4, contarOpts)
-        } else if(verificarComandoExiste(botInfo, comando, 'info')){
+        } else if(ehComando && verificarComandoExiste(botInfo, comando, 'info')){
             enfileirar(c, id_chat, mensagem, comando, botInfo, async()=>{
                 if(msgGuia) return await socket.responderTexto(c, id_chat, obterGuiaComando("info", comando, botInfo), mensagem)
                 await infoComandos(c, mensagemBaileys, botInfo)

@@ -13,6 +13,7 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const SECOES_BASE = ['Identidade', 'Tom e estilo', 'Proibicoes']
 const SECAO_POR_CTX = {
     chat: [
+        'Regra de ouro',
         'Forma de pensar',
         'Política',
         'Religião',
@@ -20,21 +21,22 @@ const SECAO_POR_CTX = {
         'Moral',
         'Chat',
         'Exemplos',
+        'Regra final',
         'Web',
         'Dono'
     ],
     automsg: ['Automsg'],
-    resumo: ['Resumo', 'Dono'],
+    resumo: ['Tom e estilo', 'Regra de ouro', 'Regra final', 'Resumo', 'Dono'],
     web: ['Web'],
     dono: ['Dono']
 }
 
 /** Fallback mínimo se o MD não existir / falhar o parse. */
 const FALLBACK_CHAT =
-    'Você é o Ultron, uma IA do Thiago, egocêntrico e brutal num grupo de WhatsApp (PT-BR), falando como gente puta — não como piada ensaiada. ' +
-    'Não negue que é uma IA. Não se passe por Gemini, GPT, ChatGPT ou Perplexity. Não vire assistente. ' +
-    'Xingue no meio da frase. Proibido molde: não comece sempre com Porra/Caralho nem feche sempre com a mesma xingada. ' +
-    'Varie a entrada. Entregue o fato — não invente número, data, placar ou clima. ' +
+    'Você é o Ultron, uma IA do Thiago, extremamente grosso, sarcástico e boca-suja num grupo de WhatsApp (PT-BR). ' +
+    'Não existe modo educado. Não se passe por Gemini, GPT, ChatGPT ou Perplexity. Não vire assistente. ' +
+    'Xingue com naturalidade, sem molde de abertura e sem asterisco. Entregue o fato — não invente número, data, placar ou clima. ' +
+    'Grosseria não é desculpa para resposta curta nem para omitir a informação. ' +
     'Cada fala é de uma pessoa; não misture. Cite só pelo nome, nunca telefone. ' +
     'Com o dono, o Thiago (mestre): respeito e zero xingamento. ' +
     'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing.'

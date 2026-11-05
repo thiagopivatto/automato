@@ -1,12 +1,11 @@
 /**
- * Detecta se o pedido do !chat corresponde a um comando do bot e devolve
- * { tipo: 'comando', comando, argsTexto } ou { tipo: 'conversa' }.
+ * No chat, comando só roda se a pessoa escreveu o prefixo.
+ * Menção e reply continuam conversa, não viram outro comando.
  */
-import api from './lbotApi.js'
 import { comandosInfo } from '../comandos/comandos.js'
 
 const BLOQUEADOS = new Set([
-    'chat', // evita loop
+    'chat',
     'desligar',
     'sairgrupos',
     'bcgrupos',
@@ -15,102 +14,17 @@ const BLOQUEADOS = new Set([
     'entrargrupo'
 ])
 
-function catalogoCompacto(botInfo) {
-    const info = comandosInfo(botInfo)
-    const { prefixo } = botInfo
-    const linhas = []
-    for (const [cat, cmds] of Object.entries(info)) {
-        if (cat === 'outros' || cat === 'admin') continue // admin só via dono explícito
-        for (const [nome, meta] of Object.entries(cmds || {})) {
-            if (BLOQUEADOS.has(nome)) continue
-            const guia = String(meta?.guia || meta?.descricao || '')
-                .replace(/\n+/g, ' ')
-                .replace(/\*/g, '')
-                .slice(0, 140)
-            linhas.push(`${prefixo}${nome} | ${cat} | ${guia}`)
-        }
-    }
-    // Dono pode pedir admin via chat
-    for (const [nome, meta] of Object.entries(info.admin || {})) {
-        if (BLOQUEADOS.has(nome)) continue
-        const guia = String(meta?.guia || '').replace(/\n+/g, ' ').replace(/\*/g, '').slice(0, 100)
-        linhas.push(`${prefixo}${nome} | admin | ${guia}`)
-    }
-    return linhas.join('\n')
-}
-
-function extrairJson(texto) {
-    const bruto = String(texto || '').trim()
-    if (!bruto) return null
-    try {
-        return JSON.parse(bruto)
-    } catch { /* */ }
-    const fence = bruto.match(/```(?:json)?\s*([\s\S]*?)```/i)
-    if (fence?.[1]) {
-        try {
-            return JSON.parse(fence[1].trim())
-        } catch { /* */ }
-    }
-    const i = bruto.indexOf('{')
-    const f = bruto.lastIndexOf('}')
-    if (i >= 0 && f > i) {
-        try {
-            return JSON.parse(bruto.slice(i, f + 1))
-        } catch { /* */ }
-    }
-    return null
-}
-
-/**
- * Heurística rápida sem IA para pedidos óbvios.
- */
-function heuristicaRapida(texto, prefixo) {
+/** Comando explícito: o prefixo está no texto. Sem prefixo, não é comando. */
+function comandoExplicito(texto, prefixo) {
     const t = String(texto || '').toLowerCase().normalize('NFD').replace(/\p{M}/gu, '')
-    if (!t.trim()) return null
-
-    // Pedido explícito de comando com prefixo no meio do texto
-    const mCmd = t.match(new RegExp(`(?:^|\\s)(\\${prefixo}[a-z0-9]+)(?:\\s+(.*))?$`, 'i'))
-    if (mCmd) {
-        const cmd = mCmd[1].toLowerCase()
-        const nome = cmd.replace(prefixo, '')
-        if (!BLOQUEADOS.has(nome)) {
-            return { tipo: 'comando', comando: cmd, argsTexto: (mCmd[2] || '').trim() }
-        }
-    }
-
-    if (/resumo\s+do\s+grupo|resumir\s+o\s+grupo|faz(er)?\s+(o\s+)?resumo/.test(t)) {
-        return { tipo: 'comando', comando: `${prefixo}resumodogrupo`, argsTexto: '' }
-    }
-
-    const top = t.match(/top\s+(\d+)\s+(.+)/i) || t.match(/(?:lista|ranking)\s+(?:dos?\s+)?(\d+)\s+(?:mais\s+)?(.+)/i)
-    if (top) {
-        return { tipo: 'comando', comando: `${prefixo}top`, argsTexto: `${top[1]} ${top[2].trim()}` }
-    }
-
-    if (/\b(casal|sortear|trisal|fofoca|jornal|cancelado)\b/.test(t) && /faz|roda|executa|manda|gera|quero|pode/.test(t)) {
-        const nome = t.match(/\b(casal|sortear|trisal|fofoca|jornal|cancelado)\b/)[1]
-        return { tipo: 'comando', comando: `${prefixo}${nome}`, argsTexto: '' }
-    }
-
-    return null
-}
-
-/** Só chama IA-roteador se parecer pedido de função do bot (evita +1 round-trip no bate-papo). */
-function parecePedidoDeComando(texto, prefixo) {
-    const t = String(texto || '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/\p{M}/gu, '')
-    if (!t.trim()) return false
-    if (t.includes(prefixo)) return true
-    return (
-        /resumo(\s+do)?\s+grupo|resumir|faz(er)?\s+(o\s+)?resumo/.test(t) ||
-        /\btop\s+\d+/.test(t) ||
-        /\b(casal|trisal|sortear|fofoca|jornal|cancelado|enquete)\b/.test(t) ||
-        /\b(baixa|baixar|download|play|yt|youtube|spotify|figurinha|sticker|sticker|stz)\b/.test(t) ||
-        /\b(roda|executa|manda|gera|ativa|desativa|liga|desliga)\b/.test(t) ||
-        /\b(promover|rebaixar|banir|kick|mutar|voteban)\b/.test(t)
-    )
+    if (!t.trim() || !prefixo) return null
+    const escapado = String(prefixo).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const mCmd = t.match(new RegExp(`(?:^|\\s)(${escapado}[a-z0-9]+)(?:\\s+(.*))?$`, 'i'))
+    if (!mCmd) return null
+    const cmd = mCmd[1].toLowerCase()
+    const nome = cmd.slice(prefixo.length)
+    if (!nome || BLOQUEADOS.has(nome)) return null
+    return { tipo: 'comando', comando: cmd, argsTexto: (mCmd[2] || '').trim() }
 }
 
 /**
@@ -118,79 +32,21 @@ function parecePedidoDeComando(texto, prefixo) {
  */
 export async function decidirAcaoChat(textoUsuario, botInfo, { mensagemDono = false } = {}) {
     const { prefixo } = botInfo
-    const rapido = heuristicaRapida(textoUsuario, prefixo)
-    if (rapido) {
-        if (rapido.tipo === 'comando') {
-            const nome = rapido.comando.replace(prefixo, '')
-            const info = comandosInfo(botInfo)
-            const ehAdmin = Object.keys(info.admin || {}).includes(nome)
-            if (ehAdmin && !mensagemDono) return { tipo: 'conversa' }
-            if (BLOQUEADOS.has(nome)) return { tipo: 'conversa' }
+    const achado = comandoExplicito(textoUsuario, prefixo)
+    if (!achado) return { tipo: 'conversa' }
+    const nome = achado.comando.slice(prefixo.length)
+    const info = comandosInfo(botInfo)
+    const cats = Object.keys(info).filter((k) => k !== 'outros')
+    let cat = null
+    for (const c of cats) {
+        if (Object.keys(info[c] || {}).includes(nome)) {
+            cat = c
+            break
         }
-        return rapido
     }
-
-    // Bate-papo comum → conversa direto (sem Gemini extra)
-    if (!parecePedidoDeComando(textoUsuario, prefixo)) {
-        return { tipo: 'conversa' }
-    }
-
-    const catalogo = catalogoCompacto(botInfo)
-    const system =
-        'Você é o roteador de intenções do bot Ultron no WhatsApp. ' +
-        'Decida se o usuário quer EXECUTAR um comando do bot ou só CONVERSAR. ' +
-        'Responda SOMENTE JSON válido, sem markdown: ' +
-        '{"acao":"comando","comando":"nomeSemPrefixo","args":"argumentos"} OU {"acao":"conversa"}. ' +
-        'Use comando só se a intenção for clara de acionar uma função do bot (resumo, top, download, figurinha, etc.). ' +
-        'Se for dúvida, opinião, bate-papo ou pedido vago → conversa. ' +
-        'Nunca invente comandos que não estejam no catálogo. args sem o nome do comando.'
-
-    const prompt =
-        `Prefixo do bot: ${prefixo}\n` +
-        `Pedido do usuário:\n${textoUsuario}\n\n` +
-        `Catálogo (comando | categoria | guia):\n${catalogo.slice(0, 8000)}\n\n` +
-        'JSON:'
-
-    try {
-        const { resultado } = await api.IA.gerarTextoIA(prompt, system, {
-            temperature: 0.1,
-            timeout: 4000,
-            budgetMs: 4500,
-            chatRapido: true,
-            maxOutputTokens: 128
-        })
-        const json = extrairJson(resultado)
-        if (!json || json.acao !== 'comando') return { tipo: 'conversa' }
-        const nome = String(json.comando || '')
-            .trim()
-            .toLowerCase()
-            .replace(new RegExp(`^\\${prefixo}`), '')
-            .replace(/[^a-z0-9]/g, '')
-        if (!nome || BLOQUEADOS.has(nome)) return { tipo: 'conversa' }
-
-        const info = comandosInfo(botInfo)
-        const cats = Object.keys(info).filter((k) => k !== 'outros')
-        let existe = false
-        let cat = null
-        for (const c of cats) {
-            if (Object.keys(info[c] || {}).includes(nome)) {
-                existe = true
-                cat = c
-                break
-            }
-        }
-        if (!existe) return { tipo: 'conversa' }
-        if (cat === 'admin' && !mensagemDono) return { tipo: 'conversa' }
-
-        return {
-            tipo: 'comando',
-            comando: `${prefixo}${nome}`,
-            argsTexto: String(json.args || '').trim()
-        }
-    } catch (err) {
-        console.log(`chatRoteador - ${err?.message || err}`)
-        return { tipo: 'conversa' }
-    }
+    if (!cat) return { tipo: 'conversa' }
+    if (cat === 'admin' && !mensagemDono) return { tipo: 'conversa' }
+    return achado
 }
 
 /** Reescreve mensagemBaileys para parecer que o usuário digitou o comando. */

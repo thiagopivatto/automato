@@ -8,8 +8,59 @@ const cooldownPorChat = new Map()
 /** Cooldown maior = menos gasto de IA / menos spam de retaliação. */
 const COOLDOWN_MS = Number(process.env.OFENSA_COOLDOWN_MS || 45_000)
 
-const PALAVROES_HINT =
-    /(porra|caralho|merda|bosta|viado|viadinho|puta|puto|putinha|arrombado|arrombada|filho\s*d[ae]\s*puta|fdp|cuz[aã]o|buceta|pau\s*no\s*cu|vai\s*se\s*foder|vai\s*tomar\s*no\s*cu|vsf|vsfd|ot[aá]rio|idiota|imbecil|burro|lixo|vagabund|corno|corn[oa]|piranha|desgraç|babaca|trouxa|palha[cç]o|in[uú]til|nojent|rid[ií]cul|fracassad|krl|crl|pqp|tnc|foda-?se|se\s*fode|seu\s*lixo|sua\s*merda|vai\s*pro\s*inferno|filho\s*da\s*puta)/i
+const NOME_INSULTO =
+    'arrombado|arrombada|idiota|imbecil|burro|burra|otario|otaria|lixo|merda|corno|corna|vagabundo|vagabunda|desgracado|desgracada|babaca|trouxa|palhaco|inutil|nojento|nojenta|ridiculo|ridicula|fracassado|fracassada|fdp|cuzao|piranha|puta|putinha'
+
+const ATAQUE_DIRETO =
+    /\b(vai se foder|vsf|vsfd|vai tomar no cu|cala a boca|te foder|pau no cu|vai pro inferno)\b/
+
+function normalizarOfensa(texto) {
+    return String(texto || '')
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+        .replace(/[^\p{L}\p{N}\s@]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+}
+
+function ofensaDirigida(t) {
+    if (ATAQUE_DIRETO.test(t)) return true
+    const seu = new RegExp(`\\b(seu|sua|seus|suas)\\s+(?:\\w+\\s+){0,1}?(${NOME_INSULTO})\\b`)
+    if (seu.test(t)) return true
+    const tuEs = new RegExp(
+        `\\b(voce|vc|tu|ce)\\s+(e|eh)\\s+(um |uma |o |a )?(${NOME_INSULTO})\\b`
+    )
+    if (tuEs.test(t)) return true
+    if (/@\w{3,}/.test(t) && new RegExp(`\\b(${NOME_INSULTO})\\b`).test(t)) return true
+    return false
+}
+
+function elogioOuConversa(t) {
+    if (/\b(tu|voce|vc|ce)\s+(e|eh)\s+(muito\s+)?(foda|brabo|braba|mito|fera)\b/.test(t)) return true
+    if (/\b(caralho|porra)\s+que\s+(golaco|gol|gols|jogo|foto|dia|fome|sono)\b/.test(t)) return true
+    if (/\bque (merda|bosta|lixo|porra|caralho) de\b/.test(t)) return true
+    if (/\b(porra|caralho)\s+que\s+\w+/.test(t) && !ofensaDirigida(t)) return true
+    if (/\bfoda-?se\b/.test(t) && !ofensaDirigida(t)) return true
+    return false
+}
+
+/**
+ * dirigida: xingamento mira alguém.
+ * duvida: tem veneno e um alvo possível; a IA decide.
+ * nao: elogio ou conversa com palavrão solto.
+ * @returns {'dirigida'|'duvida'|'nao'}
+ */
+export function classificarOfensa(texto) {
+    const t = normalizarOfensa(texto)
+    if (!t || t.length < 2) return 'nao'
+    if (ofensaDirigida(t)) return 'dirigida'
+    if (elogioOuConversa(t)) return 'nao'
+    const insulto = new RegExp(`\\b(e|eh)\\s+(um |uma )?(${NOME_INSULTO})\\b`)
+    if (insulto.test(t)) return 'duvida'
+    if (/\b(porra|caralho|merda|krl|crl|pqp|tnc|bosta)\b/.test(t)) return 'nao'
+    return 'nao'
+}
 
 const FALLBACKS = [
     'cala a boca, seu lixo patético — tu xinga porque é o único talento que te sobrou, seu merda inútil.',
@@ -28,22 +79,9 @@ export function ofensaAtivaNoGrupo(grupo) {
     return grupo?.ofensa !== false
 }
 
-/** Atalho barato: só enfileira IA se a msg cheira a ofensa. */
+/** Só enfileira se a frase ataca alguém ou está em dúvida. Conversa e elogio ficam de fora. */
 export function textoPareceOfensa(texto) {
-    const t = String(texto || '')
-        .normalize('NFD')
-        .replace(/\p{M}/gu, '')
-        .replace(/[^\p{L}\p{N}\s@]/gu, ' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-        .toLowerCase()
-    if (!t || t.length < 2) return false
-    if (PALAVROES_HINT.test(t)) return true
-    // menção + tom agressivo
-    if (/@\w{3,}/.test(t) && t.length < 160 && /(seu|sua|esse|essa|vai|cala|morre|otario|idiota)/i.test(t)) {
-        return true
-    }
-    return false
+    return classificarOfensa(texto) !== 'nao'
 }
 
 function emCooldown(idChat, remetente) {
@@ -109,7 +147,8 @@ export async function processarOfensaAutomatica(c, mensagemBaileys, botInfo) {
         if (!texto || texto.length < 2) return false
         if (texto.startsWith(botInfo?.prefixo || '!')) return false
 
-        if (!textoPareceOfensa(texto)) return false
+        const leitura = classificarOfensa(texto)
+        if (leitura === 'nao') return false
         if (emCooldown(id_chat, remetente)) return false
 
         const membros = (grupo?.participantes || [])
@@ -131,8 +170,9 @@ export async function processarOfensaAutomatica(c, mensagemBaileys, botInfo) {
             console.log(`[ofensa] IA - ${err?.message || err}`)
         }
 
-        // Com palavrão claro, nunca engole a resposta: fallback local
-        if (!resultado) resultado = fallbackOfensa()
+        // Insulto pronto só na ofensa dirigida. Dúvida sem texto da IA fica em silêncio.
+        if (!resultado && leitura === 'dirigida') resultado = fallbackOfensa()
+        if (!resultado) return false
 
         const mencoes = [remetente, ...(mencionados || [])].filter(Boolean)
         const tag = `@${mencaoNumero(remetente)}`

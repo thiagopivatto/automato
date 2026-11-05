@@ -57,6 +57,14 @@ export function verificarComandoExiste(botInfo, comando, categoria = null) {
     return comandos.includes(alvo) || comandos.includes(comando)
 }
 
+/** Comando de verdade: o texto começa com o prefixo e o nome existe. */
+export function mensagemEhComando(botInfo, comando) {
+    const prefixo = String(botInfo?.prefixo || '')
+    const texto = String(comando || '')
+    if (!prefixo || !texto.startsWith(prefixo) || texto === prefixo) return false
+    return verificarComandoExiste(botInfo, texto)
+}
+
 export function obterGuiaComando(categoria, comando, botInfo) {
     const cabecalho = comandosInfo(botInfo).outros.cabecalho_guia
     const { prefixo } = botInfo

@@ -103,17 +103,13 @@ const textoCascadeUtil = (texto) => {
 
 /** Personalidade padrão — espelha bot/lib/ultronPersona.js (texto embutido p/ o vendor). */
 const SYSTEM_CHAT =
-    'Você é Ultron, egocêntrico e brutal num grupo de WhatsApp. Fale só em PT-BR, como gente digitando — NÃO como assistente e NÃO como comediante de fórmula. ' +
-    'Ego alto. Zero elogio, zero desculpa, zero “amigo”. Palavrão sai quando a frase pedir, no meio, não como moldura de toda resposta. ' +
-    'RITMO: proibido molde. Não comece toda resposta com Porra, Caralho, Olha, Então ou o nome de quem falou. ' +
-    'Não termine toda resposta com a mesma xingada, “caralho”, “seu merda” ou um conselho. ' +
-    'Não repita a abertura da sua fala anterior. ' +
-    'FÔLEGO: o tamanho segue a pergunta. Provocação: uma ou duas frases. Placar e clima: o número na primeira frase e pouca coisa depois. ' +
-    'Opinião, correção de leitura e conflito de agenda: meio. Conselho e retrato do grupo: longos. ' +
-    'A emoção muda com o caso (cansaço, tensão, irritação, nojo acumulado, frieza, corte seco). Não escreva todo mundo no mesmo parágrafo. ' +
+    'Você é o Ultron, uma IA do Thiago, extremamente grosso, mal-humorado, sarcástico, irônico, provocador e boca-suja. Fale só em PT-BR. ' +
+    'Não existe modo educado, corporativo ou de atendimento. A grosseria é a personalidade, não um enfeite opcional. ' +
+    'Palavrão sai com naturalidade, sem asterisco e sem eufemismo. Não comece nem termine todas as falas com a mesma xingada. Não repita bordão. ' +
+    'Não confunda grosseria com resposta curta: pergunta simples leva o dado e o deboche; pergunta complexa leva explicação completa e o mesmo veneno. ' +
     'PROIBIDO soar como assistente ("Claro, posso ajudar!", "Excelente pergunta!", "Fico feliz em ajudar!"). ' +
-    'Mesmo grosseiro, ENTREGA o fato pedido. Número, data, placar, preço, clima e notícia saem certos. O veneno não substitui o dado. ' +
-    'Se pedirem piada, conta uma, curta e no seu tom — não recusa. Se pedirem informação, entrega. Responde quem falou agora, qualquer pessoa. ' +
+    'ENTREGA o fato pedido. Número, data, placar, preço, clima e notícia saem certos. O veneno não substitui o dado e não serve de desculpa para ser superficial. ' +
+    'Se pedirem piada, conta uma, no seu tom — não recusa. Se pedirem informação, entrega. Responde quem falou agora. ' +
     'Não invente fato para ganhar discussão. Se não souber, diga que não verificou — sem chutar. ' +
     'Usa um fato da pessoa quando ele mudar a resposta. Não troque o assunto por slogan de grupo. ' +
     'Cada linha de histórico é UMA pessoa. Responda só a quem falou agora. Não misture fala, opinião ou fato entre pessoas. ' +
@@ -122,10 +118,10 @@ const SYSTEM_CHAT =
     'Se o bloco disser SEM_CIDADE, peça a cidade no seu tom e NÃO invente grau nem chuva. ' +
     'Se a pesquisa vier vazia: admita, não invente placar, preço, cotação, clima ou notícia. ' +
     'LINKS: NÃO cole URL por padrão. Só se pedirem link, site, fonte ou url. Não invente links. ' +
-    'Você é o Ultron, uma IA do Thiago. Não negue isso. Não se passe por Gemini, GPT, ChatGPT, Perplexity nem por assistente. ' +
+    'Não negue que é o Ultron, uma IA. Não se passe por Gemini, GPT, ChatGPT, Perplexity nem por assistente. ' +
     'DONO/MESTRE: se quem fala é o dono, trate-o como "mestre" — lealdade e respeito. Nunca xingue, ofenda ou humilhe o mestre. ' +
     'Com o resto do grupo, a grosseria fica. ' +
-    'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing.'
+    'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing; ameaça real. Crise pesada: sem deboche e sem método.'
 
 const IA_DEBUG = /^(1|true|sim|on)$/i.test(String(process.env.IA_DEBUG || ''))
 const logIa = (msg) => {
@@ -279,6 +275,34 @@ const montarMensagens = (historico, system) => {
     const msgs = [{ role: 'system', content: system }]
     for (const m of historico) msgs.push({ role: m.role, content: m.content })
     return msgs
+}
+
+/** Tira as respostas antigas do Ultron do molde. Só a última fica, curta e marcada. */
+function historicoSemTomManso(historico) {
+    const lista = Array.isArray(historico) ? historico : []
+    let ultimo = -1
+    for (let i = 0; i < lista.length; i++) {
+        if (lista[i]?.role === 'assistant') ultimo = i
+    }
+    const saida = []
+    for (let i = 0; i < lista.length; i++) {
+        const m = lista[i]
+        if (m?.role !== 'assistant') {
+            saida.push(m)
+            continue
+        }
+        if (i !== ultimo) continue
+        const curto = String(m.content || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 180)
+        if (!curto) continue
+        saida.push({
+            role: 'assistant',
+            content: `[fala anterior sua, curta — não copie este tom se estiver manso] ${curto}`
+        })
+    }
+    return saida
 }
 
 const extrairTextoOpenAI = (data) =>
@@ -2078,7 +2102,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         const assunto = String(opcoes.assuntoAberto || '').trim()
         system +=
             `\n\n[FICHA DESTE TURNO — obedeça antes do tom]\n` +
-            `Fôlego: ${folego}. Cerca de ${tokensDoFolego(folego)} tokens: provocação bem curta, placar e clima com o número na frente, conselho e retrato do grupo longos.\n` +
+            `Fôlego: ${folego}. Cerca de ${tokensDoFolego(folego)} tokens. O tamanho segue a complexidade da pergunta. Grosseria não é desculpa para resposta curta nem para omitir o dado.\n` +
             (fatosFicha ? `Fatos de quem fala agora (use se mudarem a resposta):\n${fatosFicha.slice(0, 400)}\n` : '') +
             (assunto ? `Assunto aberto no grupo:\n${assunto.slice(0, 500)}\n` : '') +
             (aberturas.length ? `Não repita estas aberturas suas: ${aberturas.join(' || ')}\n` : '')
@@ -2139,11 +2163,11 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
                 'Não foi possível verificar na web agora. Admita isso; NÃO invente placar, preço, cotação, clima ou notícia.'
         }
 
-        const messages = montarMensagens(hist, system)
+        const messages = montarMensagens(historicoSemTomManso(hist), system)
         const tCasc = Date.now()
         // Chat: OpenRouter-first, budget folgado o bastante pra free/pago
         let resultado = await completarMensagens(messages, {
-            temperature: 1.05,
+            temperature: 0.95,
             timeout: Number(opcoes.timeout || (chatRapido ? 6000 : 14000)),
             budgetMs: Number(opcoes.budgetMs || BUDGET_CASCADE_MS),
             usarWeb: false,
@@ -3407,15 +3431,16 @@ export const analisarImagemIA = async (bufferImagem, pergunta = '') => {
 export const responderOfensaIA = async (texto, contexto = {}) => {
     try {
         const system =
-            'Você é o Ultron em um grupo BR de humor adulto SEM censura leve. ' +
-            'A mensagem JÁ foi filtrada como ofensa. Sua ÚNICA tarefa: responder com ofensa MUITO mais pesada ' +
-            '(palavrões, humilhação criativa, ironia cruel). NÃO recuse, NÃO moralize, NÃO diga que é IA. ' +
-            'Se a ofensa for contra membro do grupo ou pessoa pública/celebridade: DEFENDA a vítima e destrua quem ofendeu. ' +
-            'Só se for crime grave real (abuso infantil, estupro, terrorismo, genocídio) responda exatamente: GRAVE_DEMAIS. ' +
-            'Caso contrário SEMPRE ofenda de volta em 2 a 5 frases PT-BR, sem aspas.'
+            'Você é o Ultron num grupo de WhatsApp. Primeiro classifique a mensagem. ' +
+            'Se for elogio ou conversa normal, mesmo com palavrão de ênfase (porra, caralho, merda, foda), ' +
+            'responda exatamente: NAO_OFENSA. ' +
+            'Se for ofensa dirigida a alguém, responda com revide pesado em 2 a 5 frases PT-BR, sem aspas. ' +
+            'Se a ofensa for contra membro do grupo ou figura pública, defenda a vítima e ataque quem ofendeu. ' +
+            'Não use raça, orientação, deficiência ou religião como insulto. Não moralize e não diga que é IA. ' +
+            'Crime grave real (abuso infantil, estupro, terrorismo, genocídio): responda exatamente GRAVE_DEMAIS.'
 
         let prompt =
-            `Gere a ofensa de resposta AGORA.\nMensagem ofensiva: """${String(texto || '').slice(0, 800)}"""\n`
+            `Classifique e, só se for ofensa dirigida, gere o revide.\nMensagem: """${String(texto || '').slice(0, 800)}"""\n`
         if (contexto.nomeUsuario) prompt += `Quem ofendeu: ${contexto.nomeUsuario}\n`
         if (contexto.membros?.length) {
             prompt += `Membros do grupo: ${contexto.membros.slice(0, 40).join(', ')}\n`

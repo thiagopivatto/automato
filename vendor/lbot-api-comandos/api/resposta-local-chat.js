@@ -34,16 +34,16 @@ const PESADA =
 
 /** Teto de tokens por tipo de pergunta. Provocação curta; conselho e grupo longos. */
 export const TOKENS_FOLEGO = {
-    provocacao: 80,
-    placar: 160,
-    clima: 160,
-    papo: 220,
-    noticia: 320,
-    opiniao: 320,
-    correcao: 320,
-    agenda: 320,
-    conselho: 700,
-    grupo: 700
+    provocacao: 280,
+    placar: 400,
+    clima: 400,
+    papo: 500,
+    noticia: 700,
+    opiniao: 700,
+    correcao: 700,
+    agenda: 700,
+    conselho: 900,
+    grupo: 900
 }
 
 export function classificarFolego(texto) {

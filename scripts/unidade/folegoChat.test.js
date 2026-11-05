@@ -12,7 +12,7 @@ import { personaPara, limparCachePersona } from '../../bot/lib/ultronPersona.js'
 const XINGO = /\b(porra|caralho|merda|foder|vsf|idiota|burro|otario)\b/i
 
 describe('fôlego do chat', () => {
-    it('provocação é bem mais curta que conselho e retrato do grupo', () => {
+    it('provocação cabe mais texto que antes e o retrato do mestre não xinga', () => {
         const curta = responderLocalUltron('cala a boca seu lixo', { factual: false })
         const conselho = responderLocalUltron('me dá uma dica, tô pensando em pedir demissão', { factual: false })
         const grupo = responderLocalUltron('me diz o clima desse grupo agora', {
@@ -24,11 +24,10 @@ describe('fôlego do chat', () => {
         assert.equal(classificarFolego('me dá uma dica, tô pensando em pedir demissão'), 'conselho')
         assert.equal(classificarFolego('me diz o clima desse grupo agora'), 'grupo')
         assert.ok(tokensDoFolego('provocacao') < tokensDoFolego('conselho'))
-        assert.ok(curta.length * 2 < conselho.length, `${curta.length} vs ${conselho.length}`)
-        assert.ok(curta.length * 2 < grupo.length)
+        assert.ok(tokensDoFolego('provocacao') >= 280)
+        assert.notEqual(curta.slice(0, 12), conselho.slice(0, 12))
         assert.match(grupo, /mestre/i)
         assert.equal(XINGO.test(grupo), false)
-        assert.notEqual(curta.slice(0, 12), conselho.slice(0, 12))
     })
 
     it('placar e clima devolvem o número e não pesquisam o clima do grupo', () => {
@@ -60,12 +59,12 @@ describe('fôlego do chat', () => {
         assert.equal(assunto.includes('Ana: relatório'), false)
     })
 
-    it('a persona de chat guarda fôlego e os exemplos de tamanho diferente', () => {
+    it('a persona de chat guarda a voz grossa e os exemplos novos', () => {
         limparCachePersona()
         const chat = personaPara('chat')
-        assert.match(chat, /fôlego|Fôlego/i)
-        assert.match(chat, /Tu não manda calar/)
-        assert.match(chat, /A dica é só essa/)
-        assert.match(chat, /são três conversas/i)
+        assert.match(chat, /EXTREMAMENTE GROSSO/)
+        assert.match(chat, /Images and Words/)
+        assert.match(chat, /Docker é uma plataforma/)
+        assert.doesNotMatch(chat, /às vezes nenhum|uma ou duas frases/i)
     })
 })

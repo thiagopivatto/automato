@@ -38,7 +38,7 @@ export function metaUtilidades({ prefixo, nome_adm, nome_bot }) {
                 guia: `Ex: marque o bot *@Ultron* oi, tudo bem?\n`+
                 `Ex: *responda uma mensagem do bot* com seu texto — ele continua a conversa\n`+
                 `Ex: *@bot* o que rolou hoje na política?\n`+
-                `Ex: *${prefixo}chat* faz o resumo do grupo → roda *${prefixo}resumodogrupo*\n`+
+                `Ex: *${prefixo}chat* o que rolou hoje na política?\n`+
                 `Ex: envie/responda uma *imagem* com *${prefixo}chat* o que é isso?\n`+
                 `Personalidade deste chat: *${prefixo}personalidade*\n`+
                 `Pesquisa na web só em perguntas de fato/atualidade.\n`,

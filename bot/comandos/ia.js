@@ -338,7 +338,7 @@ export const ia = async (c, mensagemBaileys, botInfo) => {
                     let personalidadeGrupo = ''
                     try {
                         const { personaPara } = await import('../lib/ultronPersona.js')
-                        personalidadeGrupo = personaPara('resumo', { maxChars: 2800 })
+                        personalidadeGrupo = personaPara('resumo', { maxChars: 12000 })
                     } catch { /* ignore */ }
                     try {
                         const { obterPersonalidadeResumo } = await import('../lib/personalidadeResumo.js')
