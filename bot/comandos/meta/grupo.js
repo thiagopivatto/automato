@@ -283,7 +283,7 @@ export function metaGrupo({ prefixo, nome_adm, nome_bot }) {
                     `(exceto temas gravíssimos). *Apenas admins.*\n`,
                 msgs: {
                     ligado:
-                        '✅ OFENSA ativada! Se alguém xingar, o bot responde bem mais pesado (e defende membro/figura pública).',
+                        '✅ OFENSA ativada!',
                     desligado: '✅ OFENSA desativada.'
                 }
             },

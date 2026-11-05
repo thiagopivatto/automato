@@ -63,11 +63,11 @@ export function classificarOfensa(texto) {
 }
 
 const FALLBACKS = [
-    'cala a boca, seu lixo patético — tu xinga porque é o único talento que te sobrou, seu merda inútil.',
-    'falou pouco e já se entregou: é um arrombado sem repertório. vai chorar no banho, otário.',
-    'puta que pariu, que ofensa fraca. tu é residual de gente, um corno emocional com teclado.',
-    'parabéns, escória: inventou briga pra parecer alguém. continua sendo um troço descartável.',
-    'xingou e achou que ganhou? seu cérebro é decoração. some daqui, desgraça ambulante.'
+    'cala a boca, seu lixo patético. tu xinga porque é o único talento que te sobrou, e mesmo assim é medíocre. senta, relê o que escreveu e percebe que passou vergonha em público, seu merda inútil, com teclado e zero repertório.',
+    'falou pouco e já se entregou: é um arrombado sem repertório, daqueles que provocam e depois fazem cara de vítima. vai chorar no banho, otário. a frase foi fraca, a intenção foi pior, e todo mundo viu.',
+    'puta que pariu, que ofensa fraca. tu é residual de gente, um corno emocional com teclado, achando que volume substitui cérebro. tenta de novo quando aprender a formar uma frase que não seja só barulho.',
+    'parabéns, escória: inventou briga pra parecer alguém e só provou que é um troço descartável. o grupo inteiro perdeu tempo com o seu showzinho. continua sendo o mesmo babaca barulhento de sempre.',
+    'xingou e achou que ganhou? seu cérebro é decoração, a coragem é de grupo e a ofensa é de criança cansada. some daqui, desgraça ambulante, antes de passar mais vergonha do que já passou.'
 ]
 
 export function ofensaAtivaNoGrupo(grupo) {

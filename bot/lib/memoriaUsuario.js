@@ -1,6 +1,7 @@
 /**
  * Memória por usuário — arquivo JSON em dados/memoria-usuarios/.
  * LID e telefone da mesma pessoa caem no mesmo arquivo.
+ * O que foi dito num grupo ou no privado só volta naquele chat.
  * Fatos observados não somem quando o log de interações é cortado.
  */
 import fs from 'fs-extra'
@@ -19,15 +20,59 @@ function vazio(idUsuario) {
         aliases: [],
         nome: '',
         cidade: '',
+        cidades: {},
         fatos: [],
         interacoes: [],
         resumo: '',
+        resumos: {},
         atualizado_em: 0
     }
 }
 
+/**
+ * Grupo: g:<jid @g.us>. Privado: pv:<arquivo canônico da pessoa>.
+ * Sem id de chat, não há escopo.
+ */
+export function escopoDeChat(idChat, canonKey = '') {
+    const id = String(idChat || '').trim()
+    if (!id) return ''
+    if (id.startsWith('g:')) {
+        const jid = id.slice(2)
+        return jid.endsWith('@g.us') ? `g:${jid}` : ''
+    }
+    if (id.endsWith('@g.us')) return `g:${id}`
+    if (id.startsWith('pv:')) return id.slice(0, 90)
+    const chave = String(canonKey || chaveDe(id) || '').trim()
+    return chave ? `pv:${chave}` : ''
+}
+
+function textoFato(f) {
+    return String(typeof f === 'string' ? f : f?.texto || '').trim()
+}
+
+function chatFato(f) {
+    return String(typeof f === 'string' ? '' : f?.chat || '').trim()
+}
+
 function chaveDe(id) {
     return mencaoNumero(id) || ''
+}
+
+/** Escopo para ler a ficha: grupo vale para qualquer membro; privado só para quem é daquele chat. */
+function escopoDaLeitura(idChat, canonKey, aliases = []) {
+    const id = String(idChat || '').trim()
+    if (!id) return ''
+    if (id.endsWith('@g.us')) return `g:${id}`
+    if (id.startsWith('g:')) {
+        const jid = id.slice(2)
+        return jid.endsWith('@g.us') ? `g:${jid}` : ''
+    }
+    const chaves = new Set(
+        [canonKey, ...(aliases || [])].map((a) => String(a || '').trim()).filter(Boolean)
+    )
+    const chaveChat = id.startsWith('pv:') ? id.slice(3) : chaveDe(id)
+    if (chaveChat && chaves.has(chaveChat) && canonKey) return `pv:${canonKey}`
+    return ''
 }
 
 function ehPn(id) {
@@ -68,11 +113,29 @@ function fatoDuravel(f) {
     )
 }
 
+function incluirFato(fatos, texto, chat = '') {
+    const t = String(texto || '').trim()
+    if (!t) return
+    const c = String(chat || '')
+    if (fatos.some((f) => textoFato(f) === t && chatFato(f) === c)) return
+    fatos.push({ texto: t.slice(0, 160), chat: c })
+}
+
 export function podarFatos(fatos, max = MAX_FATOS) {
-    const lista = [...new Set((fatos || []).map((f) => String(f || '').trim()).filter(Boolean))]
+    const lista = []
+    const visto = new Set()
+    for (const f of fatos || []) {
+        const texto = textoFato(f).slice(0, 160)
+        const chat = chatFato(f)
+        if (!texto) continue
+        const k = `${chat}\0${texto}`
+        if (visto.has(k)) continue
+        visto.add(k)
+        lista.push({ texto, chat })
+    }
     if (lista.length <= max) return lista
-    const duraveis = lista.filter(fatoDuravel)
-    const ecos = lista.filter((f) => !fatoDuravel(f))
+    const duraveis = lista.filter((f) => fatoDuravel(f.texto))
+    const ecos = lista.filter((f) => !fatoDuravel(f.texto))
     const keepDur = duraveis.length > max ? duraveis.slice(-max) : duraveis
     const resto = max - keepDur.length
     const keepEco = resto > 0 ? ecos.slice(-resto) : []
@@ -90,11 +153,12 @@ export function aplicarCorteMemoria(dados, maxInteracoes = MAX_INTERACOES) {
         const removidas = inter.slice(0, inter.length - max)
         inter = inter.slice(-max)
         for (const i of removidas) {
+            const chat = String(i?.chat || '')
             for (const f of extrairFatosDeTexto(i?.pergunta, dados?.nome)) {
-                if (!fatos.includes(f)) fatos.push(f)
+                incluirFato(fatos, f, chat)
             }
             const echo = String(i?.pergunta || '').replace(/\s+/g, ' ').trim().slice(0, 160)
-            if (echo && !fatos.includes(echo)) fatos.push(echo)
+            if (echo) incluirFato(fatos, echo, chat)
         }
     }
     return {
@@ -119,6 +183,17 @@ async function salvarIndex(index) {
     await fs.writeJson(INDEX(), index, { spaces: 2 })
 }
 
+function mapaTexto(raw) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+    const out = {}
+    for (const [k, v] of Object.entries(raw)) {
+        const chave = String(k || '').trim()
+        const valor = String(v || '').trim()
+        if (chave && valor) out[chave] = valor
+    }
+    return out
+}
+
 function normalizarDoc(raw, idUsuario) {
     const base = vazio(idUsuario)
     if (!raw || typeof raw !== 'object') return base
@@ -128,9 +203,11 @@ function normalizarDoc(raw, idUsuario) {
         aliases: Array.isArray(raw.aliases) ? raw.aliases.map(String) : [],
         nome: raw.nome || '',
         cidade: raw.cidade || '',
+        cidades: mapaTexto(raw.cidades),
         fatos: Array.isArray(raw.fatos) ? raw.fatos : [],
         interacoes: Array.isArray(raw.interacoes) ? raw.interacoes : [],
         resumo: raw.resumo || '',
+        resumos: mapaTexto(raw.resumos),
         atualizado_em: raw.atualizado_em || 0
     }
 }
@@ -151,12 +228,14 @@ function fundirDocs(base, outro) {
     if (!out.nome && outro.nome) out.nome = outro.nome
     if (!out.cidade && outro.cidade) out.cidade = outro.cidade
     if (!out.resumo && outro.resumo) out.resumo = outro.resumo
+    out.cidades = { ...mapaTexto(outro.cidades), ...out.cidades }
+    out.resumos = { ...mapaTexto(outro.resumos), ...out.resumos }
     for (const f of outro.fatos || []) {
-        if (f && !out.fatos.includes(f)) out.fatos.push(f)
+        incluirFato(out.fatos, textoFato(f), chatFato(f))
     }
-    const visto = new Set(out.interacoes.map((i) => `${i.quando}|${i.pergunta}`))
+    const visto = new Set(out.interacoes.map((i) => `${i.quando}|${i.chat}|${i.pergunta}`))
     for (const i of outro.interacoes || []) {
-        const k = `${i.quando}|${i.pergunta}`
+        const k = `${i.quando}|${i.chat}|${i.pergunta}`
         if (!visto.has(k)) {
             out.interacoes.push(i)
             visto.add(k)
@@ -221,16 +300,30 @@ async function salvar(doc, canonKey) {
     await fs.writeJson(path.join(DIR(), `${canonKey}.json`), doc, { spaces: 2 })
 }
 
-function textoDeDoc(d) {
+function noEscopo(chat, escopo, canonKey) {
+    if (!escopo) return false
+    return escopoDeChat(chat, canonKey) === escopo
+}
+
+function textoDeDoc(d, escopo, canonKey) {
+    if (!escopo) return ''
+    const cidade = String(d.cidades?.[escopo] || '').trim()
+    const resumo = String(d.resumos?.[escopo] || '').trim()
+    const fatos = (d.fatos || [])
+        .filter((f) => noEscopo(chatFato(f), escopo, canonKey))
+        .map((f) => textoFato(f))
+        .filter(Boolean)
+    const inter = (d.interacoes || []).filter((i) => noEscopo(i?.chat, escopo, canonKey))
+    if (!cidade && !resumo && !fatos.length && !inter.length) return ''
     const partes = []
     if (d.nome) partes.push(`Nome conhecido: ${d.nome}`)
-    if (d.cidade) partes.push(`Cidade: ${d.cidade}`)
-    if (d.resumo) partes.push(`Resumo: ${d.resumo}`)
-    if (d.fatos.length) {
-        partes.push('Fatos:\n- ' + d.fatos.slice(-30).join('\n- '))
+    if (cidade) partes.push(`Cidade: ${cidade}`)
+    if (resumo) partes.push(`Resumo: ${resumo}`)
+    if (fatos.length) {
+        partes.push('Fatos:\n- ' + fatos.slice(-30).join('\n- '))
     }
-    if (d.interacoes.length) {
-        const ult = d.interacoes.slice(-8).map((i) => {
+    if (inter.length) {
+        const ult = inter.slice(-8).map((i) => {
             const q = String(i.pergunta || '').slice(0, 160)
             const r = String(i.resposta || '').slice(0, 120)
             return r ? `User: ${q}\nUltron: ${r}` : `User: ${q}`
@@ -240,21 +333,26 @@ function textoDeDoc(d) {
     return partes.join('\n\n').slice(0, 3500)
 }
 
-/** Texto pronto para injetar no system do chat. */
-export async function obterMemoriaUsuarioTexto(idUsuario, aliases = []) {
+/** Texto pronto para injetar no system do chat. Sem idChat, não devolve conversa. */
+export async function obterMemoriaUsuarioTexto(idUsuario, aliases = [], idChat = '') {
     try {
-        const { doc } = await carregarFundido(idUsuario, aliases)
-        return textoDeDoc(doc)
+        if (!idChat) return ''
+        const { doc, canonKey } = await carregarFundido(idUsuario, aliases)
+        const escopo = escopoDaLeitura(idChat, canonKey, doc.aliases)
+        return textoDeDoc(doc, escopo, canonKey)
     } catch {
         return ''
     }
 }
 
-/** Cidade guardada da pessoa, para clima quando o pedido não traz lugar. */
-export async function obterCidadeMemoria(idUsuario, aliases = []) {
+/** Cidade dita neste chat, para clima quando o pedido não traz lugar. */
+export async function obterCidadeMemoria(idUsuario, aliases = [], idChat = '') {
     try {
-        const { doc } = await carregarFundido(idUsuario, aliases)
-        return String(doc.cidade || '').trim()
+        if (!idChat) return ''
+        const { doc, canonKey } = await carregarFundido(idUsuario, aliases)
+        const escopo = escopoDaLeitura(idChat, canonKey, doc.aliases)
+        if (!escopo) return ''
+        return String(doc.cidades?.[escopo] || '').trim()
     } catch {
         return ''
     }
@@ -276,26 +374,35 @@ export async function registrarMemoriaUsuario({
         const { doc: d, canonKey } = await carregarFundido(idUsuario, aliases)
         if (nome && !/^\d{6,}$/.test(String(nome))) d.nome = String(nome).slice(0, 80)
 
+        const escopo = escopoDeChat(idChat, canonKey)
         const p = String(pergunta || '').replace(/\s+/g, ' ').trim().slice(0, 400)
         const r = String(resposta || '').replace(/\s+/g, ' ').trim().slice(0, 400)
-        const idxRecente = d.interacoes.findIndex(
-            (i) => i.pergunta === p && Date.now() - Number(i.quando || 0) < 20000
-        )
-        if (idxRecente >= 0) {
-            if (r && !d.interacoes[idxRecente].resposta) d.interacoes[idxRecente].resposta = r
-        } else if (p || r) {
-            d.interacoes.push({
-                quando: Date.now(),
-                chat: String(idChat || '').slice(0, 80),
-                pergunta: p,
-                resposta: r
-            })
-        }
+        if (escopo && (p || r)) {
+            const idxRecente = d.interacoes.findIndex(
+                (i) =>
+                    i.pergunta === p &&
+                    i.chat === escopo &&
+                    Date.now() - Number(i.quando || 0) < 20000
+            )
+            if (idxRecente >= 0) {
+                if (r && !d.interacoes[idxRecente].resposta) d.interacoes[idxRecente].resposta = r
+            } else {
+                d.interacoes.push({
+                    quando: Date.now(),
+                    chat: escopo,
+                    pergunta: p,
+                    resposta: r
+                })
+            }
 
-        const cidade = extrairCidadePessoa(p)
-        if (cidade) d.cidade = cidade
-        for (const f of extrairFatosDeTexto(p, d.nome)) {
-            if (!d.fatos.includes(f)) d.fatos.push(f)
+            const cidade = extrairCidadePessoa(p)
+            if (cidade) {
+                if (!d.cidades || typeof d.cidades !== 'object') d.cidades = {}
+                d.cidades[escopo] = cidade
+            }
+            for (const f of extrairFatosDeTexto(p, d.nome)) {
+                incluirFato(d.fatos, f, escopo)
+            }
         }
 
         const cortado = aplicarCorteMemoria(d, MAX_INTERACOES)
@@ -303,25 +410,31 @@ export async function registrarMemoriaUsuario({
         d.interacoes = cortado.interacoes
         await salvar(d, canonKey)
 
-        if (d.interacoes.length > 0 && d.interacoes.length % 5 === 0) {
-            setImmediate(() => destilarResumo(idUsuario, aliases).catch(() => {}))
+        const doEscopo = escopo ? d.interacoes.filter((i) => i.chat === escopo) : []
+        if (doEscopo.length > 0 && doEscopo.length % 5 === 0) {
+            setImmediate(() => destilarResumo(idUsuario, aliases, escopo).catch(() => {}))
         }
     } catch (err) {
         console.log(`[memoriaUsuario] ${err?.message || err}`)
     }
 }
 
-async function destilarResumo(idUsuario, aliases = []) {
+async function destilarResumo(idUsuario, aliases = [], escopo = '') {
+    if (!escopo) return
     const { doc: d, canonKey } = await carregarFundido(idUsuario, aliases)
-    if (!d.interacoes.length && !d.fatos.length) return
+    const fatos = (d.fatos || [])
+        .filter((f) => noEscopo(chatFato(f), escopo, canonKey))
+        .map((f) => textoFato(f))
+    const inter = (d.interacoes || []).filter((i) => noEscopo(i?.chat, escopo, canonKey))
+    if (!inter.length && !fatos.length) return
     try {
         const api = (await import('./lbotApi.js')).default
         const material =
             `Nome: ${d.nome || '?'}\n` +
-            `Cidade: ${d.cidade || '?'}\n` +
-            `Fatos: ${d.fatos.slice(-20).join(' | ')}\n` +
+            `Cidade: ${d.cidades?.[escopo] || '?'}\n` +
+            `Fatos: ${fatos.slice(-20).join(' | ')}\n` +
             `Últimas falas:\n` +
-            d.interacoes
+            inter
                 .slice(-10)
                 .map((i) => `- ${i.pergunta}`)
                 .join('\n')
@@ -334,7 +447,8 @@ async function destilarResumo(idUsuario, aliases = []) {
         )
         const resumo = String(resultado || '').trim().slice(0, 900)
         if (!resumo) return
-        d.resumo = resumo
+        if (!d.resumos || typeof d.resumos !== 'object') d.resumos = {}
+        d.resumos[escopo] = resumo
         await salvar(d, canonKey)
     } catch {
         /* ignore */

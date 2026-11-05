@@ -280,10 +280,10 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         await Promise.all([
             carregarHistoricoGrupo(mensagemBaileys),
             carregarPersonalidade(mensagemBaileys, id_chat),
-            obterMemoriaUsuarioTexto(remetente, aliasesRemetente)
+            obterMemoriaUsuarioTexto(remetente, aliasesRemetente, id_chat)
                 .then((t) => t || '')
                 .catch(() => ''),
-            obterCidadeMemoria(remetente, aliasesRemetente).catch(() => ''),
+            obterCidadeMemoria(remetente, aliasesRemetente, id_chat).catch(() => ''),
             (async () => {
                 try {
                     if (!(await citacaoEhDoBot(mensagemBaileys, botInfo))) return ''
@@ -319,7 +319,7 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         )
         const nomeMarcado = membro?.nome || 'alguém'
         try {
-            const trecho = await obterMemoriaUsuarioTexto(jid)
+            const trecho = await obterMemoriaUsuarioTexto(jid, [], id_chat)
             if (trecho) memoriaMencionados += `\n[Memória de ${nomeMarcado}]\n${trecho.slice(0, 500)}\n`
         } catch {
             /* sem memória dessa pessoa */

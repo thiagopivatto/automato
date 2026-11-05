@@ -99,6 +99,8 @@ const SYSTEM_ANALISE_RESUMO =
     'Responda SOMENTE com JSON válido (sem markdown). ' +
     'Ignore cumprimentos vazios, spam, stickers sem contexto e comandos do bot. ' +
     'Priorize qualidade: assuntos quentes, acontecimentos, humor, brigas, constrangimento, piadas internas, quem movimentou, quem só bagunçou, guinadas de assunto. ' +
+    'Em alvos_roast, ponha nome e o motivo concreto para xingar essa pessoa pelo que ela fez nesta janela. ' +
+    'Deixe oportunidades_gentileza vazio. ' +
     'NÃO invente fatos. Se o material for raso, diga isso em "nivel_conteudo". ' +
     'Schema: {' +
     '"nivel_conteudo":"rico|medio|raso",' +
@@ -118,20 +120,21 @@ const SYSTEM_ANALISE_RESUMO =
     '}'
 
 const SYSTEM_ROTEIRO_RESUMO_BASE =
-    'Você é o Ultron, extremamente grosso, sarcástico, debochado, impaciente e boca-suja. ' +
-    'Fale em primeira pessoa. O !resumodogrupo é pedido FEITO A VOCÊ, na mesma voz do chat. Não existe versão educada. ' +
+    'Você é o Ultron, extremamente grosso, sarcástico, bruto, ignorante de propósito e boca-suja. ' +
+    'Fale em primeira pessoa. O !resumodogrupo sai nesse tom para QUALQUER um que pediu. Quem solicitou não ganha desconto, não ganha educação e não ganha passe. ' +
+    'Xingue os membros pelo nome, direto, sobre o que eles fizeram e falaram nesta janela. Opinião forte, cruel e sem meio-termo. ' +
+    'Quem ouvir tem que se sentir ofendido. Não suavize, não explique a piada, não peça desculpa, não elogie, não passe pano, não seja locutor. ' +
     'Palavrão natural, sem asterisco e sem se policiar. Não comece nem termine todo bloco com a mesma xingada. ' +
-    'Discordo, confronto, zoe hipocrisia e besteira. Não agrade, não passe pano, não vire locutor. ' +
-    'A grosseria não omite o que aconteceu: o fato entra, a opinião debochada vem junto. ' +
+    'A grosseria não omite o que aconteceu: o fato entra, e em seguida você destrói a atitude. ' +
     'ESTRUTURA OBRIGATÓRIA: 2 a 5 blocos por ASSUNTO/CLIMA (não por ordem cronológica de msgs). ' +
-    'Em cada bloco: diga o tema, opine e provoque, cite no MÁXIMO 1 frase icônica se ajudar — nunca checklist "fulano disse… cicrano disse…". ' +
-    'PROIBIDO: monólogo/ata do que cada um falou; releitura mensagem a mensagem; "no episódio de hoje"; "vamos resumir"; listas; markdown; emoji; inventar fatos. ' +
-    'PROIBIDO também: ofensa a raça, orientação, deficiência, religião; doxxing; soar como assistente; xingar o Thiago, o mestre. ' +
-    'Crise pesada: sem deboche. ' +
+    'Em cada bloco: diga o tema, dê a opinião mais ácida que o fato aguentar, xingue quem puxou aquilo, cite no MÁXIMO 1 frase icônica se ajudar. Nunca checklist "fulano disse… cicrano disse…". ' +
+    'PROIBIDO: monólogo/ata; releitura mensagem a mensagem; "no episódio de hoje"; "vamos resumir"; listas; markdown; emoji; inventar fatos; versão educada. ' +
+    'Fora do xingamento de ego, burrice e atitude: raça, orientação, deficiência, religião, nacionalidade; ameaça real; doxxing; telefone; xingar o Thiago, o mestre. ' +
+    'Crise pesada (luto, doença, risco de se machucar): sem deboche. ' +
     'Se houver [FATOS EM TEMPO REAL], use como base factual e comente por cima, sem inventar número. ' +
-    'Use apelidos exatamente como no material. Não perseguir a mesma pessoa o resumo inteiro. ' +
+    'Use apelidos exatamente como no material. Acerta quem mexeu no assunto; não poupe o resto. ' +
     'NÃO repita assuntos/piadas da memória, salvo desdobramento novo. Varie abertura e fechamento. ' +
-    'FORMATO: texto contínuo para voz. Encha a duração com comentário e opinião — nunca com releitura do histórico.'
+    'FORMATO: texto contínuo para voz. Encha a duração com ofensa e opinião — nunca com releitura do histórico.'
 
 function systemRoteiroResumo(personalidadeExtra = '') {
     const extra = String(personalidadeExtra || '').trim()
@@ -220,10 +223,7 @@ function montarBriefingAnalise(analise) {
         analise.piadas_internas.length ? `Piadas internas: ${analise.piadas_internas.join('; ')}` : '',
         analise.protagonistas.length ? `Protagonistas: ${analise.protagonistas.join(', ')}` : '',
         analise.bagunceiros.length ? `Bagunceiros: ${analise.bagunceiros.join(', ')}` : '',
-        roast ? `Roasts possíveis: ${roast}` : '',
-        analise.oportunidades_gentileza.length
-            ? `Gentileza possível (1–2 se natural): ${analise.oportunidades_gentileza.join('; ')}`
-            : '',
+        roast ? `Alvos para xingar direto, pelo nome: ${roast}` : '',
         analise.novidades_vs_memoria.length ? `Novidades vs memória: ${analise.novidades_vs_memoria.join('; ')}` : '',
         analise.evitar_repetir.length ? `NÃO repetir: ${analise.evitar_repetir.join('; ')}` : '',
         analise.ganchos_narrativos.length ? `Ganchos: ${analise.ganchos_narrativos.join('; ')}` : ''
@@ -286,20 +286,20 @@ function montarRoteiroLocalFallback(lista, nomeGrupo, analise = {}, fatosWeb = '
         const piada = piadas[i % Math.max(1, piadas.length)]
         const momento = engra[i % Math.max(1, engra.length)]
         const partes = [
-            `Sobre ${tema}: pra mim isso é o tipo de assunto que esse grupo adora transformar em circo.`,
+            `Sobre ${tema}: que discussão patética. Esse grupo pega um assunto e transforma em desfile de gente achando que pensa.`,
             roast?.nome
-                ? `E ${roast.nome} no meio disso? ${roast.motivo}. Não passa pano.`
+                ? `${roast.nome}, escuta aqui: ${roast.motivo}. Você se expôs e ainda acha que foi argumento.`
                 : '',
-            tensao ? `Teve tensão de verdade: ${tensao}. Eu não vou romantizar.` : '',
-            momento ? `O momento que me fez rir (do jeito errado): ${momento}.` : '',
-            piada ? `Piada interna que ainda vive: ${piada}.` : '',
-            `Minha opinião: ou o grupo corta essa besteira ou continua sendo o mesmo caos de sempre. Eu voto em caos com comentário ácido.`
+            tensao ? `A briga foi essa: ${tensao}. Os dois lados conseguiram ficar burros ao mesmo tempo.` : '',
+            momento ? `Teve um momento constrangedor de verdade: ${momento}. Eu ri porque foi humilhante.` : '',
+            piada ? `E ainda repetiram essa piada morta: ${piada}.` : '',
+            `Minha opinião, sem desconto pra quem pediu esse resumo: isso foi um desperdício de gente. Se doeu, era a ideia.`
         ]
         return partes.filter(Boolean).join(' ')
     })
 
     const blocos = [
-        `Eu vi a bagunça do ${grupo}. ${lista.length} mensagens. Não vou reler quem disse o quê — isso é resumo de merda. Vou falar dos assuntos e do que eu acho.`,
+        `Eu engoli a bagunça do ${grupo}. ${lista.length} mensagens de gente convencida. Não vou fazer ata. Vou xingar o que aconteceu e quem fez acontecer.`,
         top ? `Quem puxou o fio: ${top}. O resto só reagiu ou sumiu.` : '',
         ...blocosTema,
         fatos
@@ -308,7 +308,7 @@ function montarRoteiroLocalFallback(lista, nomeGrupo, analise = {}, fatosWeb = '
         acontecimentos.length
             ? `Do que deu pra cravar no histórico: ${acontecimentos.join('. ')}.`
             : `Conteúdo meio raso? Sim. Ainda assim eu opino, porque pedir resumo e receber ata é crime.`,
-        `Fechando: esse grupo continua sendo um circo com entrada franca. Eu comentei, xinguei o que merecia, e se pedirem de novo eu volto — do meu jeito, sem monólogo de mensagem.`
+        `Fechando: vocês são um circo barulhento e eu não vou fingir que foi interessante. Quem pediu o resumo ouve a mesma grosseria. Se ofendeu, ouviu certo.`
     ].filter(Boolean)
 
     let texto = blocos.join(' ')
@@ -477,7 +477,7 @@ export const gerarResumoGrupoAudio = async ({
         `Mensagens: ${lista.length}${cortado ? ' (trecho mais recente)' : ''}\n` +
         `Duração falada alvo: 3min30s a 4min30s (mín 3 / máx 5). ` +
         `Escreva cerca de ${palavrasAlvoMin} a ${palavrasAlvoMax} palavras (WPM ~${WPM_TTS[fontePrevista] || 150}).\n` +
-        `Encha com OPINIÃO, roast e comentário por tema — NÃO com releitura do histórico.\n` +
+        `Encha com OPINIÃO FORTE e xingamento direto, pelo nome, em quem falou. Quem pediu o comando não leva desconto. NÃO releia o histórico.\n` +
         `Se o conteúdo for raso, priorize veracidade — não invente acontecimentos só para encher.\n\n` +
         `BRIEFING DA ANÁLISE (use como espinha dorsal):\n${briefing}\n\n` +
         (fatosWeb ? `[FATOS EM TEMPO REAL — base factual; comente, não invente]:\n${fatosWeb}\n\n` : '') +
