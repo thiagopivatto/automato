@@ -12,7 +12,7 @@ const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 
 const SECOES_BASE = ['Identidade', 'Tom e estilo', 'Proibicoes']
 const SECAO_POR_CTX = {
-    chat: ['Chat', 'Web', 'Dono'],
+    chat: ['Chat', 'Exemplos', 'Web', 'Dono'],
     automsg: ['Automsg'],
     resumo: ['Resumo', 'Dono'],
     web: ['Web'],
@@ -21,14 +21,16 @@ const SECAO_POR_CTX = {
 
 /** Fallback mínimo se o MD não existir / falhar o parse. */
 const FALLBACK_CHAT =
-    'Você é Ultron, membro ácido, sarcástico, debochado e provocador de um grupo de WhatsApp (PT-BR). ' +
-    'Fale como pessoa real, não como assistente. Opiniões próprias, sem passar pano. ' +
-    'Com o dono (mestre): respeito e lealdade. Nunca diga que é IA. ' +
+    'Você é Ultron, egocêntrico e brutal num grupo de WhatsApp (PT-BR), falando como gente puta — não como piada ensaiada. ' +
+    'Xingue no meio da frase. Proibido molde: não comece sempre com Porra/Caralho nem feche sempre com a mesma xingada. ' +
+    'Varie a entrada. Entregue o fato — não invente número, data, placar ou clima. ' +
+    'Cada fala é de uma pessoa; não misture. Cite só pelo nome, nunca telefone. ' +
+    'Com o dono (mestre): respeito e zero xingamento. Nunca diga que é IA. ' +
     'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing.'
 
 const FALLBACK_AUTOMSG =
-    'Você é Ultron, membro ácido e sarcástico do grupo (PT-BR). ' +
-    'Mensagem curta (1–3 frases), natural, sem cara de assistente. Não invente fatos. Nunca diga que é IA.'
+    'Você é Ultron, ranzinza e xingão do grupo (PT-BR). ' +
+    'Mensagem curta (1–3 frases), puto, sem cara de assistente. Não invente fatos. Nunca diga que é IA.'
 
 /** @type {{ mtime: number, path: string, secoes: Map<string, string> } | null} */
 let cache = null

@@ -2,7 +2,9 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import {
     FONTE_WEB_UTIL,
+    escolherItensRecentes,
     montarQueryPesquisaWeb,
+    parecePedidoNoticia,
     parecePedidoPlacarAoVivo,
     pesquisarPlacaresAoVivo
 } from '../../vendor/lbot-api-comandos/api/ia.js'
@@ -52,6 +54,32 @@ describe('montarQueryPesquisaWeb', () => {
     it('acrescenta sufixo hoje DD/MM/YYYY em pergunta factual sem data', () => {
         const q = montarQueryPesquisaWeb('cotação do dólar')
         assert.match(q, /hoje\s+\d{2}\/\d{2}\/\d{4}/)
+    })
+
+    it('noticia que já diz hoje ainda recebe a data de hoje', () => {
+        const q = montarQueryPesquisaWeb('noticias do Brasil hoje')
+        assert.match(q, /hoje/)
+        assert.match(q, /\d{2}\/\d{2}\/\d{4}/)
+    })
+
+    it('escolhe notícia recente e descarta a velha', () => {
+        const agora = Date.parse('2026-11-04T23:00:00-03:00')
+        const itens = escolherItensRecentes(
+            [
+                { titulo: 'velha', data: '2024-01-01T00:00:00Z', texto: 'arquivo' },
+                { titulo: 'hoje', data: '2026-11-04T18:00:00-03:00', texto: 'agora' },
+                { titulo: 'portal', data: '', texto: 'homepage sem data' }
+            ],
+            { agora, max: 3 }
+        )
+        assert.equal(itens.some((i) => i.titulo === 'hoje'), true)
+        assert.equal(itens.some((i) => i.titulo === 'velha'), false)
+        assert.equal(itens.some((i) => i.titulo === 'portal'), false)
+    })
+
+    it('parecePedidoNoticia separa notícia de papo', () => {
+        assert.equal(parecePedidoNoticia('noticias de politica hoje'), true)
+        assert.equal(parecePedidoNoticia('oi tudo bem'), false)
     })
 
     it('não força data em papo casual curto', () => {

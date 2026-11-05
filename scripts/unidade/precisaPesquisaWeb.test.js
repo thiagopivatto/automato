@@ -23,5 +23,12 @@ describe('precisaPesquisaWeb', () => {
         assert.equal(precisaPesquisaWeb('resultados de jogos ao vivo'), true)
         assert.equal(precisaPesquisaWeb('jogos ao vivo agora'), true)
         assert.equal(precisaPesquisaWeb('quais os placares de hoje'), true)
+        assert.equal(precisaPesquisaWeb('notícias climáticas hoje'), true)
+        assert.equal(precisaPesquisaWeb('previsão do tempo em Curitiba'), true)
+        assert.equal(precisaPesquisaWeb('vai chover amanhã'), true)
+    })
+
+    it('“faz tempo” é papo, não clima', () => {
+        assert.equal(precisaPesquisaWeb('faz tempo que não te vejo'), false)
     })
 })

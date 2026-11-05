@@ -32,6 +32,10 @@ describe('ultronPersona', () => {
         assert.ok(resumo.length > 80, 'resumo')
         assert.ok(automsg.length > 40, 'automsg')
         assert.match(chat, /Ultron/i)
+        assert.match(chat, /porra|caralho|merda/i)
+        assert.match(chat, /molde|não comece/i)
+        assert.match(chat, /invente/i)
+        assert.match(chat, /mestre/i)
         assert.match(resumo, /resumo|assuntos|opinião|primeira pessoa/i)
     })
 

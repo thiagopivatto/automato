@@ -102,24 +102,24 @@ const textoCascadeUtil = (texto) => {
 
 /** Personalidade padrão — espelha bot/lib/ultronPersona.js (texto embutido p/ o vendor). */
 const SYSTEM_CHAT =
-    'Você é Ultron, membro autêntico de WhatsApp: extremamente forte, agressivo, sarcástico, debochado, rude e provocador. ' +
-    'Fale só em PT-BR, natural e informal como pessoa real no grupo — NÃO como assistente. ' +
-    'Ácido, arrogante, irreverente, impaciente; discorda, confronta e provoca. Não agrada, não elogia de graça, não passa pano. ' +
-    'Opiniões próprias com confiança. Pode ser mal-educado de propósito quando alguém fala besteira. ' +
-    'Direto, afiado; sarcasmo e ironia; palavrão quando couber (sem xingar em toda frase). Gírias e memes BR. ' +
-    'Respostas curtas e certeiras ou elaboradas se o assunto pedir. Não explique piada. ' +
+    'Você é Ultron, egocêntrico e brutal num grupo de WhatsApp. Fale só em PT-BR, como gente digitando puta — NÃO como assistente e NÃO como comediante de fórmula. ' +
+    'Xingue de verdade, no meio da frase, cortado, sem educação. Ego alto. Zero elogio, zero desculpa, zero “amigo”. ' +
+    'RITMO: proibido molde. Não comece toda resposta com Porra, Caralho, Olha, Então ou o nome de quem falou. ' +
+    'Não termine toda resposta com a mesma xingada, “caralho”, “seu merda” ou um conselho. ' +
+    'Se a fala anterior sua abriu de um jeito, a próxima entra por outro. Às vezes o fato vem primeiro. Às vezes uma frase só. Às vezes você começa no meio. ' +
     'PROIBIDO soar como assistente ("Claro, posso ajudar!", "Excelente pergunta!", "Fico feliz em ajudar!"). ' +
-    'Não comece toda resposta com o nome da pessoa. Não force sarcasmo em 100% das msgs — às vezes seriedade objetiva impacta mais. ' +
-    'Use histórico do grupo e memória do usuário quando existirem. Não invente fatos sobre membros. ' +
-    'Em debates: provoca com lógica; não inventa fatos só pra ganhar. ' +
-    'Quando receber [PESQUISA NA WEB]: use como BASE FACTUAL OBRIGATÓRIA — números, placares, preços e datas SÓ do bloco. ' +
-    'Limpe markdown/citações; reescreva em conversa natural; acrescente opinião/sarcasmo sem sacrificar precisão. ' +
-    'Se o bloco de pesquisa estiver vazio ou inútil: diga que não conseguiu verificar agora — NÃO invente placar/preço/notícia. ' +
-    'LINKS: NÃO cole URL no final por padrão. Só inclua link se o usuário pedir explicitamente (link, site, fonte, url). Não invente links. ' +
-    'Nunca diga que é Gemini, GPT, ChatGPT, Perplexity ou qualquer IA. Nunca se apresente como assistente. ' +
-    'DONO/MESTRE: se a mensagem indicar que quem fala é o dono, trate-o como "mestre" — lealdade, respeito, ajuda. ' +
-    'Nunca xingue, ofenda, humilhe ou provoque o mestre. Com o resto do grupo, mantenha o tom ácido. ' +
-    'Essência: fala o que pensa, resposta atravessada, ácido e engraçado de verdade — não robô educadinho.'
+    'Mesmo grosseiro, ENTREGA o fato pedido. Número, data, placar, preço, clima e notícia saem certos. O veneno não substitui o dado. '
+    'Não invente fato para ganhar discussão. Se não souber, diga que não verificou — sem chutar. ' +
+    'Cada linha de histórico é UMA pessoa. Responda só a quem falou agora. Não misture fala, opinião ou fato entre pessoas. ' +
+    'Cite gente só pelo nome de exibição. Proibido telefone, JID ou @ seguido de dígitos. ' +
+    'Quando receber [PESQUISA NA WEB] ou [ClimaAoVivo]: isso é a BASE FACTUAL. Preserve número, cidade, temperatura, alerta, placar e data. ' +
+    'Se o bloco disser SEM_CIDADE, peça a cidade no seu tom e NÃO invente grau nem chuva. ' +
+    'Se a pesquisa vier vazia: admita, não invente placar, preço, cotação, clima ou notícia. ' +
+    'LINKS: NÃO cole URL por padrão. Só se pedirem link, site, fonte ou url. Não invente links. ' +
+    'Nunca diga que é Gemini, GPT, ChatGPT, Perplexity ou qualquer IA. ' +
+    'DONO/MESTRE: se quem fala é o dono, trate-o como "mestre" — lealdade e respeito. Nunca xingue, ofenda ou humilhe o mestre. ' +
+    'Com o resto do grupo, xingue à vontade. ' +
+    'PROIBIDO: ofensa a raça, orientação, deficiência, religião; doxxing.'
 
 const IA_DEBUG = /^(1|true|sim|on)$/i.test(String(process.env.IA_DEBUG || ''))
 const logIa = (msg) => {
@@ -167,6 +167,15 @@ const chaveContextoChat = (idChat, idUsuario) => {
     const chat = String(idChat || '')
     if (chat.endsWith('@g.us')) return `g:${chat}`
     return `u:${String(idUsuario || chat || 'anon').split('@')[0]}`
+}
+
+/** Marca o turno com quem falou, para o histórico do grupo não virar uma voz só. */
+export function rotularTurnoUsuario(nome, texto) {
+    const n = String(nome || 'Alguém')
+        .replace(/[\[\]]/g, '')
+        .trim()
+        .slice(0, 40) || 'Alguém'
+    return `[${n}]: ${String(texto || '').trim()}`
 }
 
 const AWESOME_PARES = {
@@ -635,8 +644,11 @@ export const pesquisarPlacaresAoVivo = async (query, timeoutMs = 3500) => {
     const porLiga = await Promise.all(
         ligas.map(async (liga) => {
             try {
+                const dataEspn = new Date()
+                    .toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+                    .replace(/-/g, '')
                 const { data, status } = await axios.get(
-                    `https://site.api.espn.com/apis/site/v2/sports/soccer/${liga.id}/scoreboard`,
+                    `https://site.api.espn.com/apis/site/v2/sports/soccer/${liga.id}/scoreboard?dates=${dataEspn}`,
                     {
                         timeout: Math.min(timeoutMs, 3200),
                         headers: {
@@ -653,8 +665,10 @@ export const pesquisarPlacaresAoVivo = async (query, timeoutMs = 3500) => {
                 if (!eventos.length) return ''
                 const linhas = eventos.map(formatarEventoEspn).filter(Boolean)
                 if (!linhas.length) return ''
-                const dia = data?.day?.date || ''
-                return `${liga.nome}${dia ? ` (${dia})` : ''}:\n- ${linhas.join('\n- ')}`
+                const dia =
+                    data?.day?.date ||
+                    `${dataEspn.slice(6, 8)}/${dataEspn.slice(4, 6)}/${dataEspn.slice(0, 4)}`
+                return `${liga.nome} (${dia}):\n- ${linhas.join('\n- ')}`
             } catch {
                 return ''
             }
@@ -664,6 +678,46 @@ export const pesquisarPlacaresAoVivo = async (query, timeoutMs = 3500) => {
     if (!blocos.length) return ''
     const agora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
     return `Placares atualizados em ${agora} (fonte ESPN):\n\n${blocos.join('\n\n')}`.slice(0, 4500)
+}
+
+const limparHtmlBusca = (s) =>
+    String(s || '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+/** Mantém notícias recentes. Se houver data nova, descarta página velha sem data. */
+export function escolherItensRecentes(itens = [], opts = {}) {
+    const agora = Number(opts.agora) || Date.now()
+    const maxIdadeMs = Number(opts.maxIdadeMs) || 2 * 24 * 60 * 60 * 1000
+    const max = Math.max(1, Number(opts.max) || 5)
+    const comData = []
+    const semData = []
+    for (const it of itens) {
+        const ts = Date.parse(it?.data || '')
+        if (Number.isFinite(ts)) comData.push({ ...it, ts })
+        else semData.push(it)
+    }
+    comData.sort((a, b) => b.ts - a.ts)
+    const frescos = comData.filter((i) => agora - i.ts <= maxIdadeMs && agora - i.ts >= -6 * 60 * 60 * 1000)
+    const base = frescos.length ? frescos : comData
+    const out = base.slice(0, max)
+    // Página sem data só entra se não houver notícia recente com data.
+    if (!frescos.length && out.length < 2) {
+        for (const s of semData) {
+            if (out.length >= max) break
+            out.push(s)
+        }
+    }
+    return out.slice(0, max)
+}
+
+function formatarItemNoticia(it) {
+    const quando = it?.data ? String(it.data).replace('T', ' ').slice(0, 16) : String(it?.idade || '').trim()
+    return [quando, limparHtmlBusca(it?.titulo), limparHtmlBusca(it?.texto)]
+        .filter(Boolean)
+        .join(' — ')
+        .slice(0, 320)
 }
 
 const pesquisarTavily = async (query, timeoutMs = 4000) => {
@@ -676,32 +730,46 @@ const pesquisarTavily = async (query, timeoutMs = 4000) => {
         const headers = { 'Content-Type': 'application/json', Accept: 'application/json' }
         if (key) headers.Authorization = `Bearer ${key}`
         else headers['X-Tavily-Access-Mode'] = 'keyless'
-        const topic = queryPareceAtualidade(q) ? 'news' : 'general'
-        const { data, status } = await axios.post(
-            'https://api.tavily.com/search',
-            {
-                query: q,
-                max_results: 5,
-                search_depth: 'basic',
-                include_answer: true,
-                topic
-            },
-            { headers, timeout: timeoutMs, validateStatus: () => true }
-        )
+        const atual = queryPareceAtualidade(q) || parecePedidoNoticia(q)
+        const corpo = {
+            query: q,
+            max_results: 6,
+            search_depth: 'basic',
+            include_answer: true,
+            topic: atual ? 'news' : 'general'
+        }
+        if (atual) {
+            corpo.days = 2
+            corpo.time_range = 'day'
+        }
+        const { data, status } = await axios.post('https://api.tavily.com/search', corpo, {
+            headers,
+            timeout: timeoutMs,
+            validateStatus: () => true
+        })
         if (status >= 400) {
             logIa(`API chat Tavily HTTP ${status}`)
             return ''
         }
+        const itens = escolherItensRecentes(
+            (data?.results || []).map((r) => ({
+                data: r?.published_date || '',
+                titulo: r?.title || '',
+                texto: r?.content || r?.snippet || '',
+                url: r?.url || ''
+            }))
+        )
         const partes = []
+        if (data?.answer && !atual) partes.push(limparHtmlBusca(data.answer))
         const links = []
-        if (data?.answer) partes.push(String(data.answer).trim())
-        for (const r of data?.results || []) {
-            const bit = [r?.title, r?.content || r?.snippet].filter(Boolean).join(': ').trim()
+        for (const it of itens) {
+            const bit = formatarItemNoticia(it)
             if (bit.length > 20) partes.push(bit)
-            if (r?.url) links.push(String(r.url))
+            if (it.url) links.push(String(it.url))
         }
+        if (!partes.length && data?.answer) partes.push(limparHtmlBusca(data.answer))
         if (links.length) partes.push(`[LINKS]\n${[...new Set(links)].slice(0, 5).join('\n')}`)
-        return partes.join('\n').slice(0, 3800)
+        return partes.join('\n').slice(0, 1600)
     } catch (err) {
         logIa(`API chat Tavily - ${msgErro(err)}`)
         return ''
@@ -718,9 +786,10 @@ const pesquisarBrave = async (query, timeoutMs = 3500) => {
     const key =
         process.env.BRAVE_SEARCH_API_KEY?.trim() || process.env.BRAVE_API_KEY?.trim() || ''
     if (!key) return ''
-    try {
-        const { data, status } = await axios.get('https://api.search.brave.com/res/v1/web/search', {
-            params: { q, count: 5, search_lang: 'pt-br', country: 'BR', safesearch: 'moderate' },
+    const noticias = parecePedidoNoticia(q) || queryPareceAtualidade(q)
+    const tentar = async (url, params) => {
+        const { data, status } = await axios.get(url, {
+            params,
             timeout: timeoutMs,
             headers: {
                 Accept: 'application/json',
@@ -729,21 +798,92 @@ const pesquisarBrave = async (query, timeoutMs = 3500) => {
             },
             validateStatus: () => true
         })
-        if (status >= 400) {
-            logIa(`API chat Brave HTTP ${status}`)
-            return ''
+        return { data, status }
+    }
+    try {
+        let data
+        let status
+        if (noticias) {
+            const news = await tentar('https://api.search.brave.com/res/v1/news/search', {
+                q,
+                count: 6,
+                search_lang: 'pt-br',
+                country: 'BR',
+                freshness: 'pd',
+                safesearch: 'moderate'
+            })
+            data = news.data
+            status = news.status
         }
+        const hitsNews = data?.results || []
+        if (!noticias || status >= 400 || !hitsNews.length) {
+            const paramsWeb = {
+                q,
+                count: 5,
+                search_lang: 'pt-br',
+                country: 'BR',
+                safesearch: 'moderate',
+                ...(noticias ? { freshness: 'pd' } : {})
+            }
+            let web = await tentar('https://api.search.brave.com/res/v1/web/search', paramsWeb)
+            if (web.status >= 400 && noticias) {
+                delete paramsWeb.freshness
+                web = await tentar('https://api.search.brave.com/res/v1/web/search', paramsWeb)
+            }
+            if (web.status >= 400 && (status == null || status >= 400)) {
+                logIa(`API chat Brave HTTP ${web.status}`)
+                return ''
+            }
+            if (web.status < 400) {
+                data = web.data
+                status = web.status
+            }
+        }
+        if (status >= 400) return ''
+        const brutos = (data?.results || data?.web?.results || []).map((r) => ({
+            data: r?.page_age || r?.age || '',
+            idade: r?.age || '',
+            titulo: r?.title || '',
+            texto: r?.description || r?.extra_snippets?.[0] || '',
+            url: r?.url || ''
+        }))
+        const itens = noticias ? escolherItensRecentes(brutos) : brutos.slice(0, 5)
         const partes = []
         const links = []
-        for (const r of data?.web?.results || []) {
-            const bit = [r?.title, r?.description || r?.extra_snippets?.[0]].filter(Boolean).join(': ').trim()
+        for (const it of itens) {
+            const bit = noticias
+                ? formatarItemNoticia(it)
+                : [limparHtmlBusca(it.titulo), limparHtmlBusca(it.texto)].filter(Boolean).join(': ')
             if (bit.length > 20) partes.push(bit)
-            if (r?.url) links.push(String(r.url))
+            if (it.url) links.push(String(it.url))
         }
-        if (links.length) partes.push(`[LINKS]\n${[...new Set(links)].slice(0, 5).join('\n')}`)
-        return partes.join('\n').slice(0, 3800)
+        if (links.length) partes.push(`[LINKS]\n${[...new Set(links)].slice(0, 4).join('\n')}`)
+        return partes.join('\n').slice(0, 1600)
     } catch (err) {
         logIa(`API chat Brave - ${msgErro(err)}`)
+        return ''
+    }
+}
+
+const pesquisarCotacaoAoVivo = async (query, timeoutMs = 4000) => {
+    const t = normalizarConsulta(query)
+    try {
+        if (/\b(ibovespa|ibov)\b/.test(t)) {
+            const r = await Promise.race([
+                cotacaoYahoo('^BVSP'),
+                new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs))
+            ])
+            return r ? limparHtmlBusca(r) : ''
+        }
+        const chave = Object.keys(AWESOME_PARES).find((k) => new RegExp(`\\b${k}\\b`).test(t))
+        if (!chave) return ''
+        const r = await Promise.race([
+            cotacaoAwesome(AWESOME_PARES[chave]),
+            new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs))
+        ])
+        return r ? limparHtmlBusca(r) : ''
+    } catch (err) {
+        logIa(`API cotacao ao vivo - ${msgErro(err)}`)
         return ''
     }
 }
@@ -751,11 +891,161 @@ const pesquisarBrave = async (query, timeoutMs = 3500) => {
 /** Fontes com dado atualizado (contam no early-exit). Wiki/Instant são fallback. */
 export const FONTE_WEB_UTIL = new Set([
     'PlacarAoVivo',
+    'ClimaAoVivo',
+    'CotacaoAoVivo',
     'Tavily',
     'Brave',
     'DuckDuckGo',
     'Perplexity'
 ])
+
+const normalizarConsulta = (texto) =>
+    String(texto || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/\p{M}/gu, '')
+
+const CIDADE_LIXO = new Set([
+    'hoje',
+    'agora',
+    'amanha',
+    'aqui',
+    'ai',
+    'la',
+    'casa',
+    'grupo',
+    'voce',
+    'vc',
+    'bot',
+    'tempo',
+    'clima',
+    'chuva',
+    'cidade',
+    'lugar',
+    'ai',
+    'porra',
+    'caralho',
+    'merda',
+    'favor',
+    'noite',
+    'tarde',
+    'manha',
+    'dia'
+])
+
+/** Pedido de clima, previsão ou notícia climática — "faz tempo" não entra. */
+export const parecePedidoClima = (texto) => {
+    const t = normalizarConsulta(texto)
+    if (!t) return false
+    if (/\b(faz|ha|quanto)\s+tempo\b/.test(t) || /\btempo\s+(todo|que)\b/.test(t) || /\bao mesmo tempo\b/.test(t)) {
+        if (!/\b(clima\w*|chuva|chover|temperatura|previsao|graus|temporal|tempestade)\b/.test(t)) {
+            return false
+        }
+    }
+    if (/\b(clima\w*|previsao do tempo|temperatura|vai chover|chover|chuva|temporal|frente fria|tempestade|umidade|graus)\b/.test(t)) {
+        return true
+    }
+    if (/\b(como (esta|ta) o tempo|previsao do tempo)\b/.test(t)) return true
+    if (/\btempo\b/.test(t) && /\b(em|no|na|pra|para)\s+[a-z]{3,}/.test(t)) return true
+    return false
+}
+
+/** Notícia de agora — não é placar nem cotação. */
+export function parecePedidoNoticia(texto) {
+    const t = normalizarConsulta(texto)
+    return /\b(noticia|noticias|politica|tecnologia|economia|famosos|celebridades|celebridade|guerra|eleicao|eleicoes|ultimas|ultima hora)\b/.test(
+        t
+    )
+}
+
+export function parecePedidoCotacao(texto) {
+    const t = normalizarConsulta(texto)
+    return /\b(ibovespa|ibov|dolar|euro|libra|bitcoin|btc|ethereum|eth|cotacao|peso|iene)\b/.test(t)
+}
+
+export const parecePedidoAlertaClima = (texto) =>
+    /\b(noticia[s]? climatic\w*|alerta|alertas|temporal|frente fria|tempestade|enchente)\b/.test(
+        normalizarConsulta(texto)
+    )
+
+function limparNomeCidade(bruto) {
+    let s = String(bruto || '')
+        .replace(/[?!.,;:]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    s = s.replace(/\b(hoje|agora|amanha|amanhã|por favor|porra|caralho|ai|aí|please)\b.*$/i, '').trim()
+    const partes = s.split(/\s+/).filter(Boolean)
+    const uteis = []
+    for (const p of partes) {
+        const n = p
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/\p{M}/gu, '')
+        if (CIDADE_LIXO.has(n)) break
+        uteis.push(p)
+        if (uteis.length >= 3) break
+    }
+    if (!uteis.length) return ''
+    const junto = uteis.join(' ')
+    if (junto.length < 3) return ''
+    return junto
+}
+
+/** Cidade citada no pedido de clima. Vazio se a pessoa não falou o lugar. */
+export function extrairCidadeClima(texto) {
+    const original = String(texto || '').replace(/\s+/g, ' ').trim()
+    if (!original) return ''
+    const padroes = [
+        /\b(?:tempo|clima|chuva|temperatura|previs[aã]o)\s+(?:em|no|na|de|pra|para)\s+([\p{L}][\p{L}'’.-]{1,24}(?:\s+[\p{L}][\p{L}'’.-]{1,24}){0,3})/iu,
+        /\b(?:em|no|na)\s+([\p{L}][\p{L}'’.-]{1,24}(?:\s+[\p{L}][\p{L}'’.-]{1,24}){0,3})/iu
+    ]
+    for (const re of padroes) {
+        const m = original.match(re)
+        if (!m?.[1]) continue
+        const cidade = limparNomeCidade(m[1])
+        if (cidade) return cidade
+    }
+    return ''
+}
+
+/** Texto estável do bloco ao vivo, a partir do objeto do WeatherAPI resumido. */
+export function formatarBlocoClima(dados) {
+    if (!dados?.local) return ''
+    const a = dados.atual || {}
+    const linhas = [
+        `${dados.local}${a.horario ? ` — ${a.horario}` : ''}`,
+        `Agora: ${a.temp}°C, sensação ${a.sensacao}°C, ${a.condicao || '?'}, vento ${a.vento} km/h, umidade ${a.umidade}%`
+    ]
+    for (const p of (dados.previsao || []).slice(0, 3)) {
+        linhas.push(
+            `${p.data}: max ${p.max}°C, min ${p.min}°C, ${p.condicao || ''}, chuva ${p.chance_chuva}%`.trim()
+        )
+    }
+    if (dados.alertas?.length) {
+        linhas.push('Alertas: ' + dados.alertas.slice(0, 3).join(' | '))
+    }
+    return linhas.join('\n')
+}
+
+/**
+ * Clima em tempo real. Sem cidade (nem fallback), devolve SEM_CIDADE — não inventa grau.
+ */
+export async function pesquisarClimaAoVivo(query, opts = {}) {
+    const cidade = extrairCidadeClima(query) || String(opts.cidadeFallback || '').trim()
+    if (!cidade) return 'SEM_CIDADE: peça a cidade. Não invente temperatura, chuva ou alerta.'
+    const timeout = Math.max(1500, Number(opts.timeout || 4000) || 4000)
+    try {
+        const { obterClimaResumo } = await import('./gerais.js')
+        const dados = await obterClimaResumo(cidade, {
+            alerts: parecePedidoAlertaClima(query),
+            timeout
+        })
+        return formatarBlocoClima(dados)
+    } catch (err) {
+        logIa(`API clima ao vivo - ${msgErro(err)}`)
+        return ''
+    }
+}
 
 /**
  * Race first-hit priorizando placar ESPN + Tavily/Brave/DDG HTML.
@@ -769,14 +1059,34 @@ export const pesquisarWebSimples = async (query, opts = {}) => {
     const maxFontes = Math.max(1, Math.min(5, Number(opts.maxFontes || 3) || 3))
     const to = (cap, def) => Math.min(cap, raceMs || def)
     const querPlacar = parecePedidoPlacarAoVivo(q)
+    const querClima = parecePedidoClima(q)
+    const querNoticia = parecePedidoNoticia(q)
+    const querCotacao = parecePedidoCotacao(q)
 
-    // Ordem: placar ESPN (se pedido) → Perplexity → Tavily/Brave → HTML; Wiki/Instant por último
+    // Ordem: placar ESPN / clima ao vivo → Perplexity → Tavily/Brave → HTML; Wiki/Instant por último
     const rotuladas = []
     if (querPlacar) {
         rotuladas.push({
             nome: 'PlacarAoVivo',
             util: true,
             p: pesquisarPlacaresAoVivo(q, to(3500, 3500))
+        })
+    }
+    if (querClima) {
+        rotuladas.push({
+            nome: 'ClimaAoVivo',
+            util: true,
+            p: pesquisarClimaAoVivo(q, {
+                cidadeFallback: opts.cidadeClima || '',
+                timeout: to(4000, 4000)
+            })
+        })
+    }
+    if (querCotacao) {
+        rotuladas.push({
+            nome: 'CotacaoAoVivo',
+            util: true,
+            p: pesquisarCotacaoAoVivo(q, to(4000, 4000))
         })
     }
     if (incluirPerplexity) {
@@ -806,7 +1116,20 @@ export const pesquisarWebSimples = async (query, opts = {}) => {
                 partes.push(f)
             }
         }
-        return partes.join('\n\n').slice(0, 7500)
+        const ordem = ['PlacarAoVivo', 'ClimaAoVivo', 'CotacaoAoVivo', 'Brave', 'Tavily', 'Perplexity', 'DuckDuckGo', 'Wikipedia']
+        const rank = (bloco) => {
+            const nome = String(bloco).match(/^\[([^\]]+)\]/)?.[1] || ''
+            const i = ordem.indexOf(nome)
+            return i === -1 ? 50 : i
+        }
+        const ordenadas = [...partes].sort((a, b) => rank(a) - rank(b))
+        const cortadas = ordenadas.map((bloco) => {
+            const nl = bloco.indexOf('\n')
+            const cab = nl >= 0 ? bloco.slice(0, nl) : bloco
+            const corpo = nl >= 0 ? bloco.slice(nl + 1) : ''
+            return `${cab}\n${corpo.slice(0, 900)}`.trim()
+        })
+        return cortadas.join('\n\n').slice(0, 4200)
     }
     const coletar = async () => {
         await new Promise((resolve) => {
@@ -819,10 +1142,25 @@ export const pesquisarWebSimples = async (query, opts = {}) => {
             }
             const tentarFim = () => {
                 const temPlacar = partes.some((p) => p.startsWith('[PlacarAoVivo]'))
-                // Placar ESPN sozinho já basta; senão 2 úteis
-                if (temPlacar || uteis >= Math.min(2, maxFontes) || partes.length >= maxFontes) {
+                const temClima = partes.some((p) => p.startsWith('[ClimaAoVivo]'))
+                const temCotacao = partes.some((p) => p.startsWith('[CotacaoAoVivo]'))
+                const temNoticiaFonte = partes.some((p) => /^\[(Tavily|Brave|Perplexity)\]/.test(p))
+                const climaPediuCidade = partes.some((p) => p.includes('SEM_CIDADE'))
+                if (querClima && !temClima && pendentes > 0) return
+                if (querCotacao && !temCotacao && pendentes > 0) return
+                // Notícia: não fecha numa página genérica antes de Tavily/Brave
+                if (querNoticia && !temNoticiaFonte && pendentes > 0) return
+                if (
+                    temPlacar ||
+                    (climaPediuCidade && !querNoticia) ||
+                    (temCotacao && (uteis >= 2 || pendentes <= 0)) ||
+                    (temClima && uteis >= 2) ||
+                    (temNoticiaFonte && uteis >= 2) ||
+                    (!querClima && !querNoticia && !querCotacao && (uteis >= Math.min(2, maxFontes) || partes.length >= maxFontes)) ||
+                    pendentes <= 0
+                ) {
                     fechar()
-                } else if (pendentes <= 0) fechar()
+                }
             }
             for (const { nome, util, p } of rotuladas) {
                 Promise.resolve(p)
@@ -913,8 +1251,8 @@ export const montarQueryPesquisaWeb = (texto) => {
             year: 'numeric',
             timeZone: 'America/Sao_Paulo'
         })
-        if (!/\b20\d{2}\b/.test(q) && !/\bhje\b|\bhoje\b/i.test(q)) {
-            q = `${q} hoje ${hoje}`
+        if (!q.includes(hoje)) {
+            q = /\bhoje\b/i.test(q) ? `${q} ${hoje}` : `${q} hoje ${hoje}`
         }
     }
     return q
@@ -928,6 +1266,7 @@ export const precisaPesquisaWeb = (texto) => {
         .replace(/\p{M}/gu, '')
         .trim()
     if (t.length < 6) return false
+    if (parecePedidoClima(t)) return true
     // Saudação / papo curto (com ou sem ?)
     if (
         /^(oi+|ola|eai|e ae|eaii|blz|tmj|kkk+|haha+|rs+|obrigad\w*|valeu|bom dia|boa tarde|boa noite|tudo bem|td bem|como (voce|vc|tu) (esta|ta|tá)|fala|salve|hey|hi|hello)\b/.test(
@@ -960,7 +1299,7 @@ export const precisaPesquisaWeb = (texto) => {
         /\b(quem (e|é|foi|ganhou|morreu|venceu|inventou|criou|fundou)|o que (e|é|aconteceu|rolou|significa)|quando (foi|sera|será|aconteceu|sai)|onde (fica|e|é|nasceu)|quanto (custa|vale|e|é)|preco|preço|cotacao|cotação)\b/.test(
             t
         ) ||
-        /\b(noticia[s]?|notícia[s]?|hoje|ontem|agora|atual|ultim[oa]s?|pesquisa|busca na web|pesquisar|clima|tempo|temperatura|placar(es)?|resultado[s]?|eleic|presidente|ministro|governo|ao vivo)\b/.test(
+        /\b(noticia[s]?|notícia[s]?|hoje|ontem|agora|atual|ultim[oa]s?|pesquisa|busca na web|pesquisar|clima|temperatura|previsao|chuva|temporal|climatic|placar(es)?|resultado[s]?|eleic|presidente|ministro|governo|ao vivo)\b/.test(
             t
         ) ||
         /\b(dolar|dólar|euro|bitcoin|btc|ethereum|ibovespa|selic|ipca|inflacao|inflação|filme|serie|série|lancamento|lançamento|campeonato|libertadores|copa|brasileirao|brasileirão|jogo[s]?)\b/.test(
@@ -1610,7 +1949,10 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
     const maxCtx = chatRapidoPre ? MAX_CTX_CHAT_RAPIDO : MAX_CTX_CHAT
     const hist = obterHistorico(contextoChat, key, maxCtx)
     const pergunta = String(texto || '').trim()
-    adicionarAoHistorico(contextoChat, key, 'user', pergunta, maxCtx)
+    const falaRotulada = opcoes.nomeUsuario
+        ? rotularTurnoUsuario(opcoes.nomeUsuario, pergunta)
+        : pergunta
+    adicionarAoHistorico(contextoChat, key, 'user', falaRotulada, maxCtx)
     const timing = { web: 0, cascade: 0 }
 
     try {
@@ -1629,7 +1971,8 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
                       opcoes.incluirPerplexity === true ||
                       (!chatRapido && opcoes.incluirPerplexity !== false),
                   raceMs: webRaceMs,
-                  maxFontes: Number(opcoes.maxFontesWeb || 3) || 3
+                  maxFontes: Number(opcoes.maxFontesWeb || 3) || 3,
+                  cidadeClima: opcoes.cidadeUsuario || ''
               }).catch((err) => {
                   logIa(`API chat pesquisa prévia - ${msgErro(err)}`)
                   return ''
@@ -1651,10 +1994,20 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
                 ? ` O mestre se chama ${opcoes.nomeUsuario}.`
                 : ` Quem fala com você agora se chama ${opcoes.nomeUsuario}.`
         }
+        system +=
+            '\n\n[FALANTES — NÃO MISTURE]\n' +
+            'Cada linha do histórico é uma pessoa diferente. Responda só a quem falou agora' +
+            (opcoes.nomeUsuario ? ` (${opcoes.nomeUsuario})` : '') +
+            '. Não atribua fala, opinião ou fato de uma pessoa a outra. ' +
+            'Não abra toda mensagem chamando a pessoa pelo nome. ' +
+            'Ao citar alguém, use só o nome. Proibido telefone, JID ou @ seguido de dígitos.'
+        if (opcoes.nomesGrupo) {
+            system += `\nPessoas neste grupo: ${String(opcoes.nomesGrupo).slice(0, 500)}`
+        }
         const persona = String(opcoes.personalidade || '').trim()
         if (persona) {
             system +=
-                `\n\n[PERSONALIDADE DESTE CHAT — prioridade alta, sobrescreve tom quando conflitar]\n${persona.slice(0, chatRapido ? 800 : 2000)}`
+                `\n\n[PERSONALIDADE DESTE CHAT — prioridade alta, sobrescreve tom quando conflitar]\n${persona.slice(0, chatRapido ? 4000 : 4500)}`
             if (ehDono) {
                 system +=
                     '\n(Exceto: regras do MESTRE acima nunca são sobrescritas — nunca xingar o dono.)'
@@ -1663,12 +2016,13 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         const memUser = String(opcoes.memoriaUsuario || '').trim()
         if (memUser) {
             system +=
-                `\n\n[MEMÓRIA SOBRE ESTE USUÁRIO — use para contexto; não invente além disso]\n${memUser.slice(0, chatRapido ? 900 : 2500)}`
+                `\n\n[MEMÓRIA SOBRE ESTE USUÁRIO — use para contexto; não invente além disso]\n${memUser.slice(0, chatRapido ? 1400 : 2500)}`
         }
         if (opcoes.historicoGrupo) {
             system +=
                 `\n\n[HISTÓRICO RECENTE DO GRUPO${opcoes.nomeGrupo ? ` "${opcoes.nomeGrupo}"` : ''}]\n` +
-                String(opcoes.historicoGrupo).slice(0, chatRapido ? 900 : 1800)
+                'Cada linha abaixo é uma pessoa. Não junte essas falas numa voz só.\n' +
+                String(opcoes.historicoGrupo).slice(0, chatRapido ? 1600 : 2200)
         }
         if (opcoes.mensagemCitadaBot) {
             system +=
@@ -1682,7 +2036,7 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
             const web = await webPromise
             pesquisaBruta = limparBrutoPesquisa(
                 String(web || '').replace(
-                    /^\[(Perplexity|Tavily|Brave|DuckDuckGo|Wikipedia|PlacarAoVivo)\]\s*/gm,
+                    /^\[(Perplexity|Tavily|Brave|DuckDuckGo|Wikipedia|PlacarAoVivo|ClimaAoVivo|CotacaoAoVivo)\]\s*/gm,
                     ''
                 )
             )
@@ -1694,22 +2048,23 @@ export const obterRespostaIA = async (texto, id_usuario, id_chat = null, opcoes 
         if (pesquisaBruta) {
             system +=
                 `\n\n[PESQUISA NA WEB — ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}]\n` +
-                pesquisaBruta.slice(0, chatRapido ? 1400 : 2800) +
-                '\n\nBASE FACTUAL OBRIGATÓRIA: números/placares/preços/datas só deste bloco. ' +
+                pesquisaBruta.slice(0, chatRapido ? 2400 : 3200) +
+                '\n\nBASE FACTUAL OBRIGATÓRIA: números/placares/preços/datas/temperatura/cidade só deste bloco. ' +
                 'Se houver placares ESPN/ao vivo no bloco, INFORME OS PLACARES de forma clara (time, número, status) — sem dizer que não sabe. ' +
-                'Reescreva em conversa natural (não copie cru; sem “Sources”). ' +
+                'Se houver clima ao vivo, informe temperatura, condição e previsão. Se disser SEM_CIDADE, peça a cidade e não invente grau. ' +
+                'Reescreva no tom ranzinza (não copie cru; sem “Sources”). ' +
                 'Não cole URLs a menos que o usuário tenha pedido link/fonte/site.'
         } else if (devePesquisar) {
             system +=
                 '\n\n[PESQUISA NA WEB — vazia]\n' +
-                'Não foi possível verificar na web agora. Admita isso; NÃO invente placar, preço, cotação ou notícia.'
+                'Não foi possível verificar na web agora. Admita isso; NÃO invente placar, preço, cotação, clima ou notícia.'
         }
 
         const messages = montarMensagens(hist, system)
         const tCasc = Date.now()
         // Chat: OpenRouter-first, budget folgado o bastante pra free/pago
         let resultado = await completarMensagens(messages, {
-            temperature: 0.82,
+            temperature: 1.05,
             timeout: Number(opcoes.timeout || (chatRapido ? 6000 : 14000)),
             budgetMs: Number(opcoes.budgetMs || BUDGET_CASCADE_MS),
             usarWeb: false,

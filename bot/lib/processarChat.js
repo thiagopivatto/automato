@@ -5,10 +5,12 @@
 import api from './lbotApi.js'
 import { precisaPesquisaWeb } from '../../vendor/lbot-api-comandos/api/ia.js'
 import * as socket from '../baileys/socket.js'
-import { criarTexto, listaContemJid, mencaoNumero } from './util.js'
+import { aliasesParticipanteMeta, criarTexto, listaContemJid, mencaoNumero } from './util.js'
 import { comandosInfo } from '../comandos/comandos.js'
 import { obterPersonalidadeChat } from './personalidadeChat.js'
-import { obterMemoriaUsuarioTexto, registrarMemoriaUsuario } from './memoriaUsuario.js'
+import { obterCidadeMemoria, obterMemoriaUsuarioTexto, registrarMemoriaUsuario } from './memoriaUsuario.js'
+import { formatarLinhaHistorico } from './falantes.js'
+import { aplicarMencoes, nomesParaPrompt, preferirJidMencao, textoMencoesParaNomes } from './mencoes.js'
 
 const raceMs = (promessa, ms, fallback = null) =>
     Promise.race([
@@ -59,7 +61,7 @@ async function carregarHistoricoGrupo(mensagemBaileys) {
     if (!mensagem_grupo) return { historicoGrupoTexto: '', nomeGrupo: '' }
     try {
         const { historicoGrupo } = await import('../controles/HistoricoGrupoControle.js')
-        const msgs = await historicoGrupo.obterUltimas(grupo?.id_grupo || id_chat, 12)
+        const msgs = await historicoGrupo.obterUltimas(grupo?.id_grupo || id_chat, 16)
         const historicoGrupoTexto = (msgs || [])
             .map((m) => {
                 const quando = m.timestamp
@@ -67,10 +69,16 @@ async function carregarHistoricoGrupo(mensagemBaileys) {
                           timeZone: 'America/Sao_Paulo'
                       })
                     : ''
-                return `${quando} ${m.nome_usuario || 'Alguém'}: ${String(m.texto || '').replace(/\s+/g, ' ').slice(0, 100)}`
+                return formatarLinhaHistorico({
+                    nome_usuario: m.nome_usuario,
+                    texto: String(m.texto || '').slice(0, 160),
+                    quando,
+                    citou_nome: m.citou_nome,
+                    citou_texto: m.citou_texto
+                })
             })
             .join('\n')
-            .slice(0, 2200)
+            .slice(0, 3200)
         return { historicoGrupoTexto, nomeGrupo: grupo?.nome || '' }
     } catch {
         return { historicoGrupoTexto: '', nomeGrupo: '' }
@@ -90,17 +98,79 @@ async function carregarPersonalidade(mensagemBaileys, id_chat) {
         // Sem !personalidade do chat: usa persona/ULTRON.md (contexto chat)
         if (!String(personalidade || '').trim()) {
             const { personaPara } = await import('./ultronPersona.js')
-            personalidade = personaPara('chat', { maxChars: 3500 })
+            personalidade = personaPara('chat', { maxChars: 4200 })
         }
         return personalidade
     } catch {
         try {
             const { personaPara } = await import('./ultronPersona.js')
-            return personaPara('chat', { maxChars: 3500 })
+            return personaPara('chat', { maxChars: 4200 })
         } catch {
             return ''
         }
     }
+}
+
+const ENGASGOS = [
+    'Repete. Travou no meio.',
+    'Manda de novo, essa não saiu.',
+    'Engasguei. De novo, sem romance.',
+    'Não saiu. Repete a pergunta.'
+]
+
+function fallbackChatEngasgo() {
+    return ENGASGOS[Math.floor(Math.random() * ENGASGOS.length)]
+}
+
+async function montarMembrosChat(mensagemBaileys) {
+    const grupo = mensagemBaileys.grupo || {}
+    const participantes = grupo.participantes || []
+    const meta = grupo.metaParticipantes || []
+    const mapa = {}
+    const idGrupo = grupo.id_grupo || mensagemBaileys.id_chat
+    if (mensagemBaileys.mensagem_grupo && idGrupo) {
+        try {
+            const { historicoGrupo } = await import('../controles/HistoricoGrupoControle.js')
+            const msgs = await historicoGrupo.obterUltimas(idGrupo, 80)
+            for (const m of msgs || []) {
+                const n = String(m?.nome_usuario || '').trim()
+                if (m?.id_usuario && n && !/^\d{8,}$/.test(n)) mapa[m.id_usuario] = n
+            }
+        } catch {
+            /* sem histórico */
+        }
+    }
+    if (mensagemBaileys.remetente && mensagemBaileys.nome_usuario) {
+        const nome = String(mensagemBaileys.nome_usuario).trim()
+        if (nome) {
+            mapa[mensagemBaileys.remetente] = nome
+            for (const a of mensagemBaileys.aliases_remetente || []) mapa[a] = nome
+        }
+    }
+    const ids = participantes.length
+        ? participantes
+        : [mensagemBaileys.remetente].filter(Boolean)
+    const vistos = new Set()
+    const membros = []
+    for (const jid of ids) {
+        if (!jid) continue
+        const aliases = meta.length ? aliasesParticipanteMeta(meta, jid) : [jid]
+        const jidPref =
+            aliases.find((a) => String(a).endsWith('@s.whatsapp.net')) ||
+            preferirJidMencao(jid, participantes.length ? participantes : aliases)
+        const chave = mencaoNumero(jidPref) || String(jid)
+        if (vistos.has(chave)) continue
+        vistos.add(chave)
+        let nome = ''
+        for (const a of [jidPref, jid, ...aliases]) {
+            if (mapa[a]) {
+                nome = mapa[a]
+                break
+            }
+        }
+        membros.push({ jid: jidPref, nome, aliases })
+    }
+    return membros
 }
 
 /**
@@ -185,14 +255,28 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         return 'comando'
     }
 
+    if (mensagemBaileys.mensagem_grupo) {
+        try {
+            const sock = await import('../baileys/socket.js')
+            await sock.atualizarFlagsAdminGrupo(c, mensagemBaileys, botInfo)
+        } catch {
+            /* metadados ao vivo são extras */
+        }
+    }
+
+    const aliasesRemetente = mensagemBaileys.aliases_remetente || []
+    const membrosChat = await montarMembrosChat(mensagemBaileys)
+    pergunta = textoMencoesParaNomes(pergunta, membrosChat, mensagemBaileys.mencionados || [])
+
     const tPre = Date.now()
-    const [{ historicoGrupoTexto, nomeGrupo }, personalidade, memoriaUsuario, citBot] =
+    const [{ historicoGrupoTexto, nomeGrupo }, personalidade, memoriaFalante, cidadeUsuario, citBot] =
         await Promise.all([
             carregarHistoricoGrupo(mensagemBaileys),
             carregarPersonalidade(mensagemBaileys, id_chat),
-            obterMemoriaUsuarioTexto(remetente)
+            obterMemoriaUsuarioTexto(remetente, aliasesRemetente)
                 .then((t) => t || '')
                 .catch(() => ''),
+            obterCidadeMemoria(remetente, aliasesRemetente).catch(() => ''),
             (async () => {
                 try {
                     if (!(await citacaoEhDoBot(mensagemBaileys, botInfo))) return ''
@@ -217,6 +301,25 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         pergunta = 'Respondendo ao que você falou.'
     }
 
+    const mencionadosHumanos = (mensagemBaileys.mencionados || []).filter(
+        (j) => j && !listaContemJid([j], botInfo?.numero_bot, botInfo?.lid_bot)
+    )
+    let memoriaMencionados = ''
+    for (const jid of mencionadosHumanos.slice(0, 3)) {
+        if (listaContemJid([jid, ...aliasesRemetente], remetente)) continue
+        const membro = membrosChat.find((m) =>
+            listaContemJid([m.jid, ...(m.aliases || [])], jid)
+        )
+        const nomeMarcado = membro?.nome || 'alguém'
+        try {
+            const trecho = await obterMemoriaUsuarioTexto(jid)
+            if (trecho) memoriaMencionados += `\n[Memória de ${nomeMarcado}]\n${trecho.slice(0, 500)}\n`
+        } catch {
+            /* sem memória dessa pessoa */
+        }
+    }
+    const memoriaUsuario = [memoriaFalante, memoriaMencionados].filter(Boolean).join('\n\n')
+
     // Fatos/atualidade → força web; papo casual não gasta pesquisa
     let usarPesquisa = 'auto'
     if (precisaPesquisaWeb(pergunta)) usarPesquisa = true
@@ -240,11 +343,13 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
         ehDono: !!mensagemBaileys.mensagem_dono,
         mensagemDono: !!mensagemBaileys.mensagem_dono,
         usarPesquisa,
-        timeout: 6000,
-        budgetMs: 8000,
-        maxOutputTokens: usarPesquisa === true ? 380 : 280,
+        cidadeUsuario: cidadeUsuario || '',
+        nomesGrupo: nomesParaPrompt(membrosChat),
+        timeout: usarPesquisa === true ? 9000 : 6000,
+        budgetMs: usarPesquisa === true ? 12000 : 8000,
+        maxOutputTokens: usarPesquisa === true ? 420 : 280,
         // Factual: race maior + Perplexity (se houver chave); casual sem web
-        webRaceMs: usarPesquisa === true ? 2800 : 1600,
+        webRaceMs: usarPesquisa === true ? 4500 : 1600,
         chatRapido: true,
         incluirPerplexity: usarPesquisa === true,
         maxFontesWeb: 3
@@ -295,25 +400,29 @@ export async function processarChatIA(c, mensagemBaileys, botInfo, textoUsuario)
             } catch {
                 /* */
             }
-            resultadoTexto =
-                'Tô aqui. Manda de novo direto que eu te respondo sem enrolação.'
+            resultadoTexto = fallbackChatEngasgo()
         }
     }
     if (!resultadoTexto || /engasgad|pane geral nas ias|ias deram uma engasgada/i.test(resultadoTexto)) {
-        resultadoTexto =
-            'Tô aqui. Manda de novo direto que eu te respondo sem enrolação.'
+        resultadoTexto = fallbackChatEngasgo()
     }
 
-    await socket.responderTexto(
-        c,
-        id_chat,
-        criarTexto(comandos_info.utilidades.chat.msgs.resposta, resultadoTexto),
-        mensagem
-    )
+    const participantes = mensagemBaileys.grupo?.participantes || []
+    const aplicado = aplicarMencoes(resultadoTexto, membrosChat, participantes)
+    const textoFinal = aplicado.texto
+    const mentionsFinais = [...aplicado.mentions]
+
+    const corpoResposta = criarTexto(comandos_info.utilidades.chat.msgs.resposta, textoFinal)
+    if (mentionsFinais.length) {
+        await socket.responderComMencoes(c, id_chat, corpoResposta, [...new Set(mentionsFinais)], mensagem)
+    } else {
+        await socket.responderTexto(c, id_chat, corpoResposta, mensagem)
+    }
 
     setImmediate(() => {
         registrarMemoriaUsuario({
             idUsuario: remetente,
+            aliases: aliasesRemetente,
             nome: nome_usuario || '',
             idChat: id_chat,
             pergunta,

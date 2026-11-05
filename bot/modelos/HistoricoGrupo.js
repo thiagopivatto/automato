@@ -12,7 +12,16 @@ const INTERVALO_PODA_MS = 60 * 60 * 1000
 export class HistoricoGrupo {
     constructor() {}
 
-    async registrar({ id_grupo, id_usuario, nome_usuario, texto, tipo = 'texto', timestamp = Date.now() }) {
+    async registrar({
+        id_grupo,
+        id_usuario,
+        nome_usuario,
+        texto,
+        tipo = 'texto',
+        timestamp = Date.now(),
+        citou_nome = '',
+        citou_texto = ''
+    }) {
         const body = String(texto || '').trim()
         if (!id_grupo || !body) return
 
@@ -22,7 +31,9 @@ export class HistoricoGrupo {
             nome_usuario: String(nome_usuario || 'Alguém').slice(0, 80),
             texto: body.slice(0, MAX_TEXTO),
             tipo,
-            timestamp: Number(timestamp) || Date.now()
+            timestamp: Number(timestamp) || Date.now(),
+            citou_nome: String(citou_nome || '').slice(0, 80),
+            citou_texto: String(citou_texto || '').slice(0, 180)
         })
     }
 

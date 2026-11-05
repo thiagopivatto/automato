@@ -290,6 +290,59 @@ export const obterClima = async (local) =>{
     })
 }
 
+const CHAVE_WEATHER = '516f58a20b6c4ad3986123104242805'
+
+/**
+ * Clima atual + previsão (e alertas, se pedidos) em objeto curto.
+ * Usa lang=pt da WeatherAPI — o chat injeta isso como fato ao vivo.
+ */
+export const obterClimaResumo = async (local, opcoes = {}) => {
+    const q = String(local || '').trim()
+    if (!q) throw new Error('cidade vazia')
+    const alerts = opcoes.alerts ? 'yes' : 'no'
+    const timeout = Math.max(1500, Number(opcoes.timeout || 4000) || 4000)
+    const url =
+        `https://api.weatherapi.com/v1/forecast.json?key=${CHAVE_WEATHER}` +
+        `&q=${encodeURIComponent(q)}&days=3&aqi=no&alerts=${alerts}&lang=pt`
+    const { data } = await axios.get(url, {
+        timeout,
+        validateStatus: (s) => s >= 200 && s < 300
+    })
+    if (!data?.location || !data?.current) throw new Error('clima sem dados')
+    const alertas = []
+    const lista = data.alerts?.alert
+    if (Array.isArray(lista)) {
+        for (const a of lista) {
+            const linha = String(a?.headline || a?.event || a?.desc || '')
+                .replace(/\s+/g, ' ')
+                .trim()
+            if (linha) alertas.push(linha.slice(0, 180))
+        }
+    }
+    return {
+        local: [data.location.name, data.location.region, data.location.country].filter(Boolean).join(', '),
+        atual: {
+            horario: data.location.localtime || '',
+            temp: data.current.temp_c,
+            sensacao: data.current.feelslike_c,
+            condicao: data.current.condition?.text || '',
+            vento: data.current.wind_kph,
+            umidade: data.current.humidity
+        },
+        previsao: (data.forecast?.forecastday || []).slice(0, 3).map((dia) => {
+            const [ano, mes, d] = String(dia.date || '').split('-')
+            return {
+                data: d && mes && ano ? `${d}/${mes}/${ano}` : dia.date,
+                max: dia.day?.maxtemp_c,
+                min: dia.day?.mintemp_c,
+                condicao: dia.day?.condition?.text || '',
+                chance_chuva: dia.day?.daily_chance_of_rain
+            }
+        }),
+        alertas
+    }
+}
+
 export const obterLetraMusica = async (texto) =>{
     return new Promise(async (resolve,reject)=>{
         try{

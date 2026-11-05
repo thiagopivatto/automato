@@ -106,14 +106,56 @@ export async function registrarHistoricoGrupo(mensagemBaileys) {
         }
         if (!corpoTxt || !id_grupo) return
 
+        let citou_nome = ''
+        let citou_texto = ''
+        const cit = mensagemBaileys.citacao
+        if (cit && (cit.corpo || cit.legenda)) {
+            citou_texto = String(cit.corpo || cit.legenda || '').replace(/\s+/g, ' ').trim().slice(0, 180)
+            if (cit.do_bot) {
+                citou_nome = 'Ultron'
+            } else if (cit.remetente) {
+                try {
+                    const recentes = await historico.obterUltimas(id_grupo, 40)
+                    const achou = [...(recentes || [])]
+                        .reverse()
+                        .find((m) => m?.id_usuario && m.id_usuario === cit.remetente && m.nome_usuario)
+                    citou_nome = achou?.nome_usuario || ''
+                } catch {
+                    citou_nome = ''
+                }
+            }
+        }
+
         await historico.registrar({
             id_grupo,
             id_usuario: remetente,
             nome_usuario,
             texto: corpoTxt,
             tipo: tipo || 'texto',
-            timestamp
+            timestamp,
+            citou_nome,
+            citou_texto
         })
+
+        const prefixo = String(mensagemBaileys.prefixo || '!').trim() || '!'
+        const pareceComando = corpoTxt.startsWith(prefixo) || corpoTxt.startsWith('!')
+        if (!pareceComando && corpoTxt.length >= 2) {
+            const aliases = mensagemBaileys.aliases_remetente || []
+            setImmediate(() => {
+                import('../lib/memoriaUsuario.js')
+                    .then(({ registrarMemoriaUsuario }) =>
+                        registrarMemoriaUsuario({
+                            idUsuario: remetente,
+                            aliases,
+                            nome: nome_usuario || '',
+                            idChat: id_grupo,
+                            pergunta: corpoTxt,
+                            resposta: ''
+                        })
+                    )
+                    .catch(() => {})
+            })
+        }
 
         // Visão/STT automático OFF por padrão (custo Gemini/Deepgram).
         // Ative com HISTORICO_AUTO_VISAO=1 / HISTORICO_AUTO_STT=1 no .env

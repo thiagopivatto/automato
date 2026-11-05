@@ -128,6 +128,7 @@ export const atualizarFlagsAdminGrupo = async(c, mensagemBaileys, botInfo)=>{
             }
         }
         mensagemBaileys.grupo.participantes = [...new Set(participantes)]
+        mensagemBaileys.grupo.metaParticipantes = meta.participants || []
         mensagemBaileys.grupo.admins = [...new Set(admins)]
         mensagemBaileys.grupo.bot_admin = listaContemJid(admins, ...botJids)
         const msgKey = mensagemBaileys.mensagem?.key || {}
